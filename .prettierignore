@@ -1,0 +1,7 @@
+pnpm-lock.yaml
+.next/
+.turbo/
+dist/
+coverage/
+plan.md
+implementation-plan.md

@@ -1,0 +1,20 @@
+{
+  "name": "@cgp/worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "tsx src/main.ts",
+    "enqueue:noop": "tsx scripts/enqueue-noop.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@cgp/config": "workspace:*",
+    "@cgp/contracts": "workspace:*",
+    "bullmq": "^6.3.4",
+    "ioredis": "^6.0.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.13"
+  }
+}

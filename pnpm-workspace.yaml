@@ -1,0 +1,10 @@
+packages:
+  - apps/*
+  - packages/*
+
+# Dependency install scripts are blocked unless listed here.
+allowBuilds:
+  esbuild: true
+  unrs-resolver: true
+  # Optional native speedup for BullMQ's msgpackr; pure JS fallback is fine for the demo.
+  msgpackr-extract: false
