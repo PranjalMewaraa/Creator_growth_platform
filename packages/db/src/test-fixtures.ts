@@ -7,7 +7,7 @@ import { createWorkspace } from './workspaces';
 export async function makeWorkspace(db: Database, name: string) {
   const [owner] = await unwrap(db)
     .insert(users)
-    .values({ email: `${randomUUID()}@example.com` })
+    .values({ name: 'Test owner', email: `${randomUUID()}@example.com` })
     .returning();
   if (!owner) throw new Error('User insert returned no row');
   return createWorkspace(db, { name, ownerUserId: owner.id });

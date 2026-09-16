@@ -15,6 +15,7 @@
   "dependencies": {
     "@cgp/config": "workspace:*",
     "@cgp/contracts": "workspace:*",
+    "better-auth": "^1.7.5",
     "drizzle-orm": "^0.45.2",
     "postgres": "^3.4.9"
   },

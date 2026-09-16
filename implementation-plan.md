@@ -2,7 +2,7 @@
 
 **Companion to `plan.md`.** `plan.md` says what and why. This file says how, in what order, and what has been decided. Where the two disagree, `plan.md` wins.
 
-**Status:** 2026-09-15. WP1, WP2 and WP3 built. Amendments A1 to A10 accepted and applied to `plan.md`; A11 proposed. Items marked OPEN need an answer before the work package that depends on them.
+**Status:** 2026-09-16. WP1 to WP4 built. Amendments A1 to A11 accepted and applied to `plan.md`. Items marked OPEN need an answer before the work package that depends on them.
 
 ---
 
@@ -11,13 +11,13 @@
 | # | Decision | Recommendation | Status | Blocks |
 |---|---|---|---|---|
 | D1 | Hosting topology (open item 17.2) | As written in plan section 5: Vercel for web, R2 for storage, one GCE VM for worker + ffmpeg | DECIDED 2026-09-14 | |
-| D1b | Postgres and Redis providers | Paid managed Postgres and smallest managed Redis, both in the same region as the render VM, since the worker makes the most DB and queue calls. Redis must suit BullMQ's constant polling, so avoid per command billing | OPEN | WP6 |
+| D1b | Postgres and Redis providers | Postgres: Neon, Singapore (`ap-southeast-1`), Postgres 18, in use for development. Pin Vercel functions and the render VM to Singapore too. Check the Neon plan before the demo: free tier compute suspends when idle, and the first query after that is slow. Redis still open: smallest managed instance in the same region, not billed per command, since BullMQ polls constantly | Postgres DECIDED 2026-09-16, Redis OPEN | WP6 |
 | D2 | Publishing pair (open item 17.7) | Instagram + LinkedIn | DECIDED 2026-09-14 | |
 | D3 | Moderation endpoint (not named in plan) | Cloud Natural Language `moderateText` + Vision SafeSearch. Both GCP, credit eligible. Verify free tier on the day | OPEN | WP11 |
 | D4 | Monorepo | pnpm workspaces + Turborepo, Node 24 LTS, TypeScript 6.0 strict, ESLint 9. TypeScript 7 and ESLint 10 wait until typescript-eslint and eslint-config-next support them | DECIDED in WP1 | |
 | D5 | ORM and migrations | Drizzle + drizzle-kit. SQL shaped, supports `FOR UPDATE`, typed | proposed | |
-| D6 | Auth | Auth.js v5, email magic link. Dev mode prints the link to the console | proposed | |
-| D7 | UI | Tailwind + shadcn/ui in `packages/ui` | proposed | |
+| D6 | Auth | better-auth, email magic link, database sessions. Chosen over Auth.js v5, still beta (`5.0.0-beta.32`), because better-auth is a stable release and its magic link option refuses unknown emails, which is exactly A11. Without an email sender the link goes to the server log; a real sender is needed before anyone outside the team signs in | DECIDED in WP4 | |
+| D7 | UI | Tailwind 4 with design tokens in CSS, primitives in `packages/ui`. shadcn/ui is deferred until a screen needs dialogs, menus or complex form controls | DECIDED in WP4 | |
 | D8 | Queue | BullMQ, one queue per job class (`inference`, `render`, `publish`) in one worker process | proposed | |
 | D9 | Streamed output | Worker publishes tokens to Redis pub/sub, web exposes an SSE route, client falls back to polling job status | proposed | |
 | D10 | Provider SDKs | `@google/genai` in Vertex mode (Gemini, Imagen, Veo), `@anthropic-ai/vertex-sdk` (Haiku), `@google-cloud/text-to-speech` | proposed | |
@@ -55,7 +55,7 @@ Small fixes, also applied: `jobs.status` uses the uppercase enum from `packages/
 
 Consequences carried into the schema with A2 and A1: `jobs` gains `video_seconds_held` and `video_seconds_settled`, `template_previews` keys on `template_version_id` (a preview is real output from one version), and `compiled_prompts` gains `parent_id` for user edits.
 
-### Proposed, needs sign off before WP4
+### Accepted 2026-09-16, applied in WP4
 
 | # | Issue found | Proposal |
 |---|---|---|
@@ -149,7 +149,7 @@ Weeks 1 to 3 are detailed. Weeks 4 to 8 are scoped and get re-planned in detail 
 | WP1 Repo scaffold | A | `git init`, pnpm + Turborepo, strict tsconfig, ESLint with import boundaries, Vitest, docker compose (Postgres, Redis), env schema, pino logger with correlation id, CI (typecheck, lint, test) | `pnpm dev` runs web and worker locally against compose. CI green |
 | WP2 Contracts | A | Section 9 types, adapter interfaces, error categories | Imported by web and worker |
 | WP3 Schema | B (A reviews ledger and job tables) | Full section 8 schema as amended. Every table in the first migration. Scoped helper, catalog helper, seed skeleton with grants through the ledger | Migration runs clean. Lint blocks unscoped access. Cross workspace read test passes. Duplicate settle rejected by the unique index |
-| WP4 Shell and auth | B | Next.js App Router, Auth.js magic link, S-01, S-02, navigation for the 7 destinations, header with credits and video seconds, design tokens, empty frames per screen | User signs in, creates a workspace, lands on the shell (week 1 exit) |
+| WP4 Shell and auth | B | Next.js App Router, magic link sign in (D6), S-01, S-02, navigation for the 7 destinations, header with credits and video seconds, design tokens, empty frames per screen. S-02 asks name and timezone; the primary goal question moves to onboarding (WP12), where each answer visibly configures something | User signs in, creates a workspace, lands on the shell (week 1 exit) |
 | WP5 Spikes | A | Instagram and LinkedIn publish from a script. ffmpeg ASS captions at 9:16 with the font stack including Noto Sans Devanagari. One 8 unit Veo Lite clip with the billing line read (17.1). 720p vs 1080p on one prompt. TTS timepoints | Each question answered in `docs/spikes/*.md` (week 1 exit) |
 | WP6 Infra | A | Vercel project, R2 bucket, Postgres and Redis per D1b, GCE VM with ffmpeg and fonts (Dockerfile, systemd), one region throughout, deploy path for web and worker, budget alert | Worker on the VM consumes a no-op job enqueued from the deployed web |
 
@@ -221,6 +221,6 @@ Claude Code builds both streams. A and B in the tables are stream labels, not pe
 
 ## 7. Next steps
 
-1. Decide A11 before WP4 (auth). WP4 and WP5 are next; WP7 needs Docker for its concurrency tests.
+1. WP5 (spikes) is next and needs the section 3 accounts. WP7's concurrency tests need a real Postgres: a Neon branch works.
 2. Decide D1b before WP6 and D3 before WP11.
 3. Start the section 3 items. They have the longest lead times.

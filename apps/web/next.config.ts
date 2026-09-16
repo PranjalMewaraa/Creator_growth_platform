@@ -5,7 +5,7 @@ loadRootEnvFile();
 
 const nextConfig: NextConfig = {
   // Workspace packages ship TypeScript source, not built output.
-  transpilePackages: ['@cgp/config', '@cgp/contracts'],
+  transpilePackages: ['@cgp/config', '@cgp/contracts', '@cgp/db', '@cgp/ui'],
 };
 
 export default nextConfig;

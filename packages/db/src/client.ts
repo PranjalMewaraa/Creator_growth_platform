@@ -8,7 +8,10 @@ export type Schema = typeof schema;
 
 export type Drizzle = PgDatabase<PgQueryResultHKT, Schema, ExtractTablesWithRelations<Schema>>;
 
-const handle = Symbol('drizzle');
+// From the global registry, not Symbol(): a bundler can instantiate this module more than
+// once (a route handler and a server component, say), and a module local symbol would make a
+// handle created in one copy unreadable in the other.
+const handle = Symbol.for('cgp.db.drizzle');
 
 /**
  * Opaque database handle. The raw query builder never leaves this package, so outside it

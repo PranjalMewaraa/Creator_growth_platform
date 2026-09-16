@@ -1,0 +1,40 @@
+@import 'tailwindcss';
+
+/* The design system lives in packages/ui, so Tailwind has to scan it too. */
+@source '../../../../packages/ui/src';
+
+/*
+ * Dark only. Surfaces step up in lightness: canvas, surface, raised.
+ * Accent (yellow) marks the action to take; hot (orange) marks the thing to look at.
+ */
+@theme {
+  --font-sans:
+    var(--font-poppins), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial,
+    sans-serif;
+
+  --color-canvas: #09090a;
+  --color-surface: #121214;
+  --color-raised: #1b1b1f;
+  --color-line: #27272c;
+  --color-ink: #f5f5f4;
+  --color-muted: #a3a3ad;
+  --color-faint: #6f6f78;
+  --color-accent: #ffc01e;
+  --color-accent-ink: #15120a;
+  --color-hot: #ff5a1f;
+  --color-good: #3ddc97;
+  --color-bad: #ff7a7a;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--color-canvas);
+  color: var(--color-ink);
+}
+
+::selection {
+  background-color: color-mix(in oklab, var(--color-accent) 35%, transparent);
+}

@@ -15,15 +15,7 @@ import {
 import { createdAt, id, outputTypeEnum } from './columns';
 
 // Global catalog tables (plan section 8, A1): shared reference data with no workspace_id.
-// Read through catalog(), written only by seed.
-
-/** Belongs to many workspaces through memberships, so it cannot carry a single workspace_id. */
-export const users = pgTable('users', {
-  id: id(),
-  email: text('email').notNull().unique(),
-  name: text('name'),
-  createdAt: createdAt(),
-});
+// Read through catalog(), written only by seed. Users live in ./identity (A11).
 
 export const templates = pgTable('templates', {
   id: id(),

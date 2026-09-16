@@ -11,6 +11,8 @@ export {
 export { catalog, CATALOG_TABLES, type Catalog, type CatalogTable } from './catalog';
 export type { Condition, Operators, Ordering, SelectOptions } from './query';
 export { createWorkspace, type NewWorkspace } from './workspaces';
+export { authDatabaseAdapter } from './auth';
+export { findMembership, listWorkspacesForUser, type WorkspaceMembership } from './memberships';
 export { grant } from './ledger';
 export {
   brandKits,

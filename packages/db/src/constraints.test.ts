@@ -54,11 +54,40 @@ beforeAll(async () => {
 afterAll(() => db.close());
 
 describe('migrations', () => {
-  it('create all 23 section 8 tables', async () => {
+  it('create every table the plan calls for, and nothing else', async () => {
     const result = (await d.execute(
-      sql`SELECT count(*)::int AS n FROM information_schema.tables WHERE table_schema = 'public'`,
-    )) as { rows: Array<{ n: number }> };
-    expect(result.rows[0]?.n).toBe(23);
+      sql`SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name`,
+    )) as { rows: Array<{ table_name: string }> };
+
+    expect(result.rows.map((row) => row.table_name)).toEqual([
+      // Identity (A11)
+      'accounts',
+      'brand_kits',
+      'compiled_prompts',
+      'compiler_profiles',
+      'cost_telemetry',
+      'credit_ledger',
+      'jobs',
+      'memberships',
+      'metering_rates',
+      'moderation_events',
+      'music_tracks',
+      'outputs',
+      'post_targets',
+      'publications',
+      'renditions',
+      'sessions',
+      'slots',
+      'social_accounts',
+      'template_previews',
+      'template_versions',
+      'templates',
+      'users',
+      'verifications',
+      'video_scenes',
+      'workspace_profiles',
+      'workspaces',
+    ]);
   });
 });
 

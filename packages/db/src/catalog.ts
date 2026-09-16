@@ -7,12 +7,10 @@ import {
   templatePreviews,
   templates,
   templateVersions,
-  users,
 } from './schema';
 
 /** Global catalog tables (plan section 8, A1): shared reference data, written only by seed. */
 export const CATALOG_TABLES = {
-  users,
   templates,
   templateVersions,
   templatePreviews,

@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { check, integer, pgTable, primaryKey, text, unique, uuid } from 'drizzle-orm/pg-core';
 import { createdAt, id, membershipRoleEnum } from './columns';
-import { users } from './catalog';
+import { users } from './identity';
 
 export const workspaces = pgTable(
   'workspaces',
@@ -33,7 +33,7 @@ export const memberships = pgTable(
   'memberships',
   {
     workspaceId: workspaceId(),
-    userId: uuid('user_id')
+    userId: text('user_id')
       .notNull()
       .references(() => users.id),
     role: membershipRoleEnum('role').notNull(),

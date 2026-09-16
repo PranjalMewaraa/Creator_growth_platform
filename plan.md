@@ -101,7 +101,7 @@ X and YouTube publishing. Merchant of record, plans, checkout, invoices. Complia
 
 These are load bearing. Each one converts a future rewrite into a future configuration change. Do not skip any of them for demo convenience.
 
-1. **`workspace_id` on every table from the first migration.** Every query scoped at the data access layer. Retrofitting tenancy is a rewrite of every query and every test. The only exceptions are the global catalog tables marked in section 8, which are read through a separate catalog helper and written only by seed.
+1. **`workspace_id` on every table from the first migration.** Every query scoped at the data access layer. Retrofitting tenancy is a rewrite of every query and every test. The only exceptions are the global catalog tables marked in section 8, read through a separate catalog helper and written only by seed, and the identity tables (`users`, sessions, login tokens), written only by the auth layer inside `packages/db`.
 2. **Postgres holds scheduling truth. Redis is transport only.** A queue wipe must be recoverable by a reconciler sweep.
 3. **No provider response shape reaches application code.** Everything normalises at the adapter boundary, for text, image, video and voice.
 4. **No generator composes its own prompt.** All prompt construction is owned by the orchestration engine.
@@ -311,7 +311,7 @@ cost_telemetry        job_id, workspace_id, action_class, provider, realised_cos
 ```
 
 Notes:
-- `workspace_id` is on every table above except those marked `[catalog]`. Catalog tables hold shared reference data, are read through `db.catalog.*`, and are written only by seed. `users` belongs to many workspaces through `memberships`.
+- `workspace_id` is on every table above except those marked `[catalog]`. Catalog tables hold shared reference data, are read through `db.catalog.*`, and are written only by seed. `users` belongs to many workspaces through `memberships`. It is an identity table: with the session and login token tables added in WP4 it is written only by the auth layer, and sign in is limited to addresses the seed created, so nobody outside the team can create an account (A11).
 - Status on `post_targets`, never an aggregate status on `publications`. Parent state is derived.
 - `publications.body` is the shared source. Each `post_targets` row carries its own per platform body and rendition.
 - `post_targets.status` includes `needs_verification` for a target claimed with no post id after a crash (invariant 9).
