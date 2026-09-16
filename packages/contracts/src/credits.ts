@@ -3,7 +3,9 @@ export const CURRENCIES = ['credits', 'video_seconds'] as const;
 
 export type Currency = (typeof CURRENCIES)[number];
 
-export type LedgerReason = 'hold' | 'settle' | 'refund' | 'grant';
+export const LEDGER_REASONS = ['hold', 'settle', 'refund', 'grant'] as const;
+
+export type LedgerReason = (typeof LEDGER_REASONS)[number];
 
 export interface CreditEstimate {
   credits: number;

@@ -4,3 +4,5 @@ export * from './errors';
 export * from './generator';
 export * from './jobs';
 export * from './media';
+export * from './publishing';
+export * from './workspace';

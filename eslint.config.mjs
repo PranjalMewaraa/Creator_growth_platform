@@ -5,7 +5,16 @@ import tseslint from 'typescript-eslint';
 
 // Plan section 4 and 18 boundaries, enforced at lint time rather than by review.
 const DATABASE_DRIVERS = {
-  group: ['drizzle-orm', 'drizzle-orm/*', 'drizzle-kit', 'postgres', 'pg', 'pg/*'],
+  group: [
+    'drizzle-orm',
+    'drizzle-orm/*',
+    'drizzle-kit',
+    'postgres',
+    'pg',
+    'pg/*',
+    '@electric-sql/pglite',
+    '@electric-sql/pglite/*',
+  ],
   message: 'Database access goes through the @cgp/db workspace scoped helpers only (invariant 1).',
 };
 const PROVIDER_SDKS = {

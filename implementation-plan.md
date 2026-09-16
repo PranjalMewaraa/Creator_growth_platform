@@ -2,7 +2,7 @@
 
 **Companion to `plan.md`.** `plan.md` says what and why. This file says how, in what order, and what has been decided. Where the two disagree, `plan.md` wins.
 
-**Status:** 2026-09-15. WP1 and WP2 built. Amendments A1 to A10 accepted and applied to `plan.md`. Items marked OPEN need an answer before the work package that depends on them.
+**Status:** 2026-09-15. WP1, WP2 and WP3 built. Amendments A1 to A10 accepted and applied to `plan.md`; A11 proposed. Items marked OPEN need an answer before the work package that depends on them.
 
 ---
 
@@ -23,7 +23,7 @@
 | D10 | Provider SDKs | `@google/genai` in Vertex mode (Gemini, Imagen, Veo), `@anthropic-ai/vertex-sdk` (Haiku), `@google-cloud/text-to-speech` | proposed | |
 | D11 | Token encryption | AES-256-GCM per token, data key wrapped by a key held in Vercel and worker env, never in the database | proposed | |
 | D12 | Image text layer | SVG layer spec stored as JSON, edited in browser, flattened in worker with resvg using the same font files | proposed | |
-| D13 | Tests | Vitest. Real Postgres in docker for ledger and claim tests | proposed | |
+| D13 | Tests | Vitest. Database tests run on PGlite (in-memory Postgres, same constraints and triggers, no docker). Concurrency tests, such as two writers racing for a hold, need the docker Postgres from WP7 on | DECIDED in WP3 | |
 | D14 | Exchange rate (open item 17.5) | 88, stored once in config, every rupee figure derived from it | proposed | |
 
 **What D1 means for the rest of the plan:**
@@ -54,6 +54,12 @@ These touch section 4 or section 8, so per section 0 rule 4 they were raised bef
 Small fixes, also applied: `jobs.status` uses the uppercase enum from `packages/contracts`, not lowercase strings. "Library" appears in seed data but not in the destination list; it is a tab inside Studio.
 
 Consequences carried into the schema with A2 and A1: `jobs` gains `video_seconds_held` and `video_seconds_settled`, `template_previews` keys on `template_version_id` (a preview is real output from one version), and `compiled_prompts` gains `parent_id` for user edits.
+
+### Proposed, needs sign off before WP4
+
+| # | Issue found | Proposal |
+|---|---|---|
+| A11 | A1 made `users` a catalog table "written only by seed", but sign in (WP4) writes at runtime: Auth.js creates users and writes sessions and verification tokens. Those auth tables are neither tenant data nor catalog | Add a third category, identity tables (`users`, `sessions`, `verification_tokens`), written only by the auth layer inside `packages/db`. For the demo, sign in is restricted to users the seed created, so no stranger can create an account (plan section 3, "the line") |
 
 ---
 
@@ -215,6 +221,6 @@ Claude Code builds both streams. A and B in the tables are stream labels, not pe
 
 ## 7. Next steps
 
-1. WP3 (schema) is next. It needs Docker locally to run the migration and its tests.
+1. Decide A11 before WP4 (auth). WP4 and WP5 are next; WP7 needs Docker for its concurrency tests.
 2. Decide D1b before WP6 and D3 before WP11.
 3. Start the section 3 items. They have the longest lead times.

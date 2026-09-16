@@ -14,6 +14,9 @@
     "test": "vitest run",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "db:generate": "pnpm --filter @cgp/db db:generate",
+    "db:migrate": "pnpm --filter @cgp/db db:migrate",
+    "db:seed": "pnpm --filter @cgp/db db:seed",
     "infra:up": "docker compose up -d",
     "infra:down": "docker compose down"
   },
