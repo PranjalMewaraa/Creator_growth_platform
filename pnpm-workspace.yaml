@@ -8,3 +8,7 @@ allowBuilds:
   unrs-resolver: true
   # Optional native speedup for BullMQ's msgpackr; pure JS fallback is fine for the demo.
   msgpackr-extract: false
+  # Its preinstall only echoes a message.
+  '@google/genai': false
+  # Postinstall sets up protobufjs's command line tool, which nothing here uses.
+  protobufjs: false

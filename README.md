@@ -20,7 +20,9 @@ Sign in at http://localhost:3000 with `SEED_OWNER_EMAIL` (default `owner@example
 
 Check the job pipeline end to end while the worker runs: `pnpm --filter @cgp/worker enqueue:noop <workspace id> [inference|render|publish]` submits a free job through Postgres and the queue, and the worker logs `noop job processed` and `settled`. On start the worker re-enqueues any job a previous run left waiting and reports balance drift.
 
-Provider calls default to fakes (`PROVIDERS=fake`). Real calls spend trial credit, so switch only when you mean to.
+Provider calls default to fakes (`PROVIDERS=fake`). Real calls spend trial credit, so switch only when you mean to. Real calls go through Vertex with application default credentials (`gcloud auth application-default login`) and `GOOGLE_CLOUD_PROJECT`. `pnpm --filter @cgp/adapters smoke:text [model key ...]` makes one tiny real call per text model. `CGP_LIVE_PROVIDERS=1 pnpm test` runs the text adapter contract tests against the real providers as well as the fakes.
+
+Fakes return real files (PNG, WAV, an MP4 fixture) and take markers in their input: `FAKE_FAIL:<retriable|reauth|terminal|quota>` fails with that category, `FAKE_BLOCK:<category>` is flagged by fake moderation.
 
 ## Checks
 
@@ -45,6 +47,7 @@ pnpm build
 | `packages/db`        | Schema, migrations, `scoped()` and `catalog()` access, auth adapter, seed |
 | `packages/ui`        | Design system primitives: button, card, empty state, form, stat           |
 | `packages/core`      | Job engine: submit with a credit hold, queues, processing, boot sweep     |
+| `packages/adapters`  | Provider adapters and their fakes, model ids, error normalisation         |
 | `tooling`            | Repo level tests, such as the import boundary checks                      |
 
 Lint enforces two boundaries from the plan: database drivers only inside `packages/db`, provider SDKs only inside `packages/adapters`.

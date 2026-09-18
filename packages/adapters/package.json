@@ -1,0 +1,22 @@
+{
+  "name": "@cgp/adapters",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "smoke:text": "tsx scripts/text-smoke.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/vertex-sdk": "^0.19.9",
+    "@cgp/config": "workspace:*",
+    "@cgp/contracts": "workspace:*",
+    "@google/genai": "^2.23.0",
+    "google-auth-library": "^11.1.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.13"
+  }
+}

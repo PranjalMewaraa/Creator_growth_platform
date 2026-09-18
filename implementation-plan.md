@@ -2,7 +2,7 @@
 
 **Companion to `plan.md`.** `plan.md` says what and why. This file says how, in what order, and what has been decided. Where the two disagree, `plan.md` wins.
 
-**Status:** 2026-09-18. WP1 to WP5 and WP7 built. Amendments A1 to A11 accepted and applied to `plan.md`. Items marked OPEN need an answer before the work package that depends on them.
+**Status:** 2026-09-18. WP1 to WP5, WP7 and WP8 built. Amendments A1 to A11 accepted and applied to `plan.md`. Items marked OPEN need an answer before the work package that depends on them.
 
 ---
 
@@ -26,6 +26,7 @@
 | D13 | Tests | Vitest. Database tests run on PGlite (in-memory Postgres, same constraints and triggers, no docker). Concurrency tests, such as two writers racing for a hold, need the docker Postgres from WP7 on | DECIDED in WP3 | |
 | D14 | Exchange rate (open item 17.5) | 88, stored once in config, every rupee figure derived from it | proposed | |
 | D15 | Facebook Page publishing | Not for this demo. It would have cost about half a week, and the API posts only to Pages, never personal profiles, so it helps fewer individual creators than Instagram and LinkedIn do. Post-demo item: same Meta app, adding Facebook Login for Business (`pages_show_list`, `pages_manage_posts`, `pages_read_engagement`) | DECIDED 2026-09-18: dropped | |
+| D16 | Claude Haiku access on Vertex | Checked 2026-09-18: `claude-haiku-4-5@20251001` on `global` is the right id (it answers with a quota error, while `us-east5` returns 404), but project `creatorpltfrm` has a quota of 0 for `global_online_prediction_requests_per_base_model` on `anthropic-claude-haiku-4-5`, so every call gets 429. Partner models usually need a quota increase request, which free trial projects may not be granted. Options: request the increase, or run scripts on Gemini until it lands (a plan section 6 change, so it needs a yes). The adapter is built and returns `quota`, so nothing else waits on this until WP10 | OPEN | |
 
 **What D1 means for the rest of the plan:**
 - **Budget.** Vercel, R2, Postgres and Redis are cash lines. The costing in plan section 6 carries only the domain as cash, so the build budget table needs a cash line per service. The Vercel and R2 lines may be zero on free tiers, but check whether Vercel Hobby terms allow an investor demo, since they restrict commercial use.
@@ -159,7 +160,7 @@ Weeks 1 to 3 are detailed. Weeks 4 to 8 are scoped and get re-planned in detail 
 | WP | Owner | Scope | Done when |
 |---|---|---|---|
 | WP7 Ledger and jobs | A | `createJob` transaction, idempotent settle and refund, grant script, versioned `metering_rates`, three BullMQ queues, worker skeleton, boot sweep, `cost_telemetry`. Built 2026-09-18: `createJobWithHold`, `settleJob`, `refundJob` in `packages/db`; submit, process and sweep in `packages/core`. `workspaces.video_seconds_cap` is not enforced yet; the granted balance already caps usage | Insufficient balance rejects before a job exists. Double settle is a no-op. Worker killed mid job is recovered by the sweep. Cached balance equals ledger sum. All four covered by tests, with concurrency on real Postgres |
-| WP8 Text adapters | A | Fakes for every adapter kind. Gemini Flash-Lite and Haiku through Vertex. gpt-oss-20b as second compile provider. Error normalisation | Same call runs fake or real behind one flag |
+| WP8 Text adapters | A | Fakes for every adapter kind. Gemini Flash-Lite and Haiku through Vertex. gpt-oss-20b as second compile provider. Error normalisation. Built 2026-09-18 in `packages/adapters`: `createTextAdapters('fake' \| 'real')`, model ids in `models.ts`, fakes returning real PNG, WAV and MP4 files. Live contract tests pass for Gemini and gpt-oss (`openai/gpt-oss-20b-maas`, `us-central1`, through the OpenAI-compatible endpoint). Haiku is blocked on quota (D16) | Same call runs fake or real behind one flag |
 | WP9 Registry and API | A + B | Generator registry, one generate route keyed by generator, estimate endpoint, job SSE route | Adding a generator touches no route file (FR-GN-02) |
 | WP10 Orchestration | A | Stages 1 to 3, artifact persistence, edit versioning, language seam, compiler profiles seeded as versioned rows | Forced 1500ms breach falls back, generation succeeds, no credit used. Assembly snapshot tests. Precedence tests |
 | WP11 Moderation pre check | A | Text pre check on compiled prompt (A6) | A blocked compiled prompt never creates a job or a hold |
@@ -222,6 +223,6 @@ Claude Code builds both streams. A and B in the tables are stream labels, not pe
 
 ## 7. Next steps
 
-1. WP8 (text adapters), WP9 (registry and API) and WP10 (orchestration) are next. WP5 still needs the Veo billing line read.
-2. Decide D1b before WP6 and D3 before WP11.
+1. WP9 (registry and API) and WP10 (orchestration) are next. WP5 still needs the Veo billing line read.
+2. Decide D1b before WP6, D16 before WP10 and D3 before WP11.
 3. Start the section 3 items. They have the longest lead times.
