@@ -3,15 +3,16 @@ import { createFakeModeration, createMemoryStore } from '@cgp/adapters';
 import { createLogger, encryptSecret } from '@cgp/config';
 import type { QueuedJobData, TargetPlatform } from '@cgp/contracts';
 import { jobs, postTargets, scoped, upsertSocialAccount, type Database } from '@cgp/db';
-import { createTestDatabase, createTestWorkspace } from '@cgp/db/testing';
+import { addTestProfile, createTestDatabase, createTestWorkspace } from '@cgp/db/testing';
+import sharp from 'sharp';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { publicationView, startPublication, storeUpload } from './publishing';
+import { instagramKey, publicationView, startPublication, storeUpload } from './publishing';
 import type { Queues } from './queues';
 
 const log = createLogger({ service: 'test', level: 'silent' });
 const kek = randomBytes(32);
-const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]);
-const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
+let JPEG: Uint8Array;
+let PNG: Uint8Array;
 
 function recordingQueues() {
   const added: QueuedJobData[] = [];
@@ -25,6 +26,10 @@ function recordingQueues() {
 let db: Database;
 beforeAll(async () => {
   db = await createTestDatabase();
+  // A wide landscape image, the case Instagram refuses as is.
+  const wide = sharp({ create: { width: 1200, height: 400, channels: 3, background: '#e11d48' } });
+  JPEG = new Uint8Array(await wide.clone().jpeg().toBuffer());
+  PNG = new Uint8Array(await wide.clone().png().toBuffer());
 });
 afterAll(async () => {
   await db.close();
@@ -49,17 +54,51 @@ async function workspaceWith(platforms: TargetPlatform[]) {
 }
 
 describe('storeUpload', () => {
-  const deps = { store: createMemoryStore(), moderation: createFakeModeration(), log };
-
-  it('stores a JPEG under the workspace prefix, trusting the bytes, not a claimed type', async () => {
-    const result = await storeUpload(deps, 'ws-1', JPEG);
-    expect(result).toMatchObject({ ok: true, mimeType: 'image/jpeg', bytes: JPEG.length });
-    expect(result.ok && result.key).toMatch(/^ws-1\/uploads\/[\w-]+\.jpg$/);
+  // Built per test: db only exists once beforeAll has run.
+  const deps = (store = createMemoryStore()) => ({
+    db,
+    store,
+    moderation: createFakeModeration(),
+    log,
   });
 
-  it('refuses anything that is not a JPEG or PNG', async () => {
-    const result = await storeUpload(deps, 'ws-1', new TextEncoder().encode('<svg></svg>'));
-    expect(result).toMatchObject({ ok: false, reason: 'invalid_input' });
+  it('stores a JPEG under the workspace prefix, trusting the bytes, not a claimed type', async () => {
+    const workspaceId = await createTestWorkspace(db);
+    const result = await storeUpload(deps(), workspaceId, JPEG);
+    expect(result).toMatchObject({ ok: true, mimeType: 'image/jpeg', bytes: JPEG.length });
+    expect(result.ok && result.key).toMatch(/^[\w-]+\/uploads\/[\w-]+\.jpg$/);
+  });
+
+  it('makes a 4:5 Instagram copy with bars in the brand colour, cropping nothing', async () => {
+    const workspaceId = await createTestWorkspace(db);
+    await addTestProfile(db, workspaceId); // brand colours start with #1F2937
+    const store = createMemoryStore();
+    const result = await storeUpload(deps(store), workspaceId, PNG);
+    if (!result.ok) throw new Error(result.reason);
+
+    const copy = await store.get(instagramKey(result.key));
+    const image = sharp(copy);
+    expect(await image.metadata()).toMatchObject({ format: 'jpeg', width: 1080, height: 1350 });
+    // A 3:1 image is 1080x360 inside the frame: bars above and below, the image in between.
+    const { data } = await image.raw().toBuffer({ resolveWithObject: true });
+    const pixel = (x: number, y: number) => [
+      ...data.subarray((y * 1080 + x) * 3, (y * 1080 + x) * 3 + 3),
+    ];
+    const near = (a: number[], b: number[]) => a.every((v, i) => Math.abs(v - (b[i] ?? 0)) <= 12);
+    expect(near(pixel(540, 20), [0x1f, 0x29, 0x37])).toBe(true);
+    expect(near(pixel(540, 1330), [0x1f, 0x29, 0x37])).toBe(true);
+    expect(near(pixel(540, 675), [0xe1, 0x1d, 0x48])).toBe(true);
+    expect(near(pixel(5, 675), [0xe1, 0x1d, 0x48])).toBe(true);
+  });
+
+  it('refuses anything that is not a JPEG or PNG, or cannot be decoded', async () => {
+    const workspaceId = await createTestWorkspace(db);
+    expect(
+      await storeUpload(deps(), workspaceId, new TextEncoder().encode('<svg></svg>')),
+    ).toMatchObject({ ok: false, reason: 'invalid_input' });
+    expect(
+      await storeUpload(deps(), workspaceId, new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2])),
+    ).toMatchObject({ ok: false, reason: 'invalid_input' });
   });
 });
 
@@ -68,7 +107,7 @@ describe('startPublication', () => {
     const { workspaceId, accountIds } = await workspaceWith(['instagram', 'linkedin']);
     const store = createMemoryStore();
     const upload = await storeUpload(
-      { store, moderation: createFakeModeration(), log },
+      { db, store, moderation: createFakeModeration(), log },
       workspaceId,
       JPEG,
     );
@@ -89,7 +128,14 @@ describe('startPublication', () => {
     if (!result.ok) throw new Error(result.reason);
     const targets = await scoped(db, workspaceId).select(postTargets);
     expect(targets.map((t) => t.status)).toEqual(['pending', 'pending']);
-    expect(targets[0]?.body).toEqual({
+    const bodyOf = (accountId: string | undefined) =>
+      targets.find((t) => t.socialAccountId === accountId)?.body;
+    // Instagram gets the 4:5 copy; LinkedIn the image as uploaded.
+    expect(bodyOf(accountIds[0])).toEqual({
+      text: 'Now shipping #jaipur',
+      media: { kind: 'image', url: upload.instagramUrl, mimeType: 'image/jpeg' },
+    });
+    expect(bodyOf(accountIds[1])).toEqual({
       text: 'Now shipping #jaipur',
       media: { kind: 'image', url: upload.url, mimeType: 'image/jpeg' },
     });
@@ -111,7 +157,7 @@ describe('startPublication', () => {
     const { workspaceId, accountIds } = await workspaceWith(['instagram']);
     const store = createMemoryStore();
     const png = await storeUpload(
-      { store, moderation: createFakeModeration(), log },
+      { db, store, moderation: createFakeModeration(), log },
       workspaceId,
       PNG,
     );
@@ -123,10 +169,17 @@ describe('startPublication', () => {
     );
     expect(result).toMatchObject({ ok: false, reason: 'invalid_input' });
     if (result.ok || result.reason !== 'invalid_input') return;
-    expect(result.issues.map((i) => i.message).sort()).toEqual([
-      'Instagram allows 2200 characters',
-      'Instagram needs a JPEG image',
-    ]);
+    // A PNG is fine now: Instagram gets the JPEG copy.
+    expect(result.issues.map((i) => i.message)).toEqual(['Instagram allows 2200 characters']);
+
+    const noImage = await startPublication(
+      { db, ...recordingQueues(), store, moderation: createFakeModeration(), log },
+      { workspaceId, text: 'words only', accountIds, timezone: 'UTC' },
+    );
+    expect(noImage).toMatchObject({
+      ok: false,
+      issues: [{ message: 'Instagram posts need an image' }],
+    });
     expect(await scoped(db, workspaceId).select(postTargets)).toEqual([]);
   });
 

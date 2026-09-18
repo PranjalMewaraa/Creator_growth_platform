@@ -64,10 +64,13 @@ export function Composer({
   workspaceId,
   accounts,
   live,
+  barColour,
 }: {
   workspaceId: string;
   accounts: Account[];
   live: boolean;
+  /** The Instagram copy's bar colour, so the preview matches what is posted. */
+  barColour: string;
 }) {
   const [text, setText] = useState('');
   const [file, setFile] = useState<File | null>(null);
@@ -83,14 +86,14 @@ export function Composer({
   const platforms = [
     ...new Set(accounts.filter((a) => chosen.includes(a.id)).map((a) => a.platform)),
   ];
-  const needsJpeg = platforms.includes('instagram');
-  const jpegProblem = needsJpeg && (!file || file.type !== 'image/jpeg');
+  // Any JPEG or PNG works: Instagram gets a 4:5 JPEG copy made on upload.
+  const imageMissing = platforms.includes('instagram') && !file;
   const tooLong = platforms.filter((p) => text.length > LIMITS[p]);
   const canPost =
     busy === null &&
     chosen.length > 0 &&
     (text.trim().length > 0 || file !== null) &&
-    !jpegProblem &&
+    !imageMissing &&
     tooLong.length === 0;
 
   // Release the last preview's memory when the composer goes away.
@@ -339,9 +342,28 @@ export function Composer({
               ) : null}
             </div>
             <p className="text-xs text-faint">
-              JPEG or PNG, up to 8 MB. Instagram needs a JPEG between 4:5 and 1.91:1.
+              JPEG or PNG, up to 8 MB. Instagram gets a 4:5 copy: the whole image, with bars in your
+              brand colour.
             </p>
           </div>
+
+          {preview && platforms.includes('instagram') ? (
+            <div className="flex flex-col gap-1.5">
+              <span className="text-sm font-medium text-muted">As it will look on Instagram</span>
+              {/* The same fit the server makes: contain in 4:5, bars in the brand colour. */}
+              <div
+                className="aspect-[4/5] w-48 overflow-hidden rounded-xl border border-line"
+                style={{ backgroundColor: barColour }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={preview}
+                  alt="Instagram preview"
+                  className="h-full w-full object-contain"
+                />
+              </div>
+            </div>
+          ) : null}
         </CardBody>
       </Card>
 
@@ -371,9 +393,7 @@ export function Composer({
             </label>
           ))}
 
-          {jpegProblem && chosen.length > 0 ? (
-            <p className="text-xs text-hot">Instagram needs a JPEG image.</p>
-          ) : null}
+          {imageMissing ? <p className="text-xs text-hot">Instagram posts need an image.</p> : null}
           {error ? <p className="text-sm text-bad">{error}</p> : null}
 
           <Button onClick={() => void post()} disabled={!canPost}>

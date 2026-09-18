@@ -77,7 +77,7 @@ async function setUp(body: PostContent = { text: 'Hello' }) {
     workspaceId,
     timezone: 'Asia/Kolkata',
     body: { ...body },
-    socialAccountIds: [account.id],
+    targets: [{ socialAccountId: account.id, body: { ...body } }],
   });
   if (!created.ok) throw new Error(created.reason);
   const [job] = created.jobs;
@@ -251,7 +251,7 @@ describe('publish handler (invariant 9)', () => {
         workspaceId: other,
         timezone: 'Asia/Kolkata',
         body: { text: 'x' },
-        socialAccountIds: [target?.socialAccountId ?? ''],
+        targets: [{ socialAccountId: target?.socialAccountId ?? '', body: { text: 'x' } }],
       }),
     ).toEqual({ ok: false, reason: 'account_not_found' });
   });

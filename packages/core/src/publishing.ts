@@ -8,8 +8,16 @@ import type {
   PostTargetStatus,
   TargetPlatform,
 } from '@cgp/contracts';
-import { createPublication, findPublication, scoped, socialAccounts, type Database } from '@cgp/db';
+import {
+  brandKits,
+  createPublication,
+  findPublication,
+  scoped,
+  socialAccounts,
+  type Database,
+} from '@cgp/db';
 import type { InputIssue } from './generators/registry';
+import { fitToFrame, INSTAGRAM_FRAME } from './media';
 import { enqueue, type Queues } from './queues';
 
 /** Published limits on post text. */
@@ -30,14 +38,39 @@ function sniffImage(data: Uint8Array) {
 }
 
 export type UploadResult =
-  | { ok: true; key: string; url: string; mimeType: string; bytes: number }
+  | {
+      ok: true;
+      key: string;
+      url: string;
+      mimeType: string;
+      bytes: number;
+      /** The 4:5 copy Instagram receives. */
+      instagramUrl: string;
+    }
   | { ok: false; reason: 'invalid_input'; issues: InputIssue[] }
   | { ok: false; reason: 'blocked'; category: ModerationCategory }
   | { ok: false; reason: 'moderation_unavailable' };
 
-/** Stores an image the user uploaded, after checking what it is and what it shows. */
+/** The Instagram copy of an upload, beside the original. */
+export function instagramKey(uploadKey: string): string {
+  return uploadKey.replace(/\.(jpg|png)$/, '.instagram.jpg');
+}
+
+/** Bars fall back to black when the workspace has no brand kit yet. */
+export async function barColour(db: Database, workspaceId: string): Promise<string> {
+  const [kit] = await scoped(db, workspaceId).select(brandKits, {
+    orderBy: (t, order) => order.desc(t.version),
+    limit: 1,
+  });
+  return kit?.colors[0] ?? '#000000';
+}
+
+/**
+ * Stores an image the user uploaded, after checking what it is and what it shows, together
+ * with its Instagram copy: 4:5, JPEG, the whole image with bars in the brand colour.
+ */
 export async function storeUpload(
-  deps: { store: ObjectStore; moderation: ModerationAdapter; log: Logger },
+  deps: { db: Database; store: ObjectStore; moderation: ModerationAdapter; log: Logger },
   workspaceId: string,
   data: Uint8Array,
 ): Promise<UploadResult> {
@@ -61,9 +94,18 @@ export async function storeUpload(
     return { ok: false, reason: 'moderation_unavailable' };
   }
 
+  let instagram: Uint8Array;
+  try {
+    instagram = await fitToFrame(data, INSTAGRAM_FRAME, await barColour(deps.db, workspaceId));
+  } catch (err) {
+    deps.log.warn({ err }, 'image could not be decoded');
+    return invalid('The image could not be read; it may be damaged');
+  }
+
   const key = `${workspaceId}/uploads/${randomUUID()}.${type.extension}`;
   const stored = await deps.store.put(key, data, type.mimeType);
-  return { ok: true, ...stored };
+  const copy = await deps.store.put(instagramKey(key), instagram, 'image/jpeg');
+  return { ok: true, ...stored, instagramUrl: copy.url };
 }
 
 export interface PublishRequest {
@@ -133,8 +175,8 @@ export async function startPublication(
     if (text.length > limit) {
       issues.push({ path: 'text', message: `${name(platform)} allows ${limit} characters` });
     }
-    if (platform === 'instagram' && media?.mimeType !== 'image/jpeg') {
-      issues.push({ path: 'media', message: 'Instagram needs a JPEG image' });
+    if (platform === 'instagram' && !media) {
+      issues.push({ path: 'media', message: 'Instagram posts need an image' });
     }
   }
   if (issues.length > 0) return { ok: false, reason: 'invalid_input', issues };
@@ -152,11 +194,27 @@ export async function startPublication(
   }
 
   const content: PostContent = { text, ...(media ? { media } : {}) };
+  const uploadKey = request.media?.key;
+  // Instagram gets the 4:5 JPEG copy; every other platform the image as uploaded.
+  const bodyFor = (platform: TargetPlatform): PostContent =>
+    platform === 'instagram' && media && uploadKey
+      ? {
+          text,
+          media: {
+            kind: 'image',
+            url: deps.store.publicUrl(instagramKey(uploadKey)),
+            mimeType: 'image/jpeg',
+          },
+        }
+      : content;
   const created = await createPublication(deps.db, {
     workspaceId: request.workspaceId,
     timezone: request.timezone,
     body: { ...content },
-    socialAccountIds: ids,
+    targets: accounts.map((account) => ({
+      socialAccountId: account.id,
+      body: { ...bodyFor(account.platform) },
+    })),
     correlationId: request.correlationId,
   });
   if (!created.ok) return created;

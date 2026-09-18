@@ -53,3 +53,5 @@ export {
   type PublishResult,
   type UploadResult,
 } from './publishing';
+export { fitToFrame, INSTAGRAM_FRAME } from './media';
+export { barColour, instagramKey } from './publishing';

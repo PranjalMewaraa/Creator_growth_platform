@@ -1,7 +1,7 @@
 import { MAX_UPLOAD_BYTES, storeUpload } from '@cgp/core';
 import { apiError, apiWorkspace, refusal } from '@/server/api';
 import { withRequestContext } from '@/server/request-context';
-import { getLogger, getProviders } from '@/server/runtime';
+import { getDb, getLogger, getProviders } from '@/server/runtime';
 
 type Context = { params: Promise<{ workspaceId: string }> };
 
@@ -27,11 +27,11 @@ export const POST = withRequestContext(async (request: Request, { params }: Cont
 
   const providers = getProviders();
   const result = await storeUpload(
-    { store: providers.store, moderation: providers.moderation, log: getLogger() },
+    { db: getDb(), store: providers.store, moderation: providers.moderation, log: getLogger() },
     workspaceId,
     new Uint8Array(await file.arrayBuffer()),
   );
   if (!result.ok) return refusal(result);
-  const { key, url, mimeType, bytes } = result;
-  return Response.json({ upload: { key, url, mimeType, bytes } }, { status: 201 });
+  const { key, url, mimeType, bytes, instagramUrl } = result;
+  return Response.json({ upload: { key, url, mimeType, bytes, instagramUrl } }, { status: 201 });
 });

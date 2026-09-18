@@ -44,9 +44,10 @@ export async function upsertSocialAccount(
 export interface NewPublication {
   workspaceId: string;
   timezone: string;
-  /** The shared source; each target gets its own copy to vary per platform later. */
+  /** The shared source, as the user wrote it. */
   body: Record<string, unknown>;
-  socialAccountIds: string[];
+  /** One per account, each with its own body: the per platform variant (A7). */
+  targets: Array<{ socialAccountId: string; body: Record<string, unknown> }>;
   correlationId?: string;
 }
 
@@ -69,7 +70,7 @@ export async function createPublication(
   db: Database,
   request: NewPublication,
 ): Promise<CreatePublicationResult> {
-  const ids = [...new Set(request.socialAccountIds)];
+  const ids = [...new Set(request.targets.map((t) => t.socialAccountId))];
   return unwrap(db).transaction(async (tx): Promise<CreatePublicationResult> => {
     const accounts = await tx
       .select({ id: socialAccounts.id })
@@ -77,7 +78,11 @@ export async function createPublication(
       .where(
         and(eq(socialAccounts.workspaceId, request.workspaceId), inArray(socialAccounts.id, ids)),
       );
-    if (ids.length === 0 || accounts.length !== ids.length) {
+    if (
+      ids.length === 0 ||
+      ids.length !== request.targets.length ||
+      accounts.length !== ids.length
+    ) {
       return { ok: false, reason: 'account_not_found' };
     }
 
@@ -95,11 +100,11 @@ export async function createPublication(
     const targets = await tx
       .insert(postTargets)
       .values(
-        ids.map((socialAccountId) => ({
+        request.targets.map((target) => ({
           workspaceId: request.workspaceId,
           publicationId: publication.id,
-          socialAccountId,
-          body: request.body,
+          socialAccountId: target.socialAccountId,
+          body: target.body,
         })),
       )
       .returning();
