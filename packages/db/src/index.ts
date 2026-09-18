@@ -55,3 +55,4 @@ export {
   workspaceProfiles,
   workspaces,
 } from './schema';
+export { COMPILER_PROFILE_VERSION, COMPILER_PROFILES } from './seed-catalog';

@@ -37,3 +37,23 @@ export async function jsonBody(request: Request): Promise<unknown> {
     return undefined;
   }
 }
+
+/** Status codes for every reason a compile or generation can refuse, shared by the routes. */
+const REFUSALS: Record<string, number> = {
+  unknown_generator: 404,
+  workspace_not_found: 404,
+  template_not_found: 404,
+  prompt_not_found: 404,
+  invalid_input: 422,
+  blocked: 422,
+  profile_required: 409,
+  brand_kit_required: 409,
+  insufficient_credits: 402,
+  insufficient_video_seconds: 402,
+};
+
+export function refusal(result: { reason: string } & Record<string, unknown>): Response {
+  const { reason, ...detail } = result;
+  delete detail.ok;
+  return apiError(REFUSALS[reason] ?? 400, reason, detail);
+}

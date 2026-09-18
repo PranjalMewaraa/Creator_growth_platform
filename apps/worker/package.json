@@ -9,6 +9,7 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@cgp/adapters": "workspace:*",
     "@cgp/config": "workspace:*",
     "@cgp/contracts": "workspace:*",
     "@cgp/core": "workspace:*",

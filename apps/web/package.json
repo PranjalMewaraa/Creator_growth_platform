@@ -9,10 +9,12 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@cgp/adapters": "workspace:*",
     "@cgp/config": "workspace:*",
     "@cgp/contracts": "workspace:*",
     "@cgp/core": "workspace:*",
     "@cgp/db": "workspace:*",
+    "@cgp/orchestration": "workspace:*",
     "@cgp/ui": "workspace:*",
     "@tailwindcss/postcss": "^4.3.3",
     "better-auth": "^1.7.5",

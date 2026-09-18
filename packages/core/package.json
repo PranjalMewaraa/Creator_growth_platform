@@ -12,6 +12,7 @@
     "@cgp/config": "workspace:*",
     "@cgp/contracts": "workspace:*",
     "@cgp/db": "workspace:*",
+    "@cgp/orchestration": "workspace:*",
     "bullmq": "^6.3.4",
     "ioredis": "^6.0.0",
     "zod": "^4.6.4"

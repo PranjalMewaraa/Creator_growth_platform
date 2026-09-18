@@ -10,14 +10,18 @@ import {
   closeQueues,
   createQueues,
   createRedis,
+  createTextHandlers,
+  generators,
   processJob,
+  publishDelta,
   sweepOnBoot,
   waitForRedis,
 } from '@cgp/core';
+import { createProviders } from '@cgp/adapters';
 import { createDatabase } from '@cgp/db';
 import { Worker } from 'bullmq';
 import { createErrorThrottle } from './error-throttle';
-import { handlers } from './handlers';
+import { handlers as baseHandlers } from './handlers';
 
 loadRootEnvFile();
 const env = parseEnv(baseEnvSchema);
@@ -36,6 +40,19 @@ if (connection.status !== 'ready') {
 // previous process left waiting or running.
 const queues = createQueues(connection);
 await sweepOnBoot({ db, queues, log });
+
+const providers = createProviders({ ...env, log });
+const handlers = {
+  ...baseHandlers,
+  ...createTextHandlers({
+    db,
+    registry: generators,
+    adapters: providers.text,
+    publishDelta: (jobId, text) => publishDelta(connection, jobId, text),
+    costInr: providers.textCostInr,
+    providerLabel: providers.mode === 'real' ? 'vertex' : 'fake',
+  }),
+};
 
 // Render runs ffmpeg on a small box, so it gets one slot. Inference is mostly waiting on providers.
 const CONCURRENCY: Record<JobClass, number> = { inference: 8, render: 1, publish: 2 };
@@ -61,7 +78,10 @@ const workers = JOB_CLASSES.map((jobClass) => {
   return worker;
 });
 
-log.info({ jobClasses: JOB_CLASSES, providers: env.PROVIDERS }, 'worker started');
+log.info(
+  { jobClasses: JOB_CLASSES, providers: env.PROVIDERS, generators: Object.keys(handlers) },
+  'worker started',
+);
 
 async function shutdown(signal: string) {
   log.info({ signal }, 'worker stopping');

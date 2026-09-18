@@ -6,6 +6,7 @@ import { migrate } from 'drizzle-orm/pglite/migrator';
 import { unwrap, wrap, type Database } from './client';
 import { grant } from './ledger';
 import { METERING_RATES_V1 } from './seed';
+import { seedCatalogIn } from './seed-catalog';
 import { MIGRATIONS_FOLDER } from './migrate';
 import * as schema from './schema';
 import { createWorkspace } from './workspaces';
@@ -49,4 +50,36 @@ export async function insertMeteringRates(
     .insert(schema.meteringRates)
     .values({ version: rates.version, credits: rates.credits })
     .onConflictDoNothing();
+}
+
+/** Compiler profiles and default templates, as every seed writes them. */
+export async function seedTestCatalog(db: Database): Promise<void> {
+  await unwrap(db).transaction((tx) => seedCatalogIn(tx));
+}
+
+/** Version 1 of a workspace profile and brand kit, like the populated demo workspace. */
+export async function addTestProfile(
+  db: Database,
+  workspaceId: string,
+  profile: Partial<typeof schema.workspaceProfiles.$inferInsert> = {},
+): Promise<void> {
+  const d = unwrap(db);
+  await d.insert(schema.workspaceProfiles).values({
+    workspaceId,
+    version: 1,
+    contentTypes: ['short video'],
+    platforms: ['instagram', 'linkedin'],
+    teamShape: 'solo creator',
+    goal90d: 'Reach 10k followers',
+    pillars: ['How to', 'Behind the scenes'],
+    tone: 'Warm, direct, practical',
+    ...profile,
+  });
+  await d.insert(schema.brandKits).values({
+    workspaceId,
+    version: 1,
+    colors: ['#1F2937', '#F59E0B'],
+    typography: 'Poppins',
+    tagline: 'Made in small batches',
+  });
 }

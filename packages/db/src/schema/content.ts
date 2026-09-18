@@ -1,3 +1,4 @@
+import type { ResolvedSetting } from '@cgp/contracts';
 import { sql } from 'drizzle-orm';
 import {
   boolean,
@@ -13,7 +14,7 @@ import {
   uuid,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
-import { templates, templateVersions } from './catalog';
+import { compilerProfiles, templates, templateVersions } from './catalog';
 import { createdAt, id, outputTypeEnum, platformEnum } from './columns';
 import { jobs } from './jobs';
 import { brandKits, workspaceId, workspaceProfiles } from './tenancy';
@@ -39,6 +40,15 @@ export const compiledPrompts = pgTable(
     profileVersion: integer('profile_version').notNull(),
     brandKitVersion: integer('brand_kit_version').notNull(),
     compilerProfileVersion: integer('compiler_profile_version').notNull(),
+    /** Which compiler profile the version belongs to, such as `script.en`. */
+    compilerProfileKey: text('compiler_profile_key').notNull(),
+    outputType: outputTypeEnum('output_type').notNull(),
+    language: text('language').notNull().default('en'),
+    /** The resolved settings (stage 1), so an edit re-applies the same requirements. */
+    settings: jsonb('settings')
+      .notNull()
+      .default(sql`'[]'::jsonb`)
+      .$type<ResolvedSetting[]>(),
     userEdited: boolean('user_edited').notNull().default(false),
     fallbackUsed: boolean('fallback_used').notNull().default(false),
     createdAt: createdAt(),
@@ -59,6 +69,11 @@ export const compiledPrompts = pgTable(
       name: 'compiled_prompts_brand_kit_version_fk',
       columns: [t.workspaceId, t.brandKitVersion],
       foreignColumns: [brandKits.workspaceId, brandKits.version],
+    }),
+    foreignKey({
+      name: 'compiled_prompts_compiler_profile_fk',
+      columns: [t.compilerProfileKey, t.compilerProfileVersion],
+      foreignColumns: [compilerProfiles.key, compilerProfiles.version],
     }),
   ],
 );

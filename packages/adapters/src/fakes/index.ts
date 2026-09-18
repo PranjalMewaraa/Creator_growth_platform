@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import {
   AdapterError,
   FAILURE_CATEGORIES,
@@ -61,7 +62,14 @@ export function createFakeImage(key = 'fake-image'): ImageAdapter {
 }
 
 // 8s, 180x320, 24 fps, no audio: the shape Veo returns with generateAudio off.
-const FAKE_CLIP = readFileSync(new URL('../../fixtures/fake-clip.mp4', import.meta.url));
+// Read on first use rather than at import, so bundles that never run the fake video (the web
+// app) do not need the fixture on disk.
+let fakeClip: Uint8Array | undefined;
+function clip(): Uint8Array {
+  return (fakeClip ??= readFileSync(
+    fileURLToPath(new URL('../../fixtures/fake-clip.mp4', import.meta.url)),
+  ));
+}
 
 export function createFakeVideo(key = 'fake-video'): VideoAdapter {
   const polls = new Map<string, number>();
@@ -91,7 +99,7 @@ export function createFakeVideo(key = 'fake-video'): VideoAdapter {
         return {
           status: 'done' as const,
           clip: {
-            data: FAKE_CLIP,
+            data: clip(),
             mimeType: 'video/mp4',
             durationSeconds: 8,
             width: 180,

@@ -16,6 +16,7 @@ export interface JobRequest {
   input?: unknown;
   estimate: CreditEstimate;
   correlationId?: string;
+  compiledPromptId?: string;
 }
 
 /**
@@ -29,6 +30,7 @@ export async function submitJob(deps: SubmitDeps, request: JobRequest): Promise<
     generatorKey: request.generatorKey,
     input: request.input,
     correlationId: request.correlationId,
+    compiledPromptId: request.compiledPromptId,
     hold: { credits: request.estimate.credits, videoSeconds: request.estimate.videoSeconds ?? 0 },
   });
   if (!result.ok) return result;

@@ -2,6 +2,7 @@ import type { MeteringRates } from '@cgp/contracts';
 import { eq } from 'drizzle-orm';
 import { unwrap, type Database } from './client';
 import { grantIn } from './ledger';
+import { seedCatalogIn } from './seed-catalog';
 import { scopedOn } from './scoped';
 import { brandKits, meteringRates, users, workspaceProfiles, workspaces } from './schema';
 import { createWorkspaceIn } from './workspaces';
@@ -23,7 +24,8 @@ export interface SeedResult {
 /**
  * Seed skeleton: metering rates, an owner, one populated workspace and one deliberately near
  * empty (plan section 15), with credits granted through the ledger. Runs in one transaction,
- * and skips if the owner already exists. Templates, compiler profiles and history come later.
+ * and skips the demo data if the owner already exists. The catalog (compiler profiles, default
+ * templates) is seeded every time, so new versions reach an existing database.
  */
 export async function seedDemo(
   db: Database,
@@ -31,6 +33,7 @@ export async function seedDemo(
 ): Promise<SeedResult> {
   const d = unwrap(db);
   return d.transaction(async (tx) => {
+    await seedCatalogIn(tx);
     const existing = await tx
       .select({ id: users.id })
       .from(users)

@@ -1,6 +1,7 @@
 import type { Logger } from '@cgp/config';
-import type { TextAdapter } from '@cgp/contracts';
-import { TEXT_MODELS, type TextModelKey } from './models';
+import type { ModerationAdapter, TextAdapter, TokenUsage } from '@cgp/contracts';
+import { createFakeModeration } from './fakes';
+import { isTextModelKey, TEXT_MODELS, textCostInr, type TextModelKey } from './models';
 import { createClaudeText } from './text/claude';
 import { createFakeText } from './text/fake';
 import { createGeminiText } from './text/gemini';
@@ -53,4 +54,38 @@ function createRealText(key: TextModelKey, { project, log }: RealProviderOptions
         log,
       });
   }
+}
+
+export interface Providers {
+  mode: ProviderMode;
+  text: TextAdapters;
+  /** The compile rewrite pass, in order: Flash-Lite, then gpt-oss (plan section 6). */
+  rewriters: TextAdapter[];
+  /**
+   * The fake in both modes until the moderation service is chosen (D3, WP11): it allows
+   * everything except `FAKE_BLOCK:` markers.
+   */
+  moderation: ModerationAdapter;
+  /** Realised cost of a text call in rupees; zero for fakes. */
+  textCostInr: (adapterKey: string, usage: TokenUsage) => number;
+}
+
+/** Everything a process needs to call providers, chosen by PROVIDERS. */
+export function createProviders(env: {
+  PROVIDERS: ProviderMode;
+  GOOGLE_CLOUD_PROJECT?: string;
+  log?: Logger;
+}): Providers {
+  const text =
+    env.PROVIDERS === 'real'
+      ? createTextAdapters('real', { project: env.GOOGLE_CLOUD_PROJECT ?? '', log: env.log })
+      : createTextAdapters('fake');
+  return {
+    mode: env.PROVIDERS,
+    text,
+    rewriters: [text['gemini-flash-lite'], text['gpt-oss-20b']],
+    moderation: createFakeModeration(),
+    textCostInr: (key, usage) =>
+      env.PROVIDERS === 'real' && isTextModelKey(key) ? textCostInr(key, usage) : 0,
+  };
 }

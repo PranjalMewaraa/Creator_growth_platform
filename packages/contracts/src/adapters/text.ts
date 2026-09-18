@@ -7,6 +7,11 @@ export interface TextRequest {
   temperature?: number;
   /** 'json' asks for a single JSON object, as the compile rewrite pass does. */
   format?: 'text' | 'json';
+  /**
+   * 'minimal' asks a reasoning model to think as little as it can, for latency bound calls
+   * such as the compile rewrite pass. Providers without a reasoning setting ignore it.
+   */
+  reasoning?: 'minimal' | 'default';
   signal?: AbortSignal;
 }
 

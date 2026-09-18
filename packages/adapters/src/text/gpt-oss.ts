@@ -71,6 +71,8 @@ export function createGptOssText(options: GptOssTextOptions): TextAdapter {
         max_tokens: request.maxOutputTokens,
         ...(request.temperature === undefined ? {} : { temperature: request.temperature }),
         ...(request.format === 'json' ? { response_format: { type: 'json_object' } } : {}),
+        // Reasoning tokens count against max_tokens, so at 'minimal' the answer keeps the budget.
+        ...(request.reasoning === 'minimal' ? { reasoning_effort: 'low' } : {}),
         messages: [
           ...(request.system ? [{ role: 'system', content: request.system }] : []),
           { role: 'user', content: request.prompt },

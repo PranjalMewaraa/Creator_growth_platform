@@ -5,6 +5,7 @@ import { applyLedgerEntry, grant } from './ledger';
 import {
   brandKits,
   compiledPrompts,
+  compilerProfiles,
   creditLedger,
   jobs,
   postTargets,
@@ -227,6 +228,9 @@ describe('integrity', () => {
       compilerProfileRef: 'caption',
       costBand: 'low',
     });
+    await d
+      .insert(compilerProfiles)
+      .values({ key: 'caption.lineage', outputType: 'caption', version: 1, config: {} });
     const prompt = {
       text: 'compiled',
       intentText: 'intent',
@@ -234,7 +238,9 @@ describe('integrity', () => {
       templateVersion: 1,
       profileVersion: 1,
       brandKitVersion: 1,
+      compilerProfileKey: 'caption.lineage',
       compilerProfileVersion: 1,
+      outputType: 'caption' as const,
     };
 
     expect(await sqlState(s.insert(compiledPrompts, prompt))).toBeUndefined();
@@ -244,5 +250,8 @@ describe('integrity', () => {
     expect(await sqlState(s.insert(compiledPrompts, { ...prompt, templateVersion: 9 }))).toBe(
       SQLSTATE.foreignKeyViolation,
     );
+    expect(
+      await sqlState(s.insert(compiledPrompts, { ...prompt, compilerProfileVersion: 2 })),
+    ).toBe(SQLSTATE.foreignKeyViolation);
   });
 });

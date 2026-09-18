@@ -24,15 +24,18 @@ Check the job pipeline end to end while the worker runs: `pnpm --filter @cgp/wor
 
 Every route is under `/api/w/<workspace id>` and answers 404 to anyone who is not a member. Generators live in one registry, `packages/core/src/generators/definitions.ts`; adding one there needs no route change (FR-GN-02, checked by `tooling/generator-routing.test.ts`).
 
-| Route                                | Does                                                                            |
-| ------------------------------------ | ------------------------------------------------------------------------------- |
-| `GET generators`                     | The registered generators                                                       |
-| `POST generate/<generator>/estimate` | Prices a request against the metering rates in force. Holds nothing             |
-| `POST generate/<generator>`          | Holds the estimate and queues the job: 202, or 402, 404, 422 with an error code |
-| `GET jobs/<job id>`                  | Job status from Postgres, the polling fallback                                  |
-| `GET jobs/<job id>/events`           | Server sent events: `status` from Postgres, `delta` text relayed through Redis  |
+| Route                                | Does                                                                                      |
+| ------------------------------------ | ----------------------------------------------------------------------------------------- |
+| `GET generators`                     | The registered generators                                                                 |
+| `POST generate/<generator>/estimate` | Prices a request against the metering rates in force. Holds nothing                       |
+| `POST generate/<generator>/compile`  | Compiles plain intent into a prompt to read and edit first. Charges nothing               |
+| `POST generate/<generator>`          | Compiles (or takes `compiledPromptId`), checks, holds, queues: 202, or 402, 404, 409, 422 |
+| `GET prompts/<prompt id>`            | A compiled prompt with its lineage and resolved settings                                  |
+| `POST prompts/<prompt id>/versions`  | A user edit, `{ "text": ... }`, as a new version of the prompt                            |
+| `GET jobs/<job id>`                  | Job status from Postgres, the polling fallback                                            |
+| `GET jobs/<job id>/events`           | Server sent events: `status` from Postgres, `delta` text relayed through Redis            |
 
-Until orchestration (WP10) adds handlers, the worker fails a generator job and refunds it in full without calling a provider.
+The worker runs the text generators (script, hooks, captions). Image and video generators have no handler until weeks 4 to 6, so their jobs fail and are refunded in full. Compiler profiles are seeded catalog rows: to change one, edit it in `packages/db/src/seed-catalog.ts`, bump `COMPILER_PROFILE_VERSION` and run `pnpm db:seed`.
 
 ## Providers
 
@@ -54,17 +57,18 @@ pnpm build
 
 ## Layout
 
-| Path                 | Holds                                                                     |
-| -------------------- | ------------------------------------------------------------------------- |
-| `apps/web`           | Next.js app and API routes                                                |
-| `apps/worker`        | BullMQ worker, one process running the inference, render, publish queues  |
-| `packages/contracts` | Shared types. The only cross stream dependency                            |
-| `packages/config`    | Env schema, logger with correlation id                                    |
-| `packages/db`        | Schema, migrations, `scoped()` and `catalog()` access, auth adapter, seed |
-| `packages/ui`        | Design system primitives: button, card, empty state, form, stat           |
-| `packages/core`      | Job engine and generator registry: credit holds, queues, job streams      |
-| `packages/adapters`  | Provider adapters and their fakes, model ids, error normalisation         |
-| `tooling`            | Repo level tests, such as the import boundary checks                      |
+| Path                     | Holds                                                                     |
+| ------------------------ | ------------------------------------------------------------------------- |
+| `apps/web`               | Next.js app and API routes                                                |
+| `apps/worker`            | BullMQ worker, one process running the inference, render, publish queues  |
+| `packages/contracts`     | Shared types. The only cross stream dependency                            |
+| `packages/config`        | Env schema, logger with correlation id                                    |
+| `packages/db`            | Schema, migrations, `scoped()` and `catalog()` access, auth adapter, seed |
+| `packages/ui`            | Design system primitives: button, card, empty state, form, stat           |
+| `packages/core`          | Job engine and generator registry: credit holds, queues, job streams      |
+| `packages/orchestration` | Prompt compiler: precedence, brief, rewrite pass, enforcement, edits      |
+| `packages/adapters`      | Provider adapters and their fakes, model ids, error normalisation         |
+| `tooling`                | Repo level tests, such as the import boundary checks                      |
 
 Lint enforces two boundaries from the plan: database drivers only inside `packages/db`, provider SDKs only inside `packages/adapters`.
 

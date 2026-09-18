@@ -1,5 +1,6 @@
 import 'server-only';
 import { createDatabase, type Database } from '@cgp/db';
+import { createProviders, type Providers } from '@cgp/adapters';
 import { createQueues, createRedis, type Queues } from '@cgp/core';
 import type { Redis } from 'ioredis';
 import { baseEnvSchema, createLogger, parseEnv, type Logger } from '@cgp/config';
@@ -44,4 +45,11 @@ export function getRedis(): Redis {
 
 export function getQueues(): Queues {
   return (shared.cgpQueues ??= createQueues(getRedis()));
+}
+
+const providers = globalThis as typeof globalThis & { cgpProviders?: Providers };
+
+/** Provider adapters chosen by PROVIDERS: fakes unless real calls were asked for. */
+export function getProviders(): Providers {
+  return (providers.cgpProviders ??= createProviders({ ...getEnv(), log: getLogger() }));
 }

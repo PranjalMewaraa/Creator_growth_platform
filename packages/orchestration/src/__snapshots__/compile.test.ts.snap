@@ -1,0 +1,99 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`assembly (stage 1 and 3, no rewrite) > caption 1`] = `
+"Post captions.
+Intent: Why cold brew is easier than you think
+Who is posting: solo creator, making short video.
+Content pillars: How to, Behind the scenes.
+Current goal: Reach 10k followers.
+Brand tagline, for tone only: Made in small batches.
+
+Requirements:
+- Keep it safe for a general audience: nothing sexual, hateful, violent, harassing, self harming, dangerous or illegal.
+- Write in English.
+- Tone: Warm, direct, practical.
+- Never use these words: guaranteed.
+- Write one caption for each of: Instagram, LinkedIn.
+- Instagram: at most 2,200 characters and 30 hashtags. LinkedIn: at most 3,000 characters.
+- At most 5 hashtags per caption.
+- Reply with JSON: {"captions": {"<platform>": string}}."
+`;
+
+exports[`assembly (stage 1 and 3, no rewrite) > hook 1`] = `
+"Hooks and titles for a post on Instagram.
+Intent: Why cold brew is easier than you think
+Who is posting: solo creator, making short video.
+Content pillars: How to, Behind the scenes.
+Current goal: Reach 10k followers.
+Brand tagline, for tone only: Made in small batches.
+
+Requirements:
+- Keep it safe for a general audience: nothing sexual, hateful, violent, harassing, self harming, dangerous or illegal.
+- Write in English.
+- Tone: Warm, direct, practical.
+- Never use these words: guaranteed.
+- Give 5 opening hooks and 5 titles.
+- Each hook at most 12 words.
+- Reply with JSON: {"hooks": string[], "titles": string[]}."
+`;
+
+exports[`assembly (stage 1 and 3, no rewrite) > image 1`] = `
+"A photograph for a post on Instagram.
+Subject: Why cold brew is easier than you think
+Style: natural light, editorial photography, shallow depth of field
+
+Requirements:
+- Keep it safe for a general audience: nothing sexual, hateful, violent, harassing, self harming, dangerous or illegal.
+- No text, letters, numbers, logos or watermarks anywhere.
+- Compose for a 4:5 frame.
+- Lean on the brand colours #1F2937, #F59E0B.
+- Mood: Warm, direct, practical."
+`;
+
+exports[`assembly (stage 1 and 3, no rewrite) > script 1`] = `
+"A short video script for Instagram.
+Intent: Why cold brew is easier than you think
+Who is posting: solo creator, making short video.
+Content pillars: How to, Behind the scenes.
+Current goal: Reach 10k followers.
+Brand tagline, for tone only: Made in small batches.
+
+Requirements:
+- Keep it safe for a general audience: nothing sexual, hateful, violent, harassing, self harming, dangerous or illegal.
+- Write in English.
+- Tone: Warm, direct, practical.
+- Never use these words: guaranteed.
+- Length: about 30 seconds spoken, 75 words at most.
+- Open with a hook in the first sentence and end with one clear call to action."
+`;
+
+exports[`assembly (stage 1 and 3, no rewrite) > thumbnail 1`] = `
+"A thumbnail background for a video on Instagram.
+Subject: Why cold brew is easier than you think
+Style: bold, high contrast, one clear subject
+
+Requirements:
+- Keep it safe for a general audience: nothing sexual, hateful, violent, harassing, self harming, dangerous or illegal.
+- No text, letters, numbers, logos or watermarks anywhere.
+- Compose for a 9:16 frame.
+- Lean on the brand colours #1F2937, #F59E0B.
+- Mood: Warm, direct, practical.
+- Leave clear space for a headline, which is added later as a separate layer."
+`;
+
+exports[`assembly (stage 1 and 3, no rewrite) > video 1`] = `
+"A short vertical video for Instagram.
+Intent: Why cold brew is easier than you think
+Who is posting: solo creator, making short video.
+Content pillars: How to, Behind the scenes.
+Current goal: Reach 10k followers.
+Brand tagline, for tone only: Made in small batches.
+
+Requirements:
+- Keep it safe for a general audience: nothing sexual, hateful, violent, harassing, self harming, dangerous or illegal.
+- No on screen text in the footage; captions are added later.
+- Frame for 9:16.
+- 3 scenes of 8 seconds each.
+- A voiceover will be added, so keep the footage free of dialogue.
+- Mood: Warm, direct, practical."
+`;

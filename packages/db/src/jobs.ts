@@ -1,8 +1,8 @@
 import { settlementFor, type Currency, type JobClass } from '@cgp/contracts';
-import { and, eq, inArray, lt, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 import { unwrap, type Database } from './client';
 import { applyLedgerEntry } from './ledger';
-import { costTelemetry, creditLedger, jobs, workspaces } from './schema';
+import { compiledPrompts, costTelemetry, creditLedger, jobs, workspaces } from './schema';
 
 export type JobRow = typeof jobs.$inferSelect;
 
@@ -20,6 +20,8 @@ export interface NewJob {
   correlationId?: string;
   /** From the generator's estimate. Held now, settled or refunded when the job ends. */
   hold: Amounts;
+  /** The compiled prompt this job runs. Its first job is recorded on it in the same transaction. */
+  compiledPromptId?: string;
 }
 
 export type CreateJobResult =
@@ -92,6 +94,18 @@ export async function createJobWithHold(db: Database, job: NewJob): Promise<Crea
         delta: -job.hold[key],
         reason: 'hold',
       });
+    }
+    if (job.compiledPromptId) {
+      await tx
+        .update(compiledPrompts)
+        .set({ jobId: created.id })
+        .where(
+          and(
+            eq(compiledPrompts.id, job.compiledPromptId),
+            eq(compiledPrompts.workspaceId, job.workspaceId),
+            isNull(compiledPrompts.jobId),
+          ),
+        );
     }
     return { ok: true, job: created };
   });

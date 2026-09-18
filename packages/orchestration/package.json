@@ -1,0 +1,16 @@
+{
+  "name": "@cgp/orchestration",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@cgp/config": "workspace:*",
+    "@cgp/contracts": "workspace:*",
+    "@cgp/db": "workspace:*"
+  }
+}

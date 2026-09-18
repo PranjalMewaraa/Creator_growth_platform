@@ -22,6 +22,13 @@
       "when": 1789542544357,
       "tag": "0002_identity",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789729932752,
+      "tag": "0003_compiled_prompt_settings",
+      "breakpoints": true
     }
   ]
 }

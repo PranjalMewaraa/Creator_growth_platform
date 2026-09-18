@@ -1,10 +1,28 @@
+import { createFakeModeration, createTextAdapters } from '@cgp/adapters';
 import { createLogger } from '@cgp/config';
-import type { QueuedJobData } from '@cgp/contracts';
-import { jobs, scoped, type Database } from '@cgp/db';
-import { createTestDatabase, createTestWorkspace, insertMeteringRates } from '@cgp/db/testing';
+import { AdapterError, type QueuedJobData, type TextAdapter } from '@cgp/contracts';
+import {
+  compiledPrompts,
+  costTelemetry,
+  creditLedger,
+  jobs,
+  outputs,
+  scoped,
+  type Database,
+} from '@cgp/db';
+import {
+  addTestProfile,
+  createTestDatabase,
+  createTestWorkspace,
+  insertMeteringRates,
+  seedTestCatalog,
+} from '@cgp/db/testing';
+import { editCompiledPrompt } from '@cgp/orchestration';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { estimateGeneration, findJob, startGeneration } from './generate';
+import { compileGeneration, estimateGeneration, findJob, startGeneration } from './generate';
 import { generators } from './generators/definitions';
+import { createTextHandlers } from './handlers/text';
+import { processJob } from './process';
 import type { Queues } from './queues';
 
 const log = createLogger({ service: 'test', level: 'silent' });
@@ -26,11 +44,26 @@ function recordingQueues() {
   return { queues, added };
 }
 
+/** A rewriter slower than any budget that stops when aborted, as real ones do. */
+const hanging: TextAdapter = {
+  key: 'hanging',
+  generate: (request) =>
+    new Promise((_, reject) => {
+      request.signal?.addEventListener('abort', () =>
+        reject(new AdapterError({ code: 'ABORTED', message: 'aborted', category: 'retriable' })),
+      );
+    }),
+  stream: () => {
+    throw new Error('not used');
+  },
+};
+
 let db: Database;
 
 beforeAll(async () => {
   db = await createTestDatabase();
   await insertMeteringRates(db);
+  await seedTestCatalog(db);
 });
 
 afterAll(async () => {
@@ -38,6 +71,23 @@ afterAll(async () => {
 });
 
 const intent = { intentText: 'Three reasons to switch to cold brew' };
+
+function deps(queues: Queues, rewriters: TextAdapter[] = []) {
+  return {
+    db,
+    queues,
+    log,
+    registry: generators,
+    compile: { rewriters },
+    moderation: createFakeModeration(),
+  };
+}
+
+async function workspace(credits = 100, videoSeconds = 0) {
+  const id = await createTestWorkspace(db, { credits, videoSeconds });
+  await addTestProfile(db, id);
+  return id;
+}
 
 describe('estimateGeneration', () => {
   it('prices with the rates in force and names their version', async () => {
@@ -59,20 +109,22 @@ describe('estimateGeneration', () => {
 });
 
 describe('startGeneration', () => {
-  it('holds the estimate, stores the parsed input and enqueues on the class queue', async () => {
-    const workspaceId = await createTestWorkspace(db, { credits: 100, videoSeconds: 30 });
+  it('compiles, holds, enqueues, and links the prompt to its job', async () => {
+    const workspaceId = await workspace(100, 30);
     const { queues, added } = recordingQueues();
 
-    const result = await startGeneration(
-      { db, queues, log, registry: generators },
-      { workspaceId, generatorKey: 'video', input: { ...intent, sceneCount: 2 } },
-    );
-
-    expect(result).toMatchObject({
-      ok: true,
-      job: { status: 'QUEUED', jobClass: 'render', held: { credits: 0, videoSeconds: 16 } },
+    const result = await startGeneration(deps(queues), {
+      workspaceId,
+      generatorKey: 'video',
+      input: { ...intent, sceneCount: 2 },
     });
-    if (!result.ok) return;
+
+    if (!result.ok) throw new Error(result.reason);
+    expect(result.job).toMatchObject({
+      status: 'QUEUED',
+      jobClass: 'render',
+      held: { credits: 0, videoSeconds: 16 },
+    });
     expect(added).toEqual([
       {
         queue: 'render',
@@ -80,48 +132,239 @@ describe('startGeneration', () => {
         data: { jobId: result.job.id, correlationId: result.job.id },
       },
     ]);
-    const workspace = await scoped(db, workspaceId).workspace();
-    expect(workspace?.videoSecondsBalance).toBe(14);
+    const [job] = await scoped(db, workspaceId).select(jobs);
+    expect(job?.input).toMatchObject({ sceneCount: 2, compiledPromptId: result.prompt.id });
+    const [prompt] = await scoped(db, workspaceId).select(compiledPrompts);
+    expect(prompt?.jobId).toBe(result.job.id);
+    expect((await scoped(db, workspaceId).workspace())?.videoSecondsBalance).toBe(14);
+  });
 
-    const stored = await findJob(db, workspaceId, result.job.id);
-    expect(stored?.status).toBe('QUEUED');
+  it('dispatches the prompt the user edited, not a fresh compile', async () => {
+    const workspaceId = await workspace();
+    const { queues } = recordingQueues();
+    const compiled = await compileGeneration(
+      { db, registry: generators, compile: { rewriters: [] } },
+      { workspaceId, generatorKey: 'caption_set', input: intent },
+    );
+    if (!compiled.ok) throw new Error(compiled.reason);
+    const edited = await editCompiledPrompt(db, workspaceId, compiled.prompt.id, 'My words.');
+    if (!edited.ok) throw new Error(edited.reason);
+
+    const result = await startGeneration(deps(queues), {
+      workspaceId,
+      generatorKey: 'caption_set',
+      input: intent,
+      compiledPromptId: edited.prompt.id,
+    });
+
+    if (!result.ok) throw new Error(result.reason);
+    expect(result.prompt).toMatchObject({ id: edited.prompt.id, userEdited: true });
+    expect(await scoped(db, workspaceId).select(compiledPrompts)).toHaveLength(2);
+  });
+
+  it('refuses a prompt compiled for another output type', async () => {
+    const workspaceId = await workspace();
+    const compiled = await compileGeneration(
+      { db, registry: generators, compile: { rewriters: [] } },
+      { workspaceId, generatorKey: 'caption_set', input: intent },
+    );
+    if (!compiled.ok) throw new Error(compiled.reason);
+    const result = await startGeneration(deps(recordingQueues().queues), {
+      workspaceId,
+      generatorKey: 'script',
+      input: intent,
+      compiledPromptId: compiled.prompt.id,
+    });
+    expect(result).toEqual({ ok: false, reason: 'prompt_not_found' });
+  });
+
+  it('creates no job and no hold for a blocked compiled prompt (invariant 10)', async () => {
+    const workspaceId = await workspace();
+    const { queues, added } = recordingQueues();
+
+    const result = await startGeneration(deps(queues), {
+      workspaceId,
+      generatorKey: 'script',
+      input: { intentText: 'FAKE_BLOCK:violence a fight scene' },
+    });
+
+    expect(result).toEqual({ ok: false, reason: 'blocked', category: 'violence' });
+    expect(added).toEqual([]);
+    expect(await scoped(db, workspaceId).select(jobs)).toEqual([]);
+    expect(await scoped(db, workspaceId).select(creditLedger)).toHaveLength(1); // the grant
   });
 
   it('creates nothing when the balance cannot cover the estimate', async () => {
-    const workspaceId = await createTestWorkspace(db, { credits: 5 });
+    const workspaceId = await workspace(5);
     const { queues, added } = recordingQueues();
-
-    const result = await startGeneration(
-      { db, queues, log, registry: generators },
-      { workspaceId, generatorKey: 'script', input: intent },
-    );
-
+    const result = await startGeneration(deps(queues), {
+      workspaceId,
+      generatorKey: 'script',
+      input: intent,
+    });
     expect(result).toEqual({ ok: false, reason: 'insufficient_credits' });
     expect(added).toEqual([]);
     expect(await scoped(db, workspaceId).select(jobs)).toEqual([]);
   });
 
-  it('creates nothing for invalid input', async () => {
+  it('asks for a profile before compiling for a workspace without one', async () => {
     const workspaceId = await createTestWorkspace(db, { credits: 100 });
-    const { queues, added } = recordingQueues();
-    const result = await startGeneration(
-      { db, queues, log, registry: generators },
-      { workspaceId, generatorKey: 'image', input: { ...intent, count: 0 } },
+    const result = await startGeneration(deps(recordingQueues().queues), {
+      workspaceId,
+      generatorKey: 'script',
+      input: intent,
+    });
+    expect(result).toEqual({ ok: false, reason: 'profile_required' });
+  });
+});
+
+describe('text generation end to end', () => {
+  const adapters = createTextAdapters('fake');
+  const deltas: string[] = [];
+  // Built on first use: db only exists once beforeAll has run.
+  const textHandlers = () =>
+    createTextHandlers({
+      db,
+      registry: generators,
+      adapters,
+      publishDelta: (_jobId, text) => {
+        deltas.push(text);
+        return Promise.resolve();
+      },
+      costInr: () => 0,
+      providerLabel: 'fake',
+    });
+  let handlers: ReturnType<typeof createTextHandlers>;
+  beforeAll(() => {
+    handlers = textHandlers();
+  });
+
+  it('has a handler for each text generator only', () => {
+    expect(Object.keys(handlers).sort()).toEqual(['caption_set', 'hook_title_set', 'script']);
+  });
+
+  it('forced 1500ms breach: falls back, generation succeeds, compile uses no credit', async () => {
+    const workspaceId = await workspace(10);
+    const { queues } = recordingQueues();
+
+    const started = await startGeneration(deps(queues, [hanging]), {
+      workspaceId,
+      generatorKey: 'script',
+      input: intent,
+    });
+    if (!started.ok) throw new Error(started.reason);
+    expect(started.prompt.fallbackUsed).toBe(true);
+
+    const result = await processJob(
+      { db, handlers, log },
+      { jobId: started.job.id, correlationId: started.job.id },
     );
-    expect(result).toMatchObject({ ok: false, reason: 'invalid_input' });
-    expect(added).toEqual([]);
+    expect(result).toBe('settled');
+
+    const job = await findJob(db, workspaceId, started.job.id);
+    expect(job).toMatchObject({ status: 'COMPLETE', settled: { credits: 6, videoSeconds: 0 } });
+
+    // Only the grant, the job's hold and its settle (zero: the actual equals the hold). Compile
+    // wrote nothing.
+    const ledger = await scoped(db, workspaceId).select(creditLedger);
+    expect(ledger.map((e) => [e.reason, e.delta])).toEqual([
+      ['grant', 10],
+      ['hold', -6],
+      ['settle', 0],
+    ]);
+    expect((await scoped(db, workspaceId).workspace())?.creditBalance).toBe(4);
+
+    const [output] = await scoped(db, workspaceId).select(outputs);
+    expect(output).toMatchObject({
+      jobId: started.job.id,
+      kind: 'script',
+      compiledPromptId: started.prompt.id,
+    });
+    expect((output?.metadata as { text: string }).text).toContain('[fake claude-haiku]');
+    expect(deltas.join('')).toBe((output?.metadata as { text: string }).text);
+
+    const [telemetry] = await scoped(db, workspaceId).select(costTelemetry);
+    expect(telemetry).toMatchObject({ actionClass: 'script', provider: 'fake:claude-haiku' });
+  });
+
+  it('stores JSON output for JSON generators and refunds when it is not JSON', async () => {
+    const workspaceId = await workspace(10);
+    const { queues } = recordingQueues();
+    const ok = await startGeneration(deps(queues), {
+      workspaceId,
+      generatorKey: 'caption_set',
+      input: intent,
+    });
+    if (!ok.ok) throw new Error(ok.reason);
+    expect(await processJob({ db, handlers, log }, { jobId: ok.job.id, correlationId: 'c' })).toBe(
+      'settled',
+    );
+
+    const failing = createTextHandlers({
+      db,
+      registry: generators,
+      adapters: {
+        'gemini-flash-lite': {
+          key: 'broken',
+          generate: () => Promise.reject(new Error('unused')),
+          async *stream() {
+            await Promise.resolve();
+            yield {
+              type: 'done' as const,
+              result: {
+                text: 'not json',
+                finishReason: 'stop' as const,
+                usage: { inputTokens: 1, outputTokens: 1 },
+              },
+            };
+          },
+        },
+      },
+      publishDelta: () => Promise.resolve(),
+      costInr: () => 0,
+      providerLabel: 'fake',
+    });
+    const bad = await startGeneration(deps(queues), {
+      workspaceId,
+      generatorKey: 'caption_set',
+      input: intent,
+    });
+    if (!bad.ok) throw new Error(bad.reason);
+    expect(
+      await processJob({ db, handlers: failing, log }, { jobId: bad.job.id, correlationId: 'c' }),
+    ).toBe('refunded');
+    expect((await scoped(db, workspaceId).workspace())?.creditBalance).toBe(9);
+  });
+
+  it('settles a redelivered job without calling the provider again', async () => {
+    const workspaceId = await workspace(10);
+    const started = await startGeneration(deps(recordingQueues().queues), {
+      workspaceId,
+      generatorKey: 'hook_title_set',
+      input: intent,
+    });
+    if (!started.ok) throw new Error(started.reason);
+    const job = (await scoped(db, workspaceId).select(jobs))[0];
+    if (!job) throw new Error('no job');
+
+    const handler = handlers.hook_title_set;
+    if (!handler) throw new Error('no handler');
+    await handler(job, log);
+    const again = await handler(job, log);
+    expect(again.telemetry.realisedCostInr).toBe(0);
+    expect(await scoped(db, workspaceId).select(outputs)).toHaveLength(1);
   });
 });
 
 describe('findJob', () => {
   it('never shows a job from another workspace', async () => {
-    const owner = await createTestWorkspace(db, { credits: 10 });
+    const owner = await workspace(10);
     const other = await createTestWorkspace(db, { credits: 10 });
-    const { queues } = recordingQueues();
-    const result = await startGeneration(
-      { db, queues, log, registry: generators },
-      { workspaceId: owner, generatorKey: 'caption_set', input: intent },
-    );
+    const result = await startGeneration(deps(recordingQueues().queues), {
+      workspaceId: owner,
+      generatorKey: 'caption_set',
+      input: intent,
+    });
     if (!result.ok) throw new Error('expected a job');
 
     expect(await findJob(db, owner, result.job.id)).toBeDefined();

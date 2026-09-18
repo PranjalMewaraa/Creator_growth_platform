@@ -68,13 +68,14 @@ describe('generator definitions', () => {
     expect(prepared?.ok && prepared.estimate).toMatchObject({ credits: 0, videoSeconds: 16 });
   });
 
-  it('fills defaults, so the job stores the input that was priced', () => {
+  it('fills priced defaults and leaves unstated instructions absent', () => {
     const prepared = generators.get('caption_set')?.prepare(intent, rates);
     expect(prepared?.ok && prepared.input).toMatchObject({
       intentText: intent.intentText,
       targetPlatform: null,
-      platforms: ['instagram', 'linkedin'],
     });
+    expect(prepared?.ok && prepared.input).not.toHaveProperty('platforms');
+    expect(generators.get('image')?.prepare(intent, rates)).toMatchObject({ input: { count: 1 } });
   });
 
   it('reports every problem with its path', () => {

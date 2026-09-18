@@ -318,7 +318,7 @@ Notes:
 - `outputs.parent_output_id` supports any output becoming another generator's input (FR-GN-10).
 - `compiled_prompts.parent_id` links a user edit to the prompt it was edited from.
 - Job status values match `JobStatus` in `packages/contracts`.
-- From WP3 on, the migrations in `packages/db/migrations` are authoritative. Additions beyond the list above: `post_targets.prepared_ref` (platform draft id, so polling survives a restart) and `post_targets.publish_started_at` (set just before the irreversible call, so a crash before it is safe to retry and a crash after it goes to `needs_verification`), `post_targets.published_at`, `jobs.correlation_id`, `compiler_profiles.key`, `social_accounts.display_name`.
+- From WP3 on, the migrations in `packages/db/migrations` are authoritative. Additions beyond the list above: `post_targets.prepared_ref` (platform draft id, so polling survives a restart) and `post_targets.publish_started_at` (set just before the irreversible call, so a crash before it is safe to retry and a crash after it goes to `needs_verification`), `post_targets.published_at`, `jobs.correlation_id`, `compiler_profiles.key`, `social_accounts.display_name`, and on `compiled_prompts` (WP10) `compiler_profile_key`, `output_type`, `language` and `settings` (the resolved settings with their precedence source, so an edit re-applies the same requirements and the disclosure can show why).
 - Enforced in the database, not only in code: ledger append only (trigger), ledger entry signs and once per job, non negative balances, previews must be real output, a published target must hold a post id, and compiled prompt lineage must point at template, profile and brand kit versions that exist.
 
 ---

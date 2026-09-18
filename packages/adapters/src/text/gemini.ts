@@ -6,7 +6,7 @@ import type {
   TextResult,
   TextStreamEvent,
 } from '@cgp/contracts';
-import { GoogleGenAI, type GenerateContentResponse } from '@google/genai';
+import { GoogleGenAI, ThinkingLevel, type GenerateContentResponse } from '@google/genai';
 import { normalizeError } from '../errors';
 
 export interface GeminiTextOptions {
@@ -59,6 +59,9 @@ export function createGeminiText(options: GeminiTextOptions): TextAdapter {
       ...(request.system ? { systemInstruction: request.system } : {}),
       ...(request.temperature === undefined ? {} : { temperature: request.temperature }),
       ...(request.format === 'json' ? { responseMimeType: 'application/json' } : {}),
+      ...(request.reasoning === 'minimal'
+        ? { thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL } }
+        : {}),
       ...(request.signal ? { abortSignal: request.signal } : {}),
     },
   });

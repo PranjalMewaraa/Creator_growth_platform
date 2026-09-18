@@ -10,6 +10,8 @@ export const baseEnvSchema = z.object({
   REDIS_URL: z.url(),
   // Real provider calls spend trial credit, so they are opt in.
   PROVIDERS: z.enum(['fake', 'real']).default('fake'),
+  /** The GCP project Vertex bills. Required when PROVIDERS=real. */
+  GOOGLE_CLOUD_PROJECT: z.string().min(1).optional(),
 });
 
 export type BaseEnv = z.infer<typeof baseEnvSchema>;

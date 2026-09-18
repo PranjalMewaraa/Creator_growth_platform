@@ -9,7 +9,6 @@ import {
   text,
   timestamp,
   unique,
-  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 import { createdAt, id, outputTypeEnum } from './columns';
@@ -80,7 +79,8 @@ export const compilerProfiles = pgTable(
     config: jsonb('config').notNull(),
     createdAt: createdAt(),
   },
-  (t) => [uniqueIndex('compiler_profiles_version').on(t.key, t.version)],
+  // A constraint, not an index: the composite FK from compiled_prompts needs it to exist first.
+  (t) => [unique('compiler_profiles_version').on(t.key, t.version)],
 );
 
 /** Credit costs live in config, not code (FR-BL-01). */

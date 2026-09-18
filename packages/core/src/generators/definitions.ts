@@ -13,7 +13,12 @@ const base = {
   templateId: z.uuid().optional(),
   /** Aspect ratio and length limits follow from this; the user is never asked for them. */
   targetPlatform: z.enum(TARGET_PLATFORMS).nullable().default(null),
+  /** An explicit tone, which outranks the template's and the profile's (FR-PO-06). */
+  tone: z.string().trim().min(1).max(80).optional(),
 };
+
+// Instructions the user did not give stay absent rather than defaulted here, so the template
+// and profile defaults can apply; only quantities that set the price take a default.
 
 /** Veo 3.1 Lite clips are 8 seconds; a reel is up to three of them (plan section 6). */
 export const SECONDS_PER_SCENE = 8;
@@ -24,7 +29,7 @@ const script = register({
   jobClass: 'inference',
   inputSchema: z.object({
     ...base,
-    durationSeconds: z.int().min(15).max(90).default(30),
+    durationSeconds: z.int().min(15).max(90).optional(),
   }),
   compilerProfile: 'script',
   providerAdapter: 'claude-haiku',
@@ -53,10 +58,8 @@ const captionSet = register({
   jobClass: 'inference',
   inputSchema: z.object({
     ...base,
-    platforms: z
-      .array(z.enum(TARGET_PLATFORMS))
-      .min(1)
-      .default([...TARGET_PLATFORMS]),
+    /** Defaults to the target platform, or every platform when there is none. */
+    platforms: z.array(z.enum(TARGET_PLATFORMS)).min(1).optional(),
   }),
   compilerProfile: 'caption',
   providerAdapter: 'gemini-flash-lite',
