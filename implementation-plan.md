@@ -25,7 +25,7 @@
 | D12 | Image text layer | SVG layer spec stored as JSON, edited in browser, flattened in worker with resvg using the same font files | proposed | |
 | D13 | Tests | Vitest. Database tests run on PGlite (in-memory Postgres, same constraints and triggers, no docker). Concurrency tests, such as two writers racing for a hold, need the docker Postgres from WP7 on | DECIDED in WP3 | |
 | D14 | Exchange rate (open item 17.5) | 88, stored once in config, every rupee figure derived from it | proposed | |
-| D15 | Facebook Page publishing | Not in the locked scope (plan section 3). Spiked in week 1 through the same Meta app (Facebook Login for Business: `pages_show_list`, `pages_manage_posts`, `pages_read_engagement`). Go or no go at the week 3 checkpoint: building it costs about half a week (publisher, platform enum, captions, previews, renditions, Insights) | DECIDED 2026-09-16: spike now, decide week 3 | Week 3 checkpoint |
+| D15 | Facebook Page publishing | Not for this demo. It would have cost about half a week, and the API posts only to Pages, never personal profiles, so it helps fewer individual creators than Instagram and LinkedIn do. Post-demo item: same Meta app, adding Facebook Login for Business (`pages_show_list`, `pages_manage_posts`, `pages_read_engagement`) | DECIDED 2026-09-18: dropped | |
 
 **What D1 means for the rest of the plan:**
 - **Budget.** Vercel, R2, Postgres and Redis are cash lines. The costing in plan section 6 carries only the domain as cash, so the build budget table needs a cash line per service. The Vercel and R2 lines may be zero on free tiers, but check whether Vercel Hobby terms allow an investor demo, since they restrict commercial use.
@@ -151,7 +151,7 @@ Weeks 1 to 3 are detailed. Weeks 4 to 8 are scoped and get re-planned in detail 
 | WP2 Contracts | A | Section 9 types, adapter interfaces, error categories | Imported by web and worker |
 | WP3 Schema | B (A reviews ledger and job tables) | Full section 8 schema as amended. Every table in the first migration. Scoped helper, catalog helper, seed skeleton with grants through the ledger | Migration runs clean. Lint blocks unscoped access. Cross workspace read test passes. Duplicate settle rejected by the unique index |
 | WP4 Shell and auth | B | Next.js App Router, magic link sign in (D6), S-01, S-02, navigation for the 7 destinations, header with credits and video seconds, design tokens, empty frames per screen. S-02 asks name and timezone; the primary goal question moves to onboarding (WP12), where each answer visibly configures something | User signs in, creates a workspace, lands on the shell (week 1 exit) |
-| WP5 Spikes | A | Instagram and LinkedIn publish from a script. Facebook Page publish from the same Meta app (D15). ffmpeg ASS captions at 9:16 with the font stack including Noto Sans Devanagari. One 8 unit Veo Lite clip with the billing line read (17.1). 720p vs 1080p on one prompt. TTS timepoints | Each question answered in `docs/spikes/*.md` (week 1 exit) |
+| WP5 Spikes | A | Instagram and LinkedIn publish from a script (done: `docs/spikes/instagram.md`, `docs/spikes/linkedin.md`). ffmpeg ASS captions at 9:16 with the font stack including Noto Sans Devanagari. One 8 unit Veo Lite clip with the billing line read (17.1). 720p vs 1080p on one prompt. TTS timepoints | Each question answered in `docs/spikes/*.md` (week 1 exit) |
 | WP6 Infra | A | Vercel project, R2 bucket, Postgres and Redis per D1b, GCE VM with ffmpeg and fonts (Dockerfile, systemd), one region throughout, deploy path for web and worker, budget alert | Worker on the VM consumes a no-op job enqueued from the deployed web |
 
 ### Weeks 2 to 3: Orchestration and job model
@@ -166,7 +166,7 @@ Weeks 1 to 3 are detailed. Weeks 4 to 8 are scoped and get re-planned in detail 
 | WP12 Onboarding and profile | B | FR-ON flow, one question per screen, each answer visibly configures something. S-17 with version history | Editing the profile creates version N+1, and the next compile shows it in lineage |
 | WP13 Brand kit | B | S-18: logo upload, 3 colours, typography, tagline. Versioned | Next compile shows new brand kit version in lineage |
 | WP14 Studio and disclosure | B | Studio frame, cost before submit, streamed output, navigable away while the job continues. PROMPT disclosure: collapsed, viewable, editable, designed | Week 3 exit: intent, see prompt, edit, dispatch, held, settled, ledger line visible |
-| Checkpoint | both | Re-baseline against velocity. Invariant audit per A5. Cut decisions per plan section 12. Facebook go or no go (D15) | |
+| Checkpoint | both | Re-baseline against velocity. Invariant audit per A5. Cut decisions per plan section 12 | |
 
 ### Week 4: Text, image, thumbnail
 
