@@ -2,7 +2,7 @@
 
 **Companion to `plan.md`.** `plan.md` says what and why. This file says how, in what order, and what has been decided. Where the two disagree, `plan.md` wins.
 
-**Status:** 2026-09-18. WP1 to WP5 and WP7 to WP10 built. Amendments A1 to A11 accepted and applied to `plan.md`. Items marked OPEN need an answer before the work package that depends on them.
+**Status:** 2026-09-18. WP1 to WP5 and WP7 to WP11 built. Amendments A1 to A11 accepted and applied to `plan.md`. Items marked OPEN need an answer before the work package that depends on them.
 
 ---
 
@@ -13,7 +13,7 @@
 | D1 | Hosting topology (open item 17.2) | As written in plan section 5: Vercel for web, R2 for storage, one GCE VM for worker + ffmpeg | DECIDED 2026-09-14 | |
 | D1b | Postgres and Redis providers | Postgres: Neon, Singapore (`ap-southeast-1`), Postgres 18, in use for development. Pin Vercel functions and the render VM to Singapore too. Check the Neon plan before the demo: free tier compute suspends when idle, and the first query after that is slow. Redis still open: smallest managed instance in the same region, not billed per command, since BullMQ polls constantly | Postgres DECIDED 2026-09-16, Redis OPEN | WP6 |
 | D2 | Publishing pair (open item 17.7) | Instagram + LinkedIn | DECIDED 2026-09-14 | |
-| D3 | Moderation endpoint (not named in plan) | Cloud Natural Language `moderateText` + Vision SafeSearch. Both GCP, credit eligible. Verify free tier on the day | OPEN | WP11 |
+| D3 | Moderation endpoint (not named in plan) | Cloud Natural Language `moderateText` + Vision SafeSearch. Both GCP, credit eligible. Verify free tier on the day. Adapter built in WP11 (`MODERATION=google`). Both APIs enabled and checked live 2026-09-18: ordinary text allowed, a violent sentence blocked (violence 1.00), a politics and finance topic allowed. A check adds about 0.5 to 2s to dispatch. The same violent sentence also scored Illicit Drugs 0.88, so the 0.8 threshold may need tuning against the week 4 eval set | DECIDED 2026-09-18 | WP11 |
 | D4 | Monorepo | pnpm workspaces + Turborepo, Node 24 LTS, TypeScript 6.0 strict, ESLint 9. TypeScript 7 and ESLint 10 wait until typescript-eslint and eslint-config-next support them | DECIDED in WP1 | |
 | D5 | ORM and migrations | Drizzle + drizzle-kit. SQL shaped, supports `FOR UPDATE`, typed | proposed | |
 | D6 | Auth | better-auth, email magic link, database sessions. Chosen over Auth.js v5, still beta (`5.0.0-beta.32`), because better-auth is a stable release and its magic link option refuses unknown emails, which is exactly A11. Without an email sender the link goes to the server log; a real sender is needed before anyone outside the team signs in | DECIDED in WP4 | |
@@ -164,7 +164,7 @@ Weeks 1 to 3 are detailed. Weeks 4 to 8 are scoped and get re-planned in detail 
 | WP8 Text adapters | A | Fakes for every adapter kind. Gemini Flash-Lite and Haiku through Vertex. gpt-oss-20b as second compile provider. Error normalisation. Built 2026-09-18 in `packages/adapters`: `createTextAdapters('fake' \| 'real')`, model ids in `models.ts`, fakes returning real PNG, WAV and MP4 files. Live contract tests pass for Gemini and gpt-oss (`openai/gpt-oss-20b-maas`, `us-central1`, through the OpenAI-compatible endpoint). Haiku is blocked on quota (D16) | Same call runs fake or real behind one flag |
 | WP9 Registry and API | A + B | Generator registry, one generate route keyed by generator, estimate endpoint, job SSE route. Built 2026-09-18: registry and the six generator definitions in `packages/core/src/generators`, `startGeneration` and `estimateGeneration` in `packages/core`, routes under `/api/w/[workspaceId]`. Generators have no worker handler yet, so their jobs fail and refund in full until WP10. The seam for compile and the moderation pre check sits between pricing and the hold in `startGeneration` | Adding a generator touches no route file (FR-GN-02) |
 | WP10 Orchestration | A | Stages 1 to 3, artifact persistence, edit versioning, language seam, compiler profiles seeded as versioned rows . Built 2026-09-18 in `packages/orchestration`: directives from five sources resolved by precedence, a deterministic brief, the rewrite pass (Flash-Lite then gpt-oss, minimal reasoning, 1500ms in total), requirements rebuilt from the settings after any rewrite or edit, edits as child versions, the language seam (`routeLanguage`, profiles keyed `<type>.<language>`). Compiler profiles and a default template per output type are seeded as versioned catalog rows. Text generators (script, hooks, captions) run in the worker, stream deltas and store output inline on `outputs` until object storage exists. The dispatch path already runs the moderation pre check through the fake adapter | Forced 1500ms breach falls back, generation succeeds, no credit used. Assembly snapshot tests. Precedence tests |
-| WP11 Moderation pre check | A | Text pre check on compiled prompt (A6) | A blocked compiled prompt never creates a job or a hold |
+| WP11 Moderation pre check | A | Text pre check on compiled prompt (A6). Built 2026-09-18: every dispatch checks the compiled prompt and records the verdict in `moderation_events`; a failed check refuses the dispatch (fail closed, 503). Google adapter for text (Natural Language `moderateText`, blocking at 0.8 confidence on harmful categories only) and images (Vision SafeSearch), chosen by `MODERATION`, separate from `PROVIDERS` | A blocked compiled prompt never creates a job or a hold |
 | WP12 Onboarding and profile | B | FR-ON flow, one question per screen, each answer visibly configures something. S-17 with version history | Editing the profile creates version N+1, and the next compile shows it in lineage |
 | WP13 Brand kit | B | S-18: logo upload, 3 colours, typography, tagline. Versioned | Next compile shows new brand kit version in lineage |
 | WP14 Studio and disclosure | B | Studio frame, cost before submit, streamed output, navigable away while the job continues. PROMPT disclosure: collapsed, viewable, editable, designed | Week 3 exit: intent, see prompt, edit, dispatch, held, settled, ledger line visible |
@@ -224,6 +224,6 @@ Claude Code builds both streams. A and B in the tables are stream labels, not pe
 
 ## 7. Next steps
 
-1. WP11 (moderation pre check: the real service, `moderation_events`) is next; the dispatch seam and its test are already in from WP10. WP5 still needs the Veo billing line read.
+1. Next in plan order: WP12 to WP14 (onboarding, brand kit, Studio). A publishing slice pulled forward from week 7 is proposed (see the WP11 report). WP5 still needs the Veo billing line read.
 2. Decide D1b before WP6, D3 before WP11, and D16 and D17 before the week 3 exit.
 3. Start the section 3 items. They have the longest lead times.

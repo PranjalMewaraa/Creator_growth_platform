@@ -2,13 +2,13 @@ import type {
   CompiledPromptView,
   CreditEstimate,
   JobView,
-  ModerationCategory,
   ModerationAdapter,
   TargetPlatform,
 } from '@cgp/contracts';
 import { compile, findCompiledPrompt, toView, type CompileDeps } from '@cgp/orchestration';
 import { currentMeteringRates, jobs, scoped, type Database, type JobRow } from '@cgp/db';
 import type { GeneratorRegistry, InputIssue, RegisteredGenerator } from './generators/registry';
+import { preCheckPrompt, type PreCheck } from './moderation';
 import { submitJob, type SubmitDeps } from './submit';
 
 export type EstimateResult =
@@ -121,7 +121,7 @@ export type GenerationResult =
   | { ok: true; job: JobView; estimate: CreditEstimate; prompt: CompiledPromptView }
   | Exclude<CompileGenerationResult, { ok: true }>
   | { ok: false; reason: 'prompt_not_found' }
-  | { ok: false; reason: 'blocked'; category: ModerationCategory }
+  | Exclude<PreCheck, { ok: true }>
   | {
       ok: false;
       reason: 'workspace_not_found' | 'insufficient_credits' | 'insufficient_video_seconds';
@@ -165,12 +165,8 @@ export async function startGeneration(
     prompt = compiled.prompt;
   }
 
-  const verdict = await deps.moderation.checkText(prompt.text);
-  if (!verdict.allowed) {
-    const category = verdict.flagged[0]?.category ?? 'other';
-    deps.log.info({ compiledPromptId: prompt.id, category }, 'compiled prompt blocked');
-    return { ok: false, reason: 'blocked', category };
-  }
+  const checked = await preCheckPrompt(deps, request.workspaceId, prompt);
+  if (!checked.ok) return checked;
 
   const submitted = await submitJob(deps, {
     workspaceId: request.workspaceId,

@@ -35,3 +35,4 @@ export {
 } from './generators/registry';
 export { generators, SECONDS_PER_SCENE } from './generators/definitions';
 export { createTextHandlers, type TextHandlerDeps } from './handlers/text';
+export { preCheckPrompt, type PreCheck } from './moderation';

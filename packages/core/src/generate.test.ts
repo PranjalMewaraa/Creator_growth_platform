@@ -1,11 +1,17 @@
 import { createFakeModeration, createTextAdapters } from '@cgp/adapters';
 import { createLogger } from '@cgp/config';
-import { AdapterError, type QueuedJobData, type TextAdapter } from '@cgp/contracts';
+import {
+  AdapterError,
+  type ModerationAdapter,
+  type QueuedJobData,
+  type TextAdapter,
+} from '@cgp/contracts';
 import {
   compiledPrompts,
   costTelemetry,
   creditLedger,
   jobs,
+  moderationEvents,
   outputs,
   scoped,
   type Database,
@@ -192,6 +198,52 @@ describe('startGeneration', () => {
     expect(added).toEqual([]);
     expect(await scoped(db, workspaceId).select(jobs)).toEqual([]);
     expect(await scoped(db, workspaceId).select(creditLedger)).toHaveLength(1); // the grant
+    const [prompt] = await scoped(db, workspaceId).select(compiledPrompts);
+    expect(await scoped(db, workspaceId).select(moderationEvents)).toMatchObject([
+      {
+        subjectType: 'compiled_prompt',
+        subjectId: prompt?.id,
+        verdict: 'blocked',
+        category: 'violence',
+      },
+    ]);
+  });
+
+  it('records the verdict on a prompt it lets through', async () => {
+    const workspaceId = await workspace();
+    const result = await startGeneration(deps(recordingQueues().queues), {
+      workspaceId,
+      generatorKey: 'script',
+      input: intent,
+    });
+    if (!result.ok) throw new Error(result.reason);
+    expect(await scoped(db, workspaceId).select(moderationEvents)).toMatchObject([
+      { subjectId: result.prompt.id, verdict: 'allowed', category: null },
+    ]);
+  });
+
+  it('refuses to dispatch when moderation is unavailable: no job, no hold, no verdict', async () => {
+    const workspaceId = await workspace();
+    const { queues, added } = recordingQueues();
+    const down: ModerationAdapter = {
+      key: 'down',
+      checkText: () =>
+        Promise.reject(
+          new AdapterError({ code: 'HTTP_503', message: 'down', category: 'retriable' }),
+        ),
+      checkImage: () => Promise.reject(new Error('unused')),
+    };
+
+    const result = await startGeneration(
+      { ...deps(queues), moderation: down },
+      { workspaceId, generatorKey: 'script', input: intent },
+    );
+
+    expect(result).toEqual({ ok: false, reason: 'moderation_unavailable' });
+    expect(added).toEqual([]);
+    expect(await scoped(db, workspaceId).select(jobs)).toEqual([]);
+    expect(await scoped(db, workspaceId).select(creditLedger)).toHaveLength(1);
+    expect(await scoped(db, workspaceId).select(moderationEvents)).toEqual([]);
   });
 
   it('creates nothing when the balance cannot cover the estimate', async () => {

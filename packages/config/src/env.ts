@@ -10,6 +10,11 @@ export const baseEnvSchema = z.object({
   REDIS_URL: z.url(),
   // Real provider calls spend trial credit, so they are opt in.
   PROVIDERS: z.enum(['fake', 'real']).default('fake'),
+  /**
+   * Which moderation service checks compiled prompts and output (D3). 'google' is Cloud Natural
+   * Language and Vision SafeSearch; 'fake' allows everything but FAKE_BLOCK markers.
+   */
+  MODERATION: z.enum(['fake', 'google']).default('fake'),
   /** The GCP project Vertex bills. Required when PROVIDERS=real. */
   GOOGLE_CLOUD_PROJECT: z.string().min(1).optional(),
 });

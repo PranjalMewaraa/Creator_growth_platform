@@ -24,3 +24,4 @@ export {
   createFakeVideo,
   createFakeVoice,
 } from './fakes';
+export { createGoogleModeration, TEXT_BLOCK_THRESHOLD } from './moderation/google';
