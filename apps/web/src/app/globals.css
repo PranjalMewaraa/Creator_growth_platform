@@ -12,14 +12,15 @@
     var(--font-poppins), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial,
     sans-serif;
 
-  --color-canvas: #09090a;
-  --color-surface: #121214;
-  --color-raised: #1b1b1f;
-  --color-line: #27272c;
+  /* Cards sit visibly above the canvas; secondary text stays readable (zinc 400 and up). */
+  --color-canvas: #0f0f11;
+  --color-surface: #18181b;
+  --color-raised: #222226;
+  --color-line: #2e2e33;
   --color-ink: #f5f5f4;
-  --color-muted: #a3a3ad;
-  --color-faint: #6f6f78;
-  --color-accent: #ffc01e;
+  --color-muted: #a1a1aa;
+  --color-faint: #8b8b94;
+  --color-accent: #facc15;
   --color-accent-ink: #15120a;
   --color-hot: #ff5a1f;
   --color-good: #3ddc97;

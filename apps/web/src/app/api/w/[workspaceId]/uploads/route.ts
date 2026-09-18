@@ -32,6 +32,6 @@ export const POST = withRequestContext(async (request: Request, { params }: Cont
     new Uint8Array(await file.arrayBuffer()),
   );
   if (!result.ok) return refusal(result);
-  const { key, url, mimeType, bytes, instagramUrl } = result;
-  return Response.json({ upload: { key, url, mimeType, bytes, instagramUrl } }, { status: 201 });
+  const { key, url, mimeType, bytes, instagramUrls } = result;
+  return Response.json({ upload: { key, url, mimeType, bytes, instagramUrls } }, { status: 201 });
 });

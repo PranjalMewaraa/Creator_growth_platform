@@ -1,8 +1,14 @@
 import { barColour, listAccounts } from '@cgp/core';
-import { Screen } from '@/components/screen';
+import { scoped, workspaceProfiles } from '@cgp/db';
 import { getDb, getEnv } from '@/server/runtime';
 import { requireWorkspace } from '@/server/session';
-import { Composer } from './composer';
+import { ComposerLoader } from './composer-loader';
+
+/** "Behind the scenes" becomes #BehindTheScenes. */
+function hashtag(pillar: string) {
+  const words = pillar.match(/[\p{L}\p{N}]+/gu) ?? [];
+  return words.length ? `#${words.map((w) => w[0]?.toUpperCase() + w.slice(1)).join('')}` : null;
+}
 
 export default async function ComposePage({
   params,
@@ -11,19 +17,23 @@ export default async function ComposePage({
 }) {
   const { workspaceId } = await params;
   await requireWorkspace(workspaceId);
-  const [accounts, bars] = await Promise.all([
-    listAccounts(getDb(), workspaceId),
-    barColour(getDb(), workspaceId),
+  const db = getDb();
+  const [accounts, bars, [profile]] = await Promise.all([
+    listAccounts(db, workspaceId),
+    barColour(db, workspaceId),
+    scoped(db, workspaceId).select(workspaceProfiles, {
+      orderBy: (t, order) => order.desc(t.version),
+      limit: 1,
+    }),
   ]);
 
   return (
-    <Screen title="New post" description="Write it, add an image, pick where it goes.">
-      <Composer
-        workspaceId={workspaceId}
-        accounts={accounts.map(({ id, platform, displayName }) => ({ id, platform, displayName }))}
-        live={getEnv().PUBLISHING === 'real'}
-        barColour={bars}
-      />
-    </Screen>
+    <ComposerLoader
+      workspaceId={workspaceId}
+      accounts={accounts.map(({ id, platform, displayName }) => ({ id, platform, displayName }))}
+      live={getEnv().PUBLISHING === 'real'}
+      barColour={bars}
+      hashtags={(profile?.pillars ?? []).map(hashtag).filter((t): t is string => t !== null)}
+    />
   );
 }

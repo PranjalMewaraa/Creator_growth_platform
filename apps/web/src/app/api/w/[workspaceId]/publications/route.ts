@@ -10,11 +10,12 @@ type Context = { params: Promise<{ workspaceId: string }> };
 interface Body {
   text?: unknown;
   mediaKey?: unknown;
+  instagramFrame?: unknown;
   accountIds?: unknown;
 }
 
 /**
- * Post now: `{ text, mediaKey?, accountIds }`. Answers 202 with the publication; each account
+ * Post now: `{ text, mediaKey?, instagramFrame?, accountIds }`. Answers 202 with the publication; each account
  * gets its own target, published by the worker, with its own status.
  */
 export const POST = withRequestContext(async (request: Request, { params }: Context) => {
@@ -27,7 +28,10 @@ export const POST = withRequestContext(async (request: Request, { params }: Cont
     typeof body.text !== 'string' ||
     !Array.isArray(body.accountIds) ||
     !body.accountIds.every((id) => typeof id === 'string') ||
-    (body.mediaKey !== undefined && typeof body.mediaKey !== 'string')
+    (body.mediaKey !== undefined && typeof body.mediaKey !== 'string') ||
+    (body.instagramFrame !== undefined &&
+      body.instagramFrame !== 'portrait' &&
+      body.instagramFrame !== 'square')
   ) {
     return apiError(422, 'invalid_input', {
       issues: [{ path: '', message: 'Expected { text, mediaKey?, accountIds }' }],
@@ -48,6 +52,7 @@ export const POST = withRequestContext(async (request: Request, { params }: Cont
       workspaceId,
       text: body.text,
       ...(body.mediaKey ? { media: { key: body.mediaKey } } : {}),
+      ...(body.instagramFrame ? { instagramFrame: body.instagramFrame } : {}),
       accountIds: body.accountIds,
       timezone: workspace?.timezone ?? 'Asia/Kolkata',
       correlationId: currentCorrelationId(),

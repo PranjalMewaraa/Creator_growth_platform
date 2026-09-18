@@ -17,7 +17,7 @@ import {
   type Database,
 } from '@cgp/db';
 import type { InputIssue } from './generators/registry';
-import { fitToFrame, INSTAGRAM_FRAME } from './media';
+import { fitToFrame, INSTAGRAM_FRAMES, type InstagramFrame } from './media';
 import { enqueue, type Queues } from './queues';
 
 /** Published limits on post text. */
@@ -44,16 +44,19 @@ export type UploadResult =
       url: string;
       mimeType: string;
       bytes: number;
-      /** The 4:5 copy Instagram receives. */
+      /** The 4:5 copy, Instagram's default. */
       instagramUrl: string;
+      /** Every Instagram copy, by frame. */
+      instagramUrls: Record<InstagramFrame, string>;
     }
   | { ok: false; reason: 'invalid_input'; issues: InputIssue[] }
   | { ok: false; reason: 'blocked'; category: ModerationCategory }
   | { ok: false; reason: 'moderation_unavailable' };
 
-/** The Instagram copy of an upload, beside the original. */
-export function instagramKey(uploadKey: string): string {
-  return uploadKey.replace(/\.(jpg|png)$/, '.instagram.jpg');
+/** An Instagram copy of an upload, beside the original. */
+export function instagramKey(uploadKey: string, frame: InstagramFrame = 'portrait'): string {
+  const suffix = frame === 'portrait' ? 'instagram' : 'instagram-square';
+  return uploadKey.replace(/\.(jpg|png)$/, `.${suffix}.jpg`);
 }
 
 /** Bars fall back to black when the workspace has no brand kit yet. */
@@ -67,7 +70,7 @@ export async function barColour(db: Database, workspaceId: string): Promise<stri
 
 /**
  * Stores an image the user uploaded, after checking what it is and what it shows, together
- * with its Instagram copy: 4:5, JPEG, the whole image with bars in the brand colour.
+ * with its Instagram copies (4:5 and 1:1 JPEGs): the whole image, bars in the brand colour.
  */
 export async function storeUpload(
   deps: { db: Database; store: ObjectStore; moderation: ModerationAdapter; log: Logger },
@@ -94,9 +97,18 @@ export async function storeUpload(
     return { ok: false, reason: 'moderation_unavailable' };
   }
 
-  let instagram: Uint8Array;
+  // Both frames now, so choosing one at publish time needs no second pass over the image.
+  let copies: Array<[InstagramFrame, Uint8Array]>;
   try {
-    instagram = await fitToFrame(data, INSTAGRAM_FRAME, await barColour(deps.db, workspaceId));
+    const bars = await barColour(deps.db, workspaceId);
+    copies = await Promise.all(
+      (Object.keys(INSTAGRAM_FRAMES) as InstagramFrame[]).map(
+        async (frame): Promise<[InstagramFrame, Uint8Array]> => [
+          frame,
+          await fitToFrame(data, INSTAGRAM_FRAMES[frame], bars),
+        ],
+      ),
+    );
   } catch (err) {
     deps.log.warn({ err }, 'image could not be decoded');
     return invalid('The image could not be read; it may be damaged');
@@ -104,8 +116,11 @@ export async function storeUpload(
 
   const key = `${workspaceId}/uploads/${randomUUID()}.${type.extension}`;
   const stored = await deps.store.put(key, data, type.mimeType);
-  const copy = await deps.store.put(instagramKey(key), instagram, 'image/jpeg');
-  return { ok: true, ...stored, instagramUrl: copy.url };
+  const urls = {} as Record<InstagramFrame, string>;
+  for (const [frame, bytes] of copies) {
+    urls[frame] = (await deps.store.put(instagramKey(key, frame), bytes, 'image/jpeg')).url;
+  }
+  return { ok: true, ...stored, instagramUrl: urls.portrait, instagramUrls: urls };
 }
 
 export interface PublishRequest {
@@ -113,6 +128,8 @@ export interface PublishRequest {
   text: string;
   /** From storeUpload, for this workspace. */
   media?: { key: string };
+  /** Which Instagram copy to post. Portrait, 4:5, unless asked otherwise. */
+  instagramFrame?: InstagramFrame;
   accountIds: string[];
   timezone: string;
   correlationId?: string;
@@ -202,7 +219,7 @@ export async function startPublication(
           text,
           media: {
             kind: 'image',
-            url: deps.store.publicUrl(instagramKey(uploadKey)),
+            url: deps.store.publicUrl(instagramKey(uploadKey, request.instagramFrame)),
             mimeType: 'image/jpeg',
           },
         }

@@ -1,7 +1,8 @@
-import { PlusIcon, Stat } from '@cgp/ui';
+import { Stat } from '@cgp/ui';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { Logo } from '@/components/logo';
+import { NewPostButton } from '@/components/new-post-button';
 import { UserMenu } from '@/components/user-menu';
 import { WorkspaceNav } from '@/components/workspace-nav';
 import { WorkspaceSwitcher } from '@/components/workspace-switcher';
@@ -38,13 +39,7 @@ export default async function WorkspaceLayout({
           </div>
 
           <div className="ml-auto flex items-center gap-2">
-            <Link
-              href={`/w/${workspace.id}/compose`}
-              className="inline-flex h-10 items-center gap-1.5 rounded-full bg-accent px-4 text-sm font-medium text-accent-ink transition hover:brightness-105"
-            >
-              <PlusIcon />
-              New post
-            </Link>
+            <NewPostButton workspaceId={workspace.id} />
             <Stat label="Credits" value={workspace.creditBalance.toLocaleString('en-IN')} />
             <Stat label="Video sec" value={String(workspace.videoSecondsBalance)} />
             <UserMenu email={user.email} name={user.name} />

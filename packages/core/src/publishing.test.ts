@@ -183,6 +183,35 @@ describe('startPublication', () => {
     expect(await scoped(db, workspaceId).select(postTargets)).toEqual([]);
   });
 
+  it('sends Instagram the square copy when 1:1 is chosen', async () => {
+    const { workspaceId, accountIds } = await workspaceWith(['instagram']);
+    const store = createMemoryStore();
+    const upload = await storeUpload(
+      { db, store, moderation: createFakeModeration(), log },
+      workspaceId,
+      JPEG,
+    );
+    if (!upload.ok) throw new Error(upload.reason);
+    expect(
+      await sharp(await store.get(instagramKey(upload.key, 'square'))).metadata(),
+    ).toMatchObject({ width: 1080, height: 1080 });
+
+    const result = await startPublication(
+      { db, ...recordingQueues(), store, moderation: createFakeModeration(), log },
+      {
+        workspaceId,
+        text: 'Square',
+        media: { key: upload.key },
+        instagramFrame: 'square',
+        accountIds,
+        timezone: 'UTC',
+      },
+    );
+    if (!result.ok) throw new Error(result.reason);
+    const [target] = await scoped(db, workspaceId).select(postTargets);
+    expect(target?.body).toMatchObject({ media: { url: upload.instagramUrls.square } });
+  });
+
   it('allows a text only post to LinkedIn', async () => {
     const { workspaceId, accountIds } = await workspaceWith(['linkedin']);
     const result = await startPublication(
