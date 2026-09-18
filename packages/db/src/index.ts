@@ -74,3 +74,9 @@ export {
   type PublicationRow,
   type SocialAccountRow,
 } from './publishing';
+export {
+  createProfileVersion,
+  listProfileVersions,
+  type ProfileFields,
+  type ProfileRow,
+} from './profiles';

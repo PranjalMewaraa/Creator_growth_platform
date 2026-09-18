@@ -55,3 +55,14 @@ export {
 } from './publishing';
 export { fitToFrame, INSTAGRAM_FRAME, INSTAGRAM_FRAMES, type InstagramFrame } from './media';
 export { barColour, instagramKey } from './publishing';
+export {
+  changedFields,
+  PROFILE_LABELS,
+  PROFILE_OPTIONS,
+  profileHistory,
+  profileSchema,
+  saveProfile,
+  type ProfileInput,
+  type ProfileVersionView,
+  type SaveProfileResult,
+} from './profile';
