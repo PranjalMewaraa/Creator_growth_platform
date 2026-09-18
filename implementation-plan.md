@@ -2,7 +2,7 @@
 
 **Companion to `plan.md`.** `plan.md` says what and why. This file says how, in what order, and what has been decided. Where the two disagree, `plan.md` wins.
 
-**Status:** 2026-09-16. WP1 to WP4 built. Amendments A1 to A11 accepted and applied to `plan.md`. Items marked OPEN need an answer before the work package that depends on them.
+**Status:** 2026-09-18. WP1 to WP5 and WP7 built. Amendments A1 to A11 accepted and applied to `plan.md`. Items marked OPEN need an answer before the work package that depends on them.
 
 ---
 
@@ -158,7 +158,7 @@ Weeks 1 to 3 are detailed. Weeks 4 to 8 are scoped and get re-planned in detail 
 
 | WP | Owner | Scope | Done when |
 |---|---|---|---|
-| WP7 Ledger and jobs | A | `createJob` transaction, idempotent settle and refund, grant script, versioned `metering_rates`, three BullMQ queues, worker skeleton, boot sweep, `cost_telemetry` | Insufficient balance rejects before a job exists. Double settle is a no-op. Worker killed mid job is recovered by the sweep. Cached balance equals ledger sum |
+| WP7 Ledger and jobs | A | `createJob` transaction, idempotent settle and refund, grant script, versioned `metering_rates`, three BullMQ queues, worker skeleton, boot sweep, `cost_telemetry`. Built 2026-09-18: `createJobWithHold`, `settleJob`, `refundJob` in `packages/db`; submit, process and sweep in `packages/core`. `workspaces.video_seconds_cap` is not enforced yet; the granted balance already caps usage | Insufficient balance rejects before a job exists. Double settle is a no-op. Worker killed mid job is recovered by the sweep. Cached balance equals ledger sum. All four covered by tests, with concurrency on real Postgres |
 | WP8 Text adapters | A | Fakes for every adapter kind. Gemini Flash-Lite and Haiku through Vertex. gpt-oss-20b as second compile provider. Error normalisation | Same call runs fake or real behind one flag |
 | WP9 Registry and API | A + B | Generator registry, one generate route keyed by generator, estimate endpoint, job SSE route | Adding a generator touches no route file (FR-GN-02) |
 | WP10 Orchestration | A | Stages 1 to 3, artifact persistence, edit versioning, language seam, compiler profiles seeded as versioned rows | Forced 1500ms breach falls back, generation succeeds, no credit used. Assembly snapshot tests. Precedence tests |
@@ -222,6 +222,6 @@ Claude Code builds both streams. A and B in the tables are stream labels, not pe
 
 ## 7. Next steps
 
-1. WP5 (spikes) is next and needs the section 3 accounts. WP7's concurrency tests need a real Postgres: a Neon branch works.
+1. WP8 (text adapters), WP9 (registry and API) and WP10 (orchestration) are next. WP5 still needs the Veo billing line read.
 2. Decide D1b before WP6 and D3 before WP11.
 3. Start the section 3 items. They have the longest lead times.

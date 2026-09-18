@@ -1,18 +1,15 @@
-import type { JobClass, QueuedJobData } from '@cgp/contracts';
-import type { Logger } from '@cgp/config';
-import type { Job } from 'bullmq';
+import type { JobHandler } from '@cgp/core';
 
-export type Handler = (job: Job<QueuedJobData>, log: Logger) => Promise<unknown>;
-
-/** Proves a class's queue is wired end to end. Used locally and by the WP6 deploy check. */
-const noop: Handler = (job, log) => {
-  log.info({ jobId: job.data.jobId }, 'noop job processed');
-  return Promise.resolve({ ok: true });
-};
-
-/** Handlers by job class, then by job name. */
-export const handlers: Record<JobClass, Record<string, Handler>> = {
-  inference: { noop },
-  render: { noop },
-  publish: { noop },
+/**
+ * Generator handlers by generator key. Real generators register here from WP8 on.
+ * `noop` proves a queue is wired end to end: used locally and by the WP6 deploy check.
+ */
+export const handlers: Readonly<Record<string, JobHandler>> = {
+  noop: (job, log) => {
+    log.info({ jobId: job.id, jobClass: job.jobClass }, 'noop job processed');
+    return Promise.resolve({
+      actual: { credits: 0, videoSeconds: 0 },
+      telemetry: { actionClass: 'noop', provider: 'none', realisedCostInr: 0 },
+    });
+  },
 };

@@ -251,6 +251,12 @@ importers:
       '@cgp/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@cgp/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@cgp/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       bullmq:
         specifier: ^6.3.4
         version: 6.3.4(ioredis@6.0.0(supports-color@7.2.0))
@@ -276,6 +282,24 @@ importers:
       zod:
         specifier: ^4.6.4
         version: 4.6.4
+
+  packages/core:
+    dependencies:
+      '@cgp/config':
+        specifier: workspace:*
+        version: link:../config
+      '@cgp/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@cgp/db':
+        specifier: workspace:*
+        version: link:../db
+      bullmq:
+        specifier: ^6.3.4
+        version: 6.3.4(ioredis@6.0.0(supports-color@7.2.0))
+      ioredis:
+        specifier: ^6.0.0
+        version: 6.0.0(supports-color@7.2.0)
 
   packages/db:
     dependencies:

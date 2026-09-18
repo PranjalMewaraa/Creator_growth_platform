@@ -11,6 +11,8 @@
   "dependencies": {
     "@cgp/config": "workspace:*",
     "@cgp/contracts": "workspace:*",
+    "@cgp/core": "workspace:*",
+    "@cgp/db": "workspace:*",
     "bullmq": "^6.3.4",
     "ioredis": "^6.0.0"
   },

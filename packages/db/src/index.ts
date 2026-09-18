@@ -15,6 +15,22 @@ export { authDatabaseAdapter } from './auth';
 export { findMembership, listWorkspacesForUser, type WorkspaceMembership } from './memberships';
 export { grant } from './ledger';
 export {
+  createJobWithHold,
+  jobsToRecover,
+  ledgerDrift,
+  markJobRunning,
+  refundJob,
+  settleJob,
+  type Amounts,
+  type BalanceDrift,
+  type CostTelemetry,
+  type CreateJobResult,
+  type EndJobResult,
+  type JobRow,
+  type NewJob,
+} from './jobs';
+export { currentMeteringRates } from './rates';
+export {
   brandKits,
   compiledPrompts,
   compilerProfiles,
