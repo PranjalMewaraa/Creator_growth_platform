@@ -193,7 +193,7 @@ All slots run on one Google Cloud account against the trial credit. Every call r
 | Image | Imagen 4 Fast | $0.02 per image | INR 1.76 |
 | Thumbnail | Imagen 4 Fast or Imagen 4 | $0.02 / $0.04 | INR 1.76 / 3.52 |
 | Video, budget tier | Veo 3.1 Lite, video only, 1080p | $0.05 per unit | INR 4.40. 720p is $0.03 / INR 2.64 |
-| Voiceover | Google Cloud Text to Speech | separate pricing page, unread | estimate INR 0.75 per 30s clip |
+| Voiceover | Google Cloud Text to Speech, Neural2 `en-IN` | USD 16 per 1M characters after 1M free per month | about INR 0.63 per 30s clip (verified 2026-09-18) |
 | Music | Free licensed library | 0 | licence recorded per track (FR-VD-08) |
 | Moderation | Free tier endpoint, text + image + sampled frames | 0 | |
 
@@ -209,7 +209,7 @@ All slots run on one Google Cloud account against the trial credit. Every call r
 | Script, English | INR 0.92 |
 | Image, standard | INR 1.76 |
 | Thumbnail set, three variants | INR 5.28 |
-| Voiceover, 30s | ~INR 0.75 (unverified) |
+| Voiceover, 30s | INR 0.63 on Neural2 (verified; free inside 1M characters a month) |
 | Render compute, 24s composite | ~INR 0.88 (estimated, replace with measurement) |
 | Video, per unit 1080p | INR 4.40 |
 
@@ -655,7 +655,7 @@ Held in reserve, on request only: onboarding, moderation block, raw mode compari
 
 1. **The Veo unit.** The pricing table quotes a price per one count and does not define the unit. Settle it in week 1 by generating one 8 second clip and reading the billing line. A charge of $0.24 confirms per second. A charge of $0.03 means the unit is a whole video and every video figure falls by ~8x.
 2. **Storage and hosting vs the credit.** The architecture specifies Vercel and Cloudflare R2, but the costing assumes every line draws on the Google Cloud trial credit. Vercel and R2 do not. Either move storage to GCS and accept egress pricing, or carry them as cash lines. Decide in week 1.
-3. **Google Cloud TTS rate.** The only figure in the cost model not taken from a published table. Read the page and pick a voice tier in week 2, before video templates are designed around a voice.
+3. **Google Cloud TTS rate.** Settled 2026-09-18 (`docs/spikes/tts.md`): Neural2 at USD 16 per 1M characters, about INR 0.63 per 30s, free inside 1M characters a month. Neural2, WaveNet and Standard return SSML mark timepoints for captions; Chirp 3 HD does not. Voice chosen: `en-IN-Neural2-A`.
 4. **Render compute at INR 0.88 per composite.** Estimated, never measured. Replace with a measurement once the render worker exists.
 5. **Exchange rate.** 88 INR per USD throughout the current docs. An earlier working figure of 94 appears elsewhere. Pick one and make every rupee figure move with it.
 6. **Plan pricing.** Cost Strategy v0.1 carries Free / Creator INR 999 / Studio INR 2,999 / Agency INR 7,999. A later working set of Free / 499 / 1,499 / 4,999 also exists. Confirm which is current before either reaches external material.
