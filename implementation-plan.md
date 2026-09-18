@@ -20,7 +20,7 @@
 | D7 | UI | Tailwind 4 with design tokens in CSS, primitives in `packages/ui`. shadcn/ui is deferred until a screen needs dialogs, menus or complex form controls | DECIDED in WP4 | |
 | D8 | Queue | BullMQ, one queue per job class (`inference`, `render`, `publish`) in one worker process | proposed | |
 | D9 | Streamed output | Worker publishes tokens to Redis pub/sub, web exposes an SSE route, client falls back to polling job status | proposed | |
-| D10 | Provider SDKs | `@google/genai` in Vertex mode (Gemini, Imagen, Veo), `@anthropic-ai/vertex-sdk` (Haiku), `@google-cloud/text-to-speech` | proposed | |
+| D10 | Provider SDKs | `@google/genai` in Vertex mode (Gemini, Imagen, Veo), `@anthropic-ai/vertex-sdk` (Haiku), `@google-cloud/text-to-speech`. Checked 2026-09-18 on project `creatorpltfrm`: Gemini 3.x answers only on the `global` endpoint (`us-central1` returns 404), while Veo and Imagen are regional, so location is per model in adapter config, not one project wide value. Model ids seen: `gemini-3.1-flash-lite`, `veo-3.1-lite-generate-001`. Newer versions exist (`gemini-3.5-flash-lite` and later Flash releases); the costing is based on 3.1, so any switch needs a pricing check first (plan section 17) | proposed | |
 | D11 | Token encryption | AES-256-GCM per token, data key wrapped by a key held in Vercel and worker env, never in the database | proposed | |
 | D12 | Image text layer | SVG layer spec stored as JSON, edited in browser, flattened in worker with resvg using the same font files | proposed | |
 | D13 | Tests | Vitest. Database tests run on PGlite (in-memory Postgres, same constraints and triggers, no docker). Concurrency tests, such as two writers racing for a hold, need the docker Postgres from WP7 on | DECIDED in WP3 | |
