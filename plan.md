@@ -541,7 +541,7 @@ Carries no new capability by design. Protect it.
 | Checkpoint | Decision |
 |---|---|
 | End week 1 | Both spikes answered. If developer mode publishing fails, confirm the stubbed adapter fallback now and adjust what the demo claims |
-| End week 3 | Re baseline against actual velocity. Invariants 1 to 8, 10 and 11 implemented and tested, not planned. 9, 12, 13 and 14 have schema and seams in place and are confirmed in the week each is built. All 14 confirmed in the week 8 dry runs |
+| End week 3 | Re baseline against actual velocity. Invariants 1 to 8, 10 and 11 implemented and tested, not planned. 9, 12, 13 and 14 have schema and seams in place and are confirmed in the week each is built. All 14 confirmed in the week 8 dry runs. Decide whether Facebook Page publishing, spiked in week 1, joins the scope at about half a week of cost; if it does, section 3 changes with it |
 | End week 4 | First evaluation set run. If lift against the raw control is not visible, that is a product finding worth more than the demo |
 | End week 6 | Video renders end to end or it does not. If not, drop to image and thumbnail with storyboard previews only |
 
