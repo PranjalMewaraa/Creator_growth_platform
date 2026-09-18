@@ -49,6 +49,10 @@ export interface Publisher {
    * Irreversible. Call only after the target is claimed, and persist the returned id before
    * anything else (invariant 9).
    */
-  publish(account: PublishAccount, prepared: PreparedPost): Promise<PublishedPost>;
+  publish(
+    account: PublishAccount,
+    prepared: PreparedPost,
+    content: PostContent,
+  ): Promise<PublishedPost>;
   metrics(account: PublishAccount, platformPostId: string): Promise<PostMetrics>;
 }

@@ -29,6 +29,13 @@
       "when": 1789729932752,
       "tag": "0003_compiled_prompt_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789735749969,
+      "tag": "0004_post_target_permalink",
+      "breakpoints": true
     }
   ]
 }

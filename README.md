@@ -37,6 +37,18 @@ Every route is under `/api/w/<workspace id>` and answers 404 to anyone who is no
 
 The worker runs the text generators (script, hooks, captions). Image and video generators have no handler until weeks 4 to 6, so their jobs fail and are refunded in full. Compiler profiles are seeded catalog rows: to change one, edit it in `packages/db/src/seed-catalog.ts`, bump `COMPILER_PROFILE_VERSION` and run `pnpm db:seed`.
 
+## Posting
+
+Connect the demo accounts from the tokens in `.env` (until the OAuth flow exists), then use **New post** in the header:
+
+```bash
+pnpm --filter @cgp/worker accounts:import <workspace id>
+```
+
+Publishing has its own switch: `PUBLISHING=fake` (the default) pretends, `PUBLISHING=real` makes public posts. Uploads go to the GCS bucket in `GCS_BUCKET` and are publicly readable, because Instagram fetches images by URL. Instagram needs a JPEG between 4:5 and 1.91:1; LinkedIn takes text alone or with a JPEG or PNG. Tokens are stored encrypted with `TOKEN_ENCRYPTION_KEY` (32 bytes, base64url); losing that key means importing the accounts again.
+
+Each account is its own post target with its own status. A target is claimed before the platform is called and its post id is written the moment it comes back (invariant 9); a target interrupted mid publish becomes `needs_verification` and is never retried automatically.
+
 ## Providers
 
 Provider calls default to fakes (`PROVIDERS=fake`). Real calls spend trial credit, so switch only when you mean to. Real calls go through Vertex with application default credentials (`gcloud auth application-default login`) and `GOOGLE_CLOUD_PROJECT`. `pnpm --filter @cgp/adapters smoke:text [model key ...]` makes one tiny real call per text model. `CGP_LIVE_PROVIDERS=1 pnpm test` runs the text adapter contract tests against the real providers as well as the fakes.
@@ -79,5 +91,7 @@ Lint enforces two boundaries from the plan: database drivers only inside `packag
 Outside `packages/db`, code gets an opaque `Database` and reaches rows only through `scoped(db, workspaceId)` for tenant tables or `catalog(db)` for read only reference tables. Change the schema in `packages/db/src/schema`, then run `pnpm db:generate` and commit the SQL it writes to `packages/db/migrations`.
 
 Database tests run on PGlite, an in-memory Postgres, so they need no database of their own and never touch `DATABASE_URL`. Tests of concurrent writers need a real Postgres: set `TEST_DATABASE_URL` and they create a throwaway database there and drop it afterwards. The pipeline tests need Redis at `REDIS_URL` and use their own key prefix. Both skip themselves when their service is missing.
+
+If API routes suddenly answer an HTML 404 in `pnpm dev` after a `pnpm build`, the production build and the dev server shared `apps/web/.next`: delete it and restart.
 
 Migrations that change a column other tables reference may need hand editing: see the note at the top of `packages/db/migrations/0002_identity.sql`.

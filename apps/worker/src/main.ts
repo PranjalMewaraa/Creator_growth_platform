@@ -2,7 +2,9 @@ import { JOB_CLASSES, type JobClass, type QueuedJobData } from '@cgp/contracts';
 import {
   baseEnvSchema,
   createLogger,
+  decryptSecret,
   loadRootEnvFile,
+  parseEncryptionKey,
   parseEnv,
   withCorrelation,
 } from '@cgp/config';
@@ -10,6 +12,8 @@ import {
   closeQueues,
   createQueues,
   createRedis,
+  createPublishHandler,
+  type JobHandler,
   createTextHandlers,
   generators,
   processJob,
@@ -18,7 +22,7 @@ import {
   waitForRedis,
 } from '@cgp/core';
 import { createProviders } from '@cgp/adapters';
-import { createDatabase } from '@cgp/db';
+import { createDatabase, PUBLISH_TARGET } from '@cgp/db';
 import { Worker } from 'bullmq';
 import { createErrorThrottle } from './error-throttle';
 import { handlers as baseHandlers } from './handlers';
@@ -52,7 +56,24 @@ const handlers = {
     costInr: providers.textCostInr,
     providerLabel: providers.mode === 'real' ? 'vertex' : 'fake',
   }),
+  ...publishHandlers(),
 };
+
+/** Publishing needs the token key; without it the worker still runs everything else. */
+function publishHandlers(): Record<string, JobHandler> {
+  if (!env.TOKEN_ENCRYPTION_KEY) {
+    log.warn('TOKEN_ENCRYPTION_KEY is not set: publish jobs will fail');
+    return {};
+  }
+  const kek = parseEncryptionKey(env.TOKEN_ENCRYPTION_KEY);
+  return {
+    [PUBLISH_TARGET]: createPublishHandler({
+      db,
+      publishers: providers.publishers,
+      decryptToken: (ciphertext) => decryptSecret(kek, ciphertext),
+    }),
+  };
+}
 
 // Render runs ffmpeg on a small box, so it gets one slot. Inference is mostly waiting on providers.
 const CONCURRENCY: Record<JobClass, number> = { inference: 8, render: 1, publish: 2 };
@@ -79,7 +100,13 @@ const workers = JOB_CLASSES.map((jobClass) => {
 });
 
 log.info(
-  { jobClasses: JOB_CLASSES, providers: env.PROVIDERS, generators: Object.keys(handlers) },
+  {
+    jobClasses: JOB_CLASSES,
+    providers: env.PROVIDERS,
+    moderation: env.MODERATION,
+    publishing: env.PUBLISHING,
+    generators: Object.keys(handlers),
+  },
   'worker started',
 );
 

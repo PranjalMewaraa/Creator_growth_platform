@@ -10,7 +10,7 @@
 
 | # | Decision | Recommendation | Status | Blocks |
 |---|---|---|---|---|
-| D1 | Hosting topology (open item 17.2) | As written in plan section 5: Vercel for web, R2 for storage, one GCE VM for worker + ffmpeg | DECIDED 2026-09-14 | |
+| D1 | Hosting topology (open item 17.2) | As written in plan section 5: Vercel for web, R2 for storage, one GCE VM for worker + ffmpeg Storage changed 2026-09-18: R2 needs a payment method even on its free tier, so media lives in GCS for now (bucket `creatorpltfrm-media`, us-central1, uniform access, objects publicly readable by unguessable key, since Instagram fetches media by URL). Behind the `ObjectStore` interface, so R2 or signed URLs later is a change in one adapter | DECIDED 2026-09-14, storage amended 2026-09-18 | |
 | D1b | Postgres and Redis providers | Postgres: Neon, Singapore (`ap-southeast-1`), Postgres 18, in use for development. Pin Vercel functions and the render VM to Singapore too. Check the Neon plan before the demo: free tier compute suspends when idle, and the first query after that is slow. Redis still open: smallest managed instance in the same region, not billed per command, since BullMQ polls constantly | Postgres DECIDED 2026-09-16, Redis OPEN | WP6 |
 | D2 | Publishing pair (open item 17.7) | Instagram + LinkedIn | DECIDED 2026-09-14 | |
 | D3 | Moderation endpoint (not named in plan) | Cloud Natural Language `moderateText` + Vision SafeSearch. Both GCP, credit eligible. Verify free tier on the day. Adapter built in WP11 (`MODERATION=google`). Both APIs enabled and checked live 2026-09-18: ordinary text allowed, a violent sentence blocked (violence 1.00), a politics and finance topic allowed. A check adds about 0.5 to 2s to dispatch. The same violent sentence also scored Illicit Drugs 0.88, so the 0.8 threshold may need tuning against the week 4 eval set | DECIDED 2026-09-18 | WP11 |
@@ -21,7 +21,7 @@
 | D8 | Queue | BullMQ, one queue per job class (`inference`, `render`, `publish`) in one worker process | proposed | |
 | D9 | Streamed output | Worker publishes tokens to Redis pub/sub, web exposes an SSE route, client falls back to polling job status | DECIDED in WP9. The stream closes after a terminal status or about 55s, and the client closes EventSource on a terminal status, since EventSource otherwise reconnects | |
 | D10 | Provider SDKs | `@google/genai` in Vertex mode (Gemini, Imagen, Veo), `@anthropic-ai/vertex-sdk` (Haiku), `@google-cloud/text-to-speech`. Checked 2026-09-18 on project `creatorpltfrm`: Gemini 3.x answers only on the `global` endpoint (`us-central1` returns 404), while Veo and Imagen are regional, so location is per model in adapter config, not one project wide value. Model ids seen: `gemini-3.1-flash-lite`, `veo-3.1-lite-generate-001`. Newer versions exist (`gemini-3.5-flash-lite` and later Flash releases); the costing is based on 3.1, so any switch needs a pricing check first (plan section 17) | proposed | |
-| D11 | Token encryption | AES-256-GCM per token, data key wrapped by a key held in Vercel and worker env, never in the database | proposed | |
+| D11 | Token encryption | AES-256-GCM per token, data key wrapped by a key held in Vercel and worker env, never in the database | DECIDED 2026-09-18: built in `packages/config` (`encryptSecret`), key in `TOKEN_ENCRYPTION_KEY` | |
 | D12 | Image text layer | SVG layer spec stored as JSON, edited in browser, flattened in worker with resvg using the same font files | proposed | |
 | D13 | Tests | Vitest. Database tests run on PGlite (in-memory Postgres, same constraints and triggers, no docker). Concurrency tests, such as two writers racing for a hold, need the docker Postgres from WP7 on | DECIDED in WP3 | |
 | D14 | Exchange rate (open item 17.5) | 88, stored once in config, every rupee figure derived from it | proposed | |
@@ -197,12 +197,12 @@ Weeks 1 to 3 are detailed. Weeks 4 to 8 are scoped and get re-planned in detail 
 
 | WP | Owner | Scope |
 |---|---|---|
-| WP28 | A | OAuth for both platforms, envelope encrypted tokens, S-03, S-19 |
-| WP29 | A | Instagram publisher per 4.7 |
-| WP30 | A | LinkedIn publisher per 4.7 |
-| WP31 | A | Scheduler, claim before call, the four error classes, sweep extended for publish |
+| WP28 | A | OAuth for both platforms, envelope encrypted tokens, S-03, S-19. Publishing slice (2026-09-18): tokens encrypted and imported from .env by `accounts:import`, Accounts screen lists them; the OAuth connect flow is still to do |
+| WP29 | A | Instagram publisher per 4.7. Built in the publishing slice |
+| WP30 | A | LinkedIn publisher per 4.7. Built in the publishing slice, text and image posts, little text escaping |
+| WP31 | A | Scheduler, claim before call, the four error classes, sweep extended for publish. Publishing slice: post now with claim before call, the four classes onto target statuses and needs_verification, all tested; scheduling and automatic retries still to do |
 | WP32 | A | Rendition cache per platform spec |
-| WP33 | B | Composer (S-13) with per platform preview tabs and inline validation |
+| WP33 | B | Composer (S-13) with per platform preview tabs and inline validation. Publishing slice: a page with text, image upload, account choice, live per target status; per platform previews and the layer form still to do |
 | WP34 | B | Calendar week view (S-07) with status chips and render state |
 | WP35 | B | Sync centre (S-20), platform errors verbatim |
 
@@ -224,6 +224,6 @@ Claude Code builds both streams. A and B in the tables are stream labels, not pe
 
 ## 7. Next steps
 
-1. Next in plan order: WP12 to WP14 (onboarding, brand kit, Studio). A publishing slice pulled forward from week 7 is proposed (see the WP11 report). WP5 still needs the Veo billing line read.
+1. Next in plan order: WP12 to WP14 (onboarding, brand kit, Studio). The publishing slice (parts of WP28 to WP33) is built; the first real posts through it are the user's to make with PUBLISHING=real.
 2. Decide D1b before WP6, D3 before WP11, and D16 and D17 before the week 3 exit.
 3. Start the section 3 items. They have the longest lead times.

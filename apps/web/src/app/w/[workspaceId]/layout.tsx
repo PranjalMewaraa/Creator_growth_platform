@@ -1,4 +1,4 @@
-import { Stat } from '@cgp/ui';
+import { PlusIcon, Stat } from '@cgp/ui';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { Logo } from '@/components/logo';
@@ -38,6 +38,13 @@ export default async function WorkspaceLayout({
           </div>
 
           <div className="ml-auto flex items-center gap-2">
+            <Link
+              href={`/w/${workspace.id}/compose`}
+              className="inline-flex h-10 items-center gap-1.5 rounded-full bg-accent px-4 text-sm font-medium text-accent-ink transition hover:brightness-105"
+            >
+              <PlusIcon />
+              New post
+            </Link>
             <Stat label="Credits" value={workspace.creditBalance.toLocaleString('en-IN')} />
             <Stat label="Video sec" value={String(workspace.videoSecondsBalance)} />
             <UserMenu email={user.email} name={user.name} />

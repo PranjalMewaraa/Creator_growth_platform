@@ -82,6 +82,8 @@ export const postTargets = pgTable(
      */
     publishStartedAt: timestamp('publish_started_at', { withTimezone: true }),
     publishedAt: timestamp('published_at', { withTimezone: true }),
+    /** The public link the platform gave for the post, when it gave one. */
+    permalink: text('permalink'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

@@ -1,6 +1,17 @@
 import type { Logger } from '@cgp/config';
-import type { ModerationAdapter, TextAdapter, TokenUsage } from '@cgp/contracts';
-import { createFakeModeration } from './fakes';
+import type {
+  ModerationAdapter,
+  ObjectStore,
+  Publisher,
+  TargetPlatform,
+  TextAdapter,
+  TokenUsage,
+} from '@cgp/contracts';
+import { createFakeModeration, createFakePublisher } from './fakes';
+import { createInstagramPublisher } from './publishers/instagram';
+import { createLinkedInPublisher } from './publishers/linkedin';
+import { createGcsStore } from './storage/gcs';
+import { createMemoryStore } from './storage/memory';
 import { createGoogleModeration } from './moderation/google';
 import { isTextModelKey, TEXT_MODELS, textCostInr, type TextModelKey } from './models';
 import { createClaudeText } from './text/claude';
@@ -64,6 +75,10 @@ export interface Providers {
   rewriters: TextAdapter[];
   /** Chosen by MODERATION, separately from PROVIDERS (D3). */
   moderation: ModerationAdapter;
+  /** Chosen by PUBLISHING: real ones make public posts, so they have their own switch. */
+  publishers: Record<TargetPlatform, Publisher>;
+  /** GCS when GCS_BUCKET is set, else in memory (enough for fake publishing). */
+  store: ObjectStore;
   /** Realised cost of a text call in rupees; zero for fakes. */
   textCostInr: (adapterKey: string, usage: TokenUsage) => number;
 }
@@ -72,6 +87,8 @@ export interface Providers {
 export function createProviders(env: {
   PROVIDERS: ProviderMode;
   MODERATION?: 'fake' | 'google';
+  PUBLISHING?: 'fake' | 'real';
+  GCS_BUCKET?: string;
   GOOGLE_CLOUD_PROJECT?: string;
   log?: Logger;
 }): Providers {
@@ -91,12 +108,30 @@ export function createProviders(env: {
     text,
     rewriters: [text['gemini-flash-lite'], text['gpt-oss-20b']],
     moderation,
+    publishers:
+      env.PUBLISHING === 'real'
+        ? {
+            instagram: createInstagramPublisher({ log: env.log }),
+            linkedin: createLinkedInPublisher({ log: env.log }),
+          }
+        : {
+            instagram: createFakePublisher('instagram'),
+            linkedin: createFakePublisher('linkedin'),
+          },
+    store: env.GCS_BUCKET
+      ? createGcsStore({
+          bucket: env.GCS_BUCKET,
+          project: requireProject(env.GOOGLE_CLOUD_PROJECT),
+          log: env.log,
+        })
+      : createMemoryStore(),
     textCostInr: (key, usage) =>
       env.PROVIDERS === 'real' && isTextModelKey(key) ? textCostInr(key, usage) : 0,
   };
 }
 
 function requireProject(project: string | undefined): string {
-  if (!project) throw new Error('GOOGLE_CLOUD_PROJECT is required for Google moderation');
+  if (!project)
+    throw new Error('GOOGLE_CLOUD_PROJECT is required for Google moderation and storage');
   return project;
 }

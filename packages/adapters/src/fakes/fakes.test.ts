@@ -87,7 +87,7 @@ describe('fake publisher', () => {
     const publisher = createFakePublisher('instagram');
     const prepared = await publisher.prepare(account, { text: 'hi' });
     expect(await publisher.check(account, prepared)).toEqual({ state: 'ready' });
-    const { platformPostId } = await publisher.publish(account, prepared);
+    const { platformPostId } = await publisher.publish(account, prepared, { text: 'hi' });
     const metrics = await publisher.metrics(account, platformPostId);
     expect(Object.keys(metrics)).toEqual(['fetchedAt']);
   });

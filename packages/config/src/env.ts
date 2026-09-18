@@ -15,6 +15,15 @@ export const baseEnvSchema = z.object({
    * Language and Vision SafeSearch; 'fake' allows everything but FAKE_BLOCK markers.
    */
   MODERATION: z.enum(['fake', 'google']).default('fake'),
+  /**
+   * Real publishing makes public posts, so it has its own switch, off by default. With 'fake'
+   * the publishers pretend and nothing leaves the machine.
+   */
+  PUBLISHING: z.enum(['fake', 'real']).default('fake'),
+  /** Media bucket (D1 revisited: GCS in the GCP project for now). Needed for uploads. */
+  GCS_BUCKET: z.string().min(1).optional(),
+  /** Wraps the per token data keys (D11). 32 bytes, base64url. Needed to store or use tokens. */
+  TOKEN_ENCRYPTION_KEY: z.string().min(1).optional(),
   /** The GCP project Vertex bills. Required when PROVIDERS=real. */
   GOOGLE_CLOUD_PROJECT: z.string().min(1).optional(),
 });

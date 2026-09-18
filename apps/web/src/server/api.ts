@@ -51,6 +51,7 @@ const REFUSALS: Record<string, number> = {
   insufficient_credits: 402,
   insufficient_video_seconds: 402,
   moderation_unavailable: 503,
+  account_not_found: 404,
 };
 
 export function refusal(result: { reason: string } & Record<string, unknown>): Response {

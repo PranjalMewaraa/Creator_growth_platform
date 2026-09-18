@@ -56,3 +56,21 @@ export {
   workspaces,
 } from './schema';
 export { COMPILER_PROFILE_VERSION, COMPILER_PROFILES } from './seed-catalog';
+export {
+  claimPostTarget,
+  createPublication,
+  findPostTarget,
+  findPublication,
+  markPostTarget,
+  markPublished,
+  markPublishStarted,
+  PUBLISH_TARGET,
+  setPreparedRef,
+  upsertSocialAccount,
+  type CreatePublicationResult,
+  type NewPublication,
+  type NewSocialAccount,
+  type PostTargetRow,
+  type PublicationRow,
+  type SocialAccountRow,
+} from './publishing';
