@@ -1,9 +1,11 @@
 import { randomUUID } from 'node:crypto';
+import type { MeteringRates } from '@cgp/contracts';
 import { PGlite } from '@electric-sql/pglite';
 import { drizzle } from 'drizzle-orm/pglite';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 import { unwrap, wrap, type Database } from './client';
 import { grant } from './ledger';
+import { METERING_RATES_V1 } from './seed';
 import { MIGRATIONS_FOLDER } from './migrate';
 import * as schema from './schema';
 import { createWorkspace } from './workspaces';
@@ -34,4 +36,17 @@ export async function createTestWorkspace(
   if (credits > 0) await grant(db, workspace.id, 'credits', credits);
   if (videoSeconds > 0) await grant(db, workspace.id, 'video_seconds', videoSeconds);
   return workspace.id;
+}
+
+export { METERING_RATES_V1 } from './seed';
+
+/** Metering rates in force from now on, as the seed writes them. */
+export async function insertMeteringRates(
+  db: Database,
+  rates: MeteringRates = METERING_RATES_V1,
+): Promise<void> {
+  await unwrap(db)
+    .insert(schema.meteringRates)
+    .values({ version: rates.version, credits: rates.credits })
+    .onConflictDoNothing();
 }

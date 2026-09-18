@@ -13,6 +13,10 @@
     "@cgp/contracts": "workspace:*",
     "@cgp/db": "workspace:*",
     "bullmq": "^6.3.4",
-    "ioredis": "^6.0.0"
+    "ioredis": "^6.0.0",
+    "zod": "^4.6.4"
+  },
+  "devDependencies": {
+    "@cgp/adapters": "workspace:*"
   }
 }

@@ -9,3 +9,25 @@ export {
 export { closeQueues, createQueues, enqueue, type QueueOptions, type Queues } from './queues';
 export { submitJob, type JobRequest, type SubmitDeps } from './submit';
 export { sweepOnBoot, type SweepResult } from './sweep';
+export { createRedis, waitForRedis } from './redis';
+export { jobChannel, publishDelta, subscribeDeltas, type JobChannelOptions } from './events';
+export { jobEventStream, type JobStreamOptions, type JobStreamSource } from './job-stream';
+export {
+  estimateGeneration,
+  findJob,
+  startGeneration,
+  toJobView,
+  type EstimateResult,
+  type GenerationRequest,
+  type GenerationResult,
+} from './generate';
+export {
+  createGeneratorRegistry,
+  rateFor,
+  register,
+  type GeneratorRegistry,
+  type InputIssue,
+  type Prepared,
+  type RegisteredGenerator,
+} from './generators/registry';
+export { generators, SECONDS_PER_SCENE } from './generators/definitions';

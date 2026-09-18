@@ -6,12 +6,18 @@ import {
   parseEnv,
   withCorrelation,
 } from '@cgp/config';
-import { closeQueues, createQueues, processJob, sweepOnBoot } from '@cgp/core';
+import {
+  closeQueues,
+  createQueues,
+  createRedis,
+  processJob,
+  sweepOnBoot,
+  waitForRedis,
+} from '@cgp/core';
 import { createDatabase } from '@cgp/db';
 import { Worker } from 'bullmq';
 import { createErrorThrottle } from './error-throttle';
 import { handlers } from './handlers';
-import { createRedis, waitForRedis } from './redis';
 
 loadRootEnvFile();
 const env = parseEnv(baseEnvSchema);

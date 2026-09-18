@@ -1,5 +1,7 @@
 import 'server-only';
 import { createDatabase, type Database } from '@cgp/db';
+import { createQueues, createRedis, type Queues } from '@cgp/core';
+import type { Redis } from 'ioredis';
 import { baseEnvSchema, createLogger, parseEnv, type Logger } from '@cgp/config';
 import { z } from 'zod';
 
@@ -31,4 +33,15 @@ const pool = globalThis as typeof globalThis & { cgpDb?: Database };
 
 export function getDb(): Database {
   return (pool.cgpDb ??= createDatabase(getEnv().DATABASE_URL));
+}
+
+const shared = globalThis as typeof globalThis & { cgpRedis?: Redis; cgpQueues?: Queues };
+
+/** One Redis connection per server process, shared by the queues; subscribers duplicate it. */
+export function getRedis(): Redis {
+  return (shared.cgpRedis ??= createRedis(getEnv().REDIS_URL));
+}
+
+export function getQueues(): Queues {
+  return (shared.cgpQueues ??= createQueues(getRedis()));
 }

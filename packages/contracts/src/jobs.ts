@@ -43,3 +43,33 @@ export function settlementFor(status: JobStatus): 'settle' | 'refund' | null {
       return null;
   }
 }
+
+/** Statuses a job never leaves. */
+export function isTerminalStatus(status: JobStatus): boolean {
+  return settlementFor(status) !== null;
+}
+
+/** What the API shows about a job. Postgres is the source; nothing here comes from Redis. */
+export interface JobView {
+  id: string;
+  generatorKey: string;
+  jobClass: JobClass;
+  status: JobStatus;
+  held: { credits: number; videoSeconds: number };
+  /** Null until the job settles. */
+  settled: { credits: number; videoSeconds: number } | null;
+  /** On BLOCKED, `category` is the moderation category shown to the user. */
+  error: { code: string; message: string; category?: string } | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Events on a job's stream (D9). `status` comes from Postgres. `delta` is streamed text relayed
+ * through Redis pub/sub: best effort, so a client that joins late misses earlier deltas and
+ * reads the finished output instead.
+ *
+ * The server ends the stream after a terminal status, but EventSource reconnects whenever a
+ * stream ends, so the client closes it on the first terminal status it sees.
+ */
+export type JobEvent = { type: 'status'; job: JobView } | { type: 'delta'; text: string };

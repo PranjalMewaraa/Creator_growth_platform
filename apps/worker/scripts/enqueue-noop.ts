@@ -4,9 +4,8 @@
 import { randomUUID } from 'node:crypto';
 import { JOB_CLASSES, type JobClass } from '@cgp/contracts';
 import { baseEnvSchema, createLogger, loadRootEnvFile, parseEnv } from '@cgp/config';
-import { closeQueues, createQueues, submitJob } from '@cgp/core';
+import { closeQueues, createQueues, createRedis, submitJob } from '@cgp/core';
 import { createDatabase } from '@cgp/db';
-import { createRedis } from '../src/redis';
 
 const [workspaceId, jobClassArg = 'inference'] = process.argv.slice(2);
 if (!workspaceId) throw new Error('Usage: enqueue:noop <workspace id> [job class]');

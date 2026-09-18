@@ -2,7 +2,7 @@
 
 **Companion to `plan.md`.** `plan.md` says what and why. This file says how, in what order, and what has been decided. Where the two disagree, `plan.md` wins.
 
-**Status:** 2026-09-18. WP1 to WP5, WP7 and WP8 built. Amendments A1 to A11 accepted and applied to `plan.md`. Items marked OPEN need an answer before the work package that depends on them.
+**Status:** 2026-09-18. WP1 to WP5 and WP7 to WP9 built. Amendments A1 to A11 accepted and applied to `plan.md`. Items marked OPEN need an answer before the work package that depends on them.
 
 ---
 
@@ -19,7 +19,7 @@
 | D6 | Auth | better-auth, email magic link, database sessions. Chosen over Auth.js v5, still beta (`5.0.0-beta.32`), because better-auth is a stable release and its magic link option refuses unknown emails, which is exactly A11. Without an email sender the link goes to the server log; a real sender is needed before anyone outside the team signs in | DECIDED in WP4 | |
 | D7 | UI | Tailwind 4 with design tokens in CSS, primitives in `packages/ui`. shadcn/ui is deferred until a screen needs dialogs, menus or complex form controls | DECIDED in WP4 | |
 | D8 | Queue | BullMQ, one queue per job class (`inference`, `render`, `publish`) in one worker process | proposed | |
-| D9 | Streamed output | Worker publishes tokens to Redis pub/sub, web exposes an SSE route, client falls back to polling job status | proposed | |
+| D9 | Streamed output | Worker publishes tokens to Redis pub/sub, web exposes an SSE route, client falls back to polling job status | DECIDED in WP9. The stream closes after a terminal status or about 55s, and the client closes EventSource on a terminal status, since EventSource otherwise reconnects | |
 | D10 | Provider SDKs | `@google/genai` in Vertex mode (Gemini, Imagen, Veo), `@anthropic-ai/vertex-sdk` (Haiku), `@google-cloud/text-to-speech`. Checked 2026-09-18 on project `creatorpltfrm`: Gemini 3.x answers only on the `global` endpoint (`us-central1` returns 404), while Veo and Imagen are regional, so location is per model in adapter config, not one project wide value. Model ids seen: `gemini-3.1-flash-lite`, `veo-3.1-lite-generate-001`. Newer versions exist (`gemini-3.5-flash-lite` and later Flash releases); the costing is based on 3.1, so any switch needs a pricing check first (plan section 17) | proposed | |
 | D11 | Token encryption | AES-256-GCM per token, data key wrapped by a key held in Vercel and worker env, never in the database | proposed | |
 | D12 | Image text layer | SVG layer spec stored as JSON, edited in browser, flattened in worker with resvg using the same font files | proposed | |
@@ -161,7 +161,7 @@ Weeks 1 to 3 are detailed. Weeks 4 to 8 are scoped and get re-planned in detail 
 |---|---|---|---|
 | WP7 Ledger and jobs | A | `createJob` transaction, idempotent settle and refund, grant script, versioned `metering_rates`, three BullMQ queues, worker skeleton, boot sweep, `cost_telemetry`. Built 2026-09-18: `createJobWithHold`, `settleJob`, `refundJob` in `packages/db`; submit, process and sweep in `packages/core`. `workspaces.video_seconds_cap` is not enforced yet; the granted balance already caps usage | Insufficient balance rejects before a job exists. Double settle is a no-op. Worker killed mid job is recovered by the sweep. Cached balance equals ledger sum. All four covered by tests, with concurrency on real Postgres |
 | WP8 Text adapters | A | Fakes for every adapter kind. Gemini Flash-Lite and Haiku through Vertex. gpt-oss-20b as second compile provider. Error normalisation. Built 2026-09-18 in `packages/adapters`: `createTextAdapters('fake' \| 'real')`, model ids in `models.ts`, fakes returning real PNG, WAV and MP4 files. Live contract tests pass for Gemini and gpt-oss (`openai/gpt-oss-20b-maas`, `us-central1`, through the OpenAI-compatible endpoint). Haiku is blocked on quota (D16) | Same call runs fake or real behind one flag |
-| WP9 Registry and API | A + B | Generator registry, one generate route keyed by generator, estimate endpoint, job SSE route | Adding a generator touches no route file (FR-GN-02) |
+| WP9 Registry and API | A + B | Generator registry, one generate route keyed by generator, estimate endpoint, job SSE route. Built 2026-09-18: registry and the six generator definitions in `packages/core/src/generators`, `startGeneration` and `estimateGeneration` in `packages/core`, routes under `/api/w/[workspaceId]`. Generators have no worker handler yet, so their jobs fail and refund in full until WP10. The seam for compile and the moderation pre check sits between pricing and the hold in `startGeneration` | Adding a generator touches no route file (FR-GN-02) |
 | WP10 Orchestration | A | Stages 1 to 3, artifact persistence, edit versioning, language seam, compiler profiles seeded as versioned rows | Forced 1500ms breach falls back, generation succeeds, no credit used. Assembly snapshot tests. Precedence tests |
 | WP11 Moderation pre check | A | Text pre check on compiled prompt (A6) | A blocked compiled prompt never creates a job or a hold |
 | WP12 Onboarding and profile | B | FR-ON flow, one question per screen, each answer visibly configures something. S-17 with version history | Editing the profile creates version N+1, and the next compile shows it in lineage |
@@ -223,6 +223,6 @@ Claude Code builds both streams. A and B in the tables are stream labels, not pe
 
 ## 7. Next steps
 
-1. WP9 (registry and API) and WP10 (orchestration) are next. WP5 still needs the Veo billing line read.
+1. WP10 (orchestration) and WP11 (moderation pre check) are next. WP5 still needs the Veo billing line read.
 2. Decide D1b before WP6, D16 before WP10 and D3 before WP11.
 3. Start the section 3 items. They have the longest lead times.

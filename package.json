@@ -21,6 +21,7 @@
     "infra:down": "docker compose down"
   },
   "devDependencies": {
+    "@cgp/core": "workspace:*",
     "@eslint/js": "^9.39.5",
     "@types/node": "^24.13.4",
     "eslint": "^9.39.5",
