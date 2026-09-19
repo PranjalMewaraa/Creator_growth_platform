@@ -80,3 +80,9 @@ export {
   type ProfileFields,
   type ProfileRow,
 } from './profiles';
+export {
+  createBrandKitVersion,
+  listBrandKitVersions,
+  type BrandKitFields,
+  type BrandKitRow,
+} from './brand-kits';

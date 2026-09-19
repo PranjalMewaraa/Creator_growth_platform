@@ -66,3 +66,16 @@ export {
   type ProfileVersionView,
   type SaveProfileResult,
 } from './profile';
+export {
+  BRAND_FONTS,
+  BRAND_KIT_LABELS,
+  brandKitHistory,
+  brandKitSchema,
+  MAX_LOGO_BYTES,
+  saveBrandKit,
+  storeLogo,
+  type BrandKitInput,
+  type BrandKitVersionView,
+  type LogoResult,
+  type SaveBrandKitResult,
+} from './brand-kit';

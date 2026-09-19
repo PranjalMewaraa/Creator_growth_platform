@@ -2,7 +2,7 @@
 
 **Companion to `plan.md`.** `plan.md` says what and why. This file says how, in what order, and what has been decided. Where the two disagree, `plan.md` wins.
 
-**Status:** 2026-09-18. WP1 to WP5, WP7 to WP12 and a publishing slice built. Amendments A1 to A11 accepted and applied to `plan.md`. Items marked OPEN need an answer before the work package that depends on them.
+**Status:** 2026-09-18. WP1 to WP5, WP7 to WP13 and a publishing slice built. Amendments A1 to A11 accepted and applied to `plan.md`. Items marked OPEN need an answer before the work package that depends on them.
 
 ---
 
@@ -166,7 +166,7 @@ Weeks 1 to 3 are detailed. Weeks 4 to 8 are scoped and get re-planned in detail 
 | WP10 Orchestration | A | Stages 1 to 3, artifact persistence, edit versioning, language seam, compiler profiles seeded as versioned rows . Built 2026-09-18 in `packages/orchestration`: directives from five sources resolved by precedence, a deterministic brief, the rewrite pass (Flash-Lite then gpt-oss, minimal reasoning, 1500ms in total), requirements rebuilt from the settings after any rewrite or edit, edits as child versions, the language seam (`routeLanguage`, profiles keyed `<type>.<language>`). Compiler profiles and a default template per output type are seeded as versioned catalog rows. Text generators (script, hooks, captions) run in the worker, stream deltas and store output inline on `outputs` until object storage exists. The dispatch path already runs the moderation pre check through the fake adapter | Forced 1500ms breach falls back, generation succeeds, no credit used. Assembly snapshot tests. Precedence tests |
 | WP11 Moderation pre check | A | Text pre check on compiled prompt (A6). Built 2026-09-18: every dispatch checks the compiled prompt and records the verdict in `moderation_events`; a failed check refuses the dispatch (fail closed, 503). Google adapter for text (Natural Language `moderateText`, blocking at 0.8 confidence on harmful categories only) and images (Vision SafeSearch), chosen by `MODERATION`, separate from `PROVIDERS` | A blocked compiled prompt never creates a job or a hold |
 | WP12 Onboarding and profile | B | FR-ON flow, one question per screen, each answer visibly configures something. S-17 with version history. Built 2026-09-18: eight questions at `/w/[id]/onboarding` with a live panel of the brief lines the compiler writes from the answers; the Brand screen edits the profile, saves version N+1 only when something changed, and lists the history with what each version changed. Home asks a workspace without a profile to start | Editing the profile creates version N+1, and the next compile shows it in lineage |
-| WP13 Brand kit | B | S-18: logo upload, 3 colours, typography, tagline. Versioned | Next compile shows new brand kit version in lineage |
+| WP13 Brand kit | B | S-18: logo upload, 3 colours, typography, tagline. Versioned. Built 2026-09-19 on the Brand screen: logo upload (PNG or JPEG, moderated, resized to 512px, no SVG), up to three colours, a typeface from the fonts the renderer has (Poppins, Noto Sans Devanagari), tagline, live brand card, history. Saves version N+1 only on a real change; a logo must be one this workspace uploaded | Next compile shows new brand kit version in lineage |
 | WP14 Studio and disclosure | B | Studio frame, cost before submit, streamed output, navigable away while the job continues. PROMPT disclosure: collapsed, viewable, editable, designed | Week 3 exit: intent, see prompt, edit, dispatch, held, settled, ledger line visible |
 | Checkpoint | both | Re-baseline against velocity. Invariant audit per A5. Cut decisions per plan section 12 | |
 
@@ -224,6 +224,6 @@ Claude Code builds both streams. A and B in the tables are stream labels, not pe
 
 ## 7. Next steps
 
-1. Next in plan order: WP13 and WP14 (brand kit, Studio). The publishing slice (parts of WP28 to WP33) is built; the first real posts through it are the user's to make with PUBLISHING=real.
+1. Next in plan order: WP14 (Studio and the compiled prompt disclosure), the week 3 exit. The publishing slice (parts of WP28 to WP33) is built; the first real posts through it are the user's to make with PUBLISHING=real.
 2. Decide D1b before WP6, D3 before WP11, and D16 and D17 before the week 3 exit.
 3. Start the section 3 items. They have the longest lead times.

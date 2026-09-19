@@ -14,8 +14,9 @@ async function restrictedImports(filePath: string, code: string) {
   return (result?.messages ?? []).filter((m) => m.ruleId === 'no-restricted-imports');
 }
 
-// The first lint loads every plugin, which can pass 5s while other test files run in parallel.
-describe('import boundaries', { timeout: 30_000 }, () => {
+// The first lint loads every plugin and the type aware parser setup. With the other test files
+// and a dev server competing for the machine that has taken over a minute, so give it room.
+describe('import boundaries', { timeout: 120_000 }, () => {
   it('blocks database drivers outside packages/db', async () => {
     const errors = await restrictedImports(
       'apps/web/src/app/leak.ts',
