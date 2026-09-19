@@ -340,7 +340,7 @@ export function OnboardingFlow({
         </footer>
       </section>
 
-      <aside className="flex flex-col gap-4 rounded-2xl border border-line bg-surface p-6 lg:sticky lg:top-32 xl:top-20">
+      <aside className="flex flex-col gap-4 rounded-2xl border border-line bg-surface p-6 lg:sticky lg:top-20">
         <div>
           <h2 className="text-sm font-medium text-ink">What this sets up</h2>
           <p className="mt-1 text-xs text-muted">

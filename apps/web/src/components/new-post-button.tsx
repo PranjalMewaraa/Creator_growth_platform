@@ -11,10 +11,11 @@ export function NewPostButton({ workspaceId }: { workspaceId: string }) {
   return (
     <Link
       href={href}
-      className="inline-flex h-10 items-center gap-1.5 rounded-full bg-accent px-4 text-sm font-medium text-accent-ink transition hover:brightness-105"
+      aria-label="New post"
+      className="inline-flex h-10 items-center gap-1.5 rounded-full bg-accent px-3 text-sm font-medium text-accent-ink shadow-[0_8px_24px_-10px_var(--color-accent)] transition hover:brightness-105 sm:px-4"
     >
       <PlusIcon />
-      New post
+      <span className="hidden sm:inline">New post</span>
     </Link>
   );
 }

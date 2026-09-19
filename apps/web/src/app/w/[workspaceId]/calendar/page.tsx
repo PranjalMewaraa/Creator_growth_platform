@@ -1,16 +1,34 @@
-import { Card, CardHeader, EmptyState } from '@cgp/ui';
-import { Screen } from '@/components/screen';
+import { listAccounts, profileHistory } from '@cgp/core';
+import { listArt } from '@/server/art';
+import { getDb } from '@/server/runtime';
+import { requireWorkspace } from '@/server/session';
+import { CalendarLoader } from './calendar-loader';
 
-export default function CalendarPage() {
+/**
+ * S-07, calendar week view. A visual preview for now: the channels and settings are real, the
+ * posts on the grid are samples until scheduling lands (WP31, WP34).
+ */
+export default async function CalendarPage({
+  params,
+}: {
+  params: Promise<{ workspaceId: string }>;
+}) {
+  const { workspaceId } = await params;
+  const { workspace } = await requireWorkspace(workspaceId);
+  const db = getDb();
+  const [accounts, [profile]] = await Promise.all([
+    listAccounts(db, workspaceId),
+    profileHistory(db, workspaceId),
+  ]);
+
   return (
-    <Screen title="Calendar" description="The week, with a status chip per platform.">
-      <Card>
-        <CardHeader title="This week" />
-        <EmptyState
-          title="No slots yet"
-          description="An empty slot is the main way to start a post, so this fills up once planning begins."
-        />
-      </Card>
-    </Screen>
+    <CalendarLoader
+      workspaceId={workspaceId}
+      workspaceName={workspace.name}
+      timezone={workspace.timezone}
+      cadence={profile?.profile.cadence ?? null}
+      accounts={accounts.map(({ id, platform, displayName }) => ({ id, platform, displayName }))}
+      art={listArt()}
+    />
   );
 }
