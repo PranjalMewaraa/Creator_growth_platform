@@ -32,7 +32,9 @@ const script = register({
     durationSeconds: z.int().min(15).max(90).optional(),
   }),
   compilerProfile: 'script',
-  providerAdapter: 'claude-haiku',
+  // Claude Haiku is the plan's script model, but the project has no Haiku quota yet (D16),
+  // so scripts run on Flash-Lite until it does. Switching back is this one line.
+  providerAdapter: 'gemini-flash-lite',
   estimate: (_input, rates) => {
     const credits = rateFor(rates, 'script');
     return { credits, breakdown: [{ label: 'Script', credits }] };

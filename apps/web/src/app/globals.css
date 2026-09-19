@@ -25,6 +25,9 @@
   --color-hot: #ff5a1f;
   --color-good: #3ddc97;
   --color-bad: #ff7a7a;
+  /* AI surfaces only (the engine, the agent): a neon pair with a glow. Yellow stays the action. */
+  --color-ai: #8b5cf6;
+  --color-ai-hot: #d946ef;
 }
 
 :root {
@@ -38,4 +41,34 @@ body {
 
 ::selection {
   background-color: color-mix(in oklab, var(--color-accent) 35%, transparent);
+}
+
+/* The AI accent: a violet to fuchsia edge and a soft neon glow, for things the engine does. */
+@utility ai-glow {
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--color-ai) 55%, transparent),
+    0 12px 40px -12px color-mix(in oklab, var(--color-ai-hot) 55%, transparent),
+    0 0 60px -20px color-mix(in oklab, var(--color-ai) 70%, transparent);
+}
+
+@utility ai-surface {
+  background:
+    radial-gradient(
+      120% 80% at 0% 0%,
+      color-mix(in oklab, var(--color-ai) 28%, transparent),
+      transparent 60%
+    ),
+    radial-gradient(
+      90% 70% at 100% 100%,
+      color-mix(in oklab, var(--color-ai-hot) 22%, transparent),
+      transparent 60%
+    ),
+    var(--color-surface);
+}
+
+@utility ai-text {
+  background: linear-gradient(90deg, #c4b5fd, #f0abfc);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }

@@ -29,6 +29,7 @@ import { compileGeneration, estimateGeneration, findJob, startGeneration } from 
 import { generators } from './generators/definitions';
 import { createTextHandlers } from './handlers/text';
 import { processJob } from './process';
+import { jobOutputs, recentGenerationJobs } from './studio';
 import type { Queues } from './queues';
 
 const log = createLogger({ service: 'test', level: 'silent' });
@@ -332,11 +333,11 @@ describe('text generation end to end', () => {
       kind: 'script',
       compiledPromptId: started.prompt.id,
     });
-    expect((output?.metadata as { text: string }).text).toContain('[fake claude-haiku]');
+    expect((output?.metadata as { text: string }).text).toContain('[fake gemini-flash-lite]');
     expect(deltas.join('')).toBe((output?.metadata as { text: string }).text);
 
     const [telemetry] = await scoped(db, workspaceId).select(costTelemetry);
-    expect(telemetry).toMatchObject({ actionClass: 'script', provider: 'fake:claude-haiku' });
+    expect(telemetry).toMatchObject({ actionClass: 'script', provider: 'fake:gemini-flash-lite' });
   });
 
   it('stores JSON output for JSON generators and refunds when it is not JSON', async () => {
@@ -422,5 +423,45 @@ describe('findJob', () => {
     expect(await findJob(db, owner, result.job.id)).toBeDefined();
     expect(await findJob(db, other, result.job.id)).toBeUndefined();
     expect(await findJob(db, owner, 'not-a-uuid')).toBeUndefined();
+  });
+});
+
+describe('studio helpers', () => {
+  it('lists recent generation jobs with their intent, and a finished job’s output', async () => {
+    const workspaceId = await workspace(20);
+    const { queues } = recordingQueues();
+    const started = await startGeneration(deps(queues), {
+      workspaceId,
+      generatorKey: 'caption_set',
+      input: intent,
+    });
+    if (!started.ok) throw new Error(started.reason);
+
+    const [recent] = await recentGenerationJobs(db, workspaceId);
+    expect(recent).toMatchObject({
+      id: started.job.id,
+      generatorKey: 'caption_set',
+      intentText: intent.intentText,
+      status: 'QUEUED',
+    });
+    expect(await jobOutputs(db, workspaceId, started.job.id)).toEqual([]);
+
+    const handlers = createTextHandlers({
+      db,
+      registry: generators,
+      adapters: createTextAdapters('fake'),
+      publishDelta: () => Promise.resolve(),
+      costInr: () => 0,
+      providerLabel: 'fake',
+    });
+    await processJob({ db, handlers, log }, { jobId: started.job.id, correlationId: 'c' });
+
+    const [output] = await jobOutputs(db, workspaceId, started.job.id);
+    expect(output).toMatchObject({ kind: 'caption', compiledPromptId: started.prompt.id });
+    expect(JSON.parse(output?.text ?? '')).toMatchObject({ fake: true });
+
+    const other = await createTestWorkspace(db);
+    expect(await jobOutputs(db, other, started.job.id)).toEqual([]);
+    expect(await recentGenerationJobs(db, other)).toEqual([]);
   });
 });

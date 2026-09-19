@@ -188,7 +188,7 @@ All slots run on one Google Cloud account against the trial credit. Every call r
 |---|---|---|---|
 | Compile pass | Gemini 3.1 Flash-Lite | $0.25 / $1.50 per 1M in/out | cached input at $0.025 |
 | Compile pass, second provider | gpt-oss-20b | $0.07 / $0.25 per 1M | partner model, credit eligible |
-| Script, English | Claude Haiku 4.5 | $1.00 / $5.00 per 1M | partner model, credit eligible |
+| Script, English | Claude Haiku 4.5 (Gemini 3.1 Flash-Lite until the Haiku quota is granted, D16) | $1.00 / $5.00 per 1M | partner model, credit eligible |
 | Captions and hooks | Gemini 3.1 Flash-Lite | as above | batched |
 | Image | Imagen 4 Fast | $0.02 per image | INR 1.76 |
 | Thumbnail | Imagen 4 Fast or Imagen 4 | $0.02 / $0.04 | INR 1.76 / 3.52 |
