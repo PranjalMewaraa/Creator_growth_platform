@@ -1,3 +1,4 @@
+import { eq } from 'drizzle-orm';
 import { unwrap, type Database } from './client';
 import { templatePreviews } from './schema';
 
@@ -20,4 +21,14 @@ export async function saveTemplatePreview(
       target: templatePreviews.templateVersionId,
       set: { mediaUrl: fields.mediaUrl, text: fields.text },
     });
+}
+
+/** Drops a version's preview, so the gallery says it has none rather than showing an old one. */
+export async function deleteTemplatePreview(
+  db: Database,
+  templateVersionId: string,
+): Promise<void> {
+  await unwrap(db)
+    .delete(templatePreviews)
+    .where(eq(templatePreviews.templateVersionId, templateVersionId));
 }

@@ -103,9 +103,11 @@ export function createGeminiImage(options: GeminiImageOptions): ImageAdapter {
 
     async generate(request) {
       try {
-        const results = await Promise.all(
-          Array.from({ length: request.count }, () => one(request)),
-        );
+        // One at a time, not in parallel. The image quota is metered per minute and a burst of
+        // three trips it every time, which costs the whole set: a thumbnail set is refused
+        // outright rather than taking a few seconds longer.
+        const results: Array<Awaited<ReturnType<typeof one>>> = [];
+        for (let i = 0; i < request.count; i++) results.push(await one(request));
         return {
           images: results.map(([image]) => image),
           usage: usageOf(results.map(([, response]) => response)),

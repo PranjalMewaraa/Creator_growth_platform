@@ -1,7 +1,15 @@
 import type { Logger } from '@cgp/config';
-import type { ImageAdapter, ModerationAdapter, ObjectStore, TextAdapter } from '@cgp/contracts';
+import type {
+  ImageAdapter,
+  ModerationAdapter,
+  ObjectStore,
+  TextAdapter,
+  TokenUsage,
+} from '@cgp/contracts';
 import {
   catalog,
+  deleteTemplatePreview,
+  jobs as jobsTable,
   outputs,
   saveTemplatePreview,
   scoped,
@@ -53,6 +61,9 @@ const NOT_QUEUED = {
 export interface TemplatePreviewDeps {
   db: Database;
   store: ObjectStore;
+  /** Realised cost per call, so a preview run shows up in telemetry like any other work. */
+  textCostInr: (adapterKey: string, usage: TokenUsage) => number;
+  imageCostInr: (adapterKey: string, usage: TokenUsage) => number;
   moderation: ModerationAdapter;
   registry: GeneratorRegistry;
   text: Readonly<Record<string, TextAdapter>>;
@@ -91,7 +102,7 @@ export async function buildTemplatePreviews(
       adapters: deps.text,
       moderation: deps.moderation,
       publishDelta: () => Promise.resolve(),
-      costInr: () => 0,
+      costInr: deps.textCostInr,
       providerLabel: 'preview',
     }),
     ...createImageHandlers({
@@ -100,7 +111,7 @@ export async function buildTemplatePreviews(
       adapters: deps.image,
       moderation: deps.moderation,
       store: deps.store,
-      costInr: () => 0,
+      costInr: deps.imageCostInr,
       providerLabel: 'preview',
     }),
   };
@@ -136,11 +147,13 @@ export async function buildTemplatePreviews(
     }
 
     try {
-      const preview = await runOne(deps, handlers, workspaceId, {
-        templateId: template.id,
-        generatorKey: generator.key,
-        outputType: template.outputType,
-      });
+      const preview = await withQuotaRetry(deps, () =>
+        runOne(deps, handlers, workspaceId, {
+          templateId: template.id,
+          generatorKey: generator.key,
+          outputType: template.outputType,
+        }),
+      );
       await saveTemplatePreview(deps.db, {
         templateVersionId: version.id,
         mediaUrl: preview.mediaUrl,
@@ -150,6 +163,9 @@ export async function buildTemplatePreviews(
       deps.log.info({ template: template.slug }, 'preview made');
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err);
+      // A forced run that could not replace the preview drops it: keeping the last one would
+      // show an older run's output as if it were this version's.
+      if (options.force) await deleteTemplatePreview(deps.db, version.id);
       outcomes.push({
         slug: template.slug,
         outputType: template.outputType,
@@ -160,6 +176,26 @@ export async function buildTemplatePreviews(
     }
   }
   return outcomes;
+}
+
+/** Long enough for a per minute image quota to refill. */
+const QUOTA_WAIT_MS = 45_000;
+
+/**
+ * Image models meter by the minute, and a gallery run asks for every picture at once, so the
+ * last few reliably come back 429. A refused template waits for the window and tries again
+ * rather than keeping whatever preview it had, which would be the previous run's.
+ */
+async function withQuotaRetry<T>(deps: TemplatePreviewDeps, work: () => Promise<T>): Promise<T> {
+  try {
+    return await work();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (!/429|quota/i.test(message)) throw err;
+    deps.log.info({ waitMs: QUOTA_WAIT_MS }, 'provider quota reached, waiting to try again');
+    await new Promise((resolve) => setTimeout(resolve, QUOTA_WAIT_MS));
+    return work();
+  }
 }
 
 /** One template, compiled, generated and settled, with whatever it produced read back. */
@@ -197,7 +233,16 @@ async function runOne(
       correlationId: started.job.id,
     },
   );
-  if (result !== 'settled') throw new Error(`job ${result}`);
+  if (result !== 'settled') {
+    // Carry the job's own reason up, so a quota refusal can be waited out rather than reported
+    // as a bare refund.
+    const [job] = await scoped(deps.db, workspaceId).select(jobsTable, {
+      where: (t, op) => op.eq(t.id, started.job.id),
+      limit: 1,
+    });
+    const reason = (job?.error as { message?: string } | null)?.message;
+    throw new Error(reason ? `job ${result}: ${reason}` : `job ${result}`);
+  }
 
   const [output] = await scoped(deps.db, workspaceId).select(outputs, {
     where: (t, op) => op.eq(t.jobId, started.job.id),

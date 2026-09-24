@@ -139,6 +139,8 @@ describe('the preview pipeline', () => {
       {
         db,
         store,
+        textCostInr: () => 0,
+        imageCostInr: () => 0,
         moderation: createFakeModeration(),
         registry: generators,
         text: createTextAdapters('fake'),
@@ -169,6 +171,8 @@ describe('the preview pipeline', () => {
     const deps = {
       db,
       store: createMemoryStore(),
+      textCostInr: () => 0,
+      imageCostInr: () => 0,
       moderation: createFakeModeration(),
       registry: generators,
       text: createTextAdapters('fake'),

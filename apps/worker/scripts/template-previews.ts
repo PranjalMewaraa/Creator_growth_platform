@@ -32,6 +32,8 @@ try {
     {
       db,
       store: providers.store,
+      textCostInr: providers.textCostInr,
+      imageCostInr: providers.imageCostInr,
       moderation: providers.moderation,
       registry: generators,
       text: providers.text,
