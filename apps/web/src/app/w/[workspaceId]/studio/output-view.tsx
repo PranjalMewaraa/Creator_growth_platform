@@ -1,10 +1,57 @@
 'use client';
 
+import {
+  countHashtags,
+  PLATFORM_HASHTAG_LIMITS,
+  PLATFORM_TEXT_LIMITS,
+  type TargetPlatform,
+} from '@cgp/contracts';
 import { cx } from '@cgp/ui';
 import { useState, type ReactNode } from 'react';
 
 // A finished output, shaped by what the generator makes: a script reads as paragraphs, hooks
 // and titles as lists, captions as one card per platform. Copy stays locked while checking.
+
+/** Words a person speaks in a second, the same rate the compiler budgets scripts at. */
+const WORDS_PER_SECOND = 2.5;
+
+function words(text: string): number {
+  return text.trim() ? text.trim().split(/\s+/).length : 0;
+}
+
+/** Amber from nine tenths of the limit, red past it: the counter warns before it refuses. */
+function tone(used: number, limit: number): string {
+  if (used > limit) return 'text-bad';
+  return used >= limit * 0.9 ? 'text-accent' : 'text-muted';
+}
+
+function Count({ used, limit, unit }: { used: number; limit: number; unit: string }) {
+  return (
+    <span className={cx('tabular-nums', tone(used, limit))}>
+      {used.toLocaleString('en-IN')}/{limit.toLocaleString('en-IN')} {unit}
+    </span>
+  );
+}
+
+/**
+ * What a caption costs against the platform it is for (S-11): characters against the
+ * published limit and, where the platform counts them, hashtags. Both update as the text does.
+ */
+function CaptionMeter({ platform, text }: { platform: TargetPlatform; text: string }) {
+  const limit = PLATFORM_TEXT_LIMITS[platform];
+  const tags = PLATFORM_HASHTAG_LIMITS[platform];
+  const tagsUsed = countHashtags(text);
+  const over = text.length > limit || (tags !== undefined && tagsUsed > tags);
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
+      <Count used={text.length} limit={limit} unit="characters" />
+      {tags === undefined ? null : <Count used={tagsUsed} limit={tags} unit="hashtags" />}
+      {over ? (
+        <span className="text-bad">Too long to post as it is; trim it before publishing.</span>
+      ) : null}
+    </div>
+  );
+}
 
 function CopyButton({ text, locked }: { text: string; locked: boolean }) {
   const [copied, setCopied] = useState(false);
@@ -30,11 +77,14 @@ function Block({
   title,
   text,
   locked,
+  meter,
   children,
 }: {
   title?: string;
   text: string;
   locked: boolean;
+  /** A length indicator under the text, for the outputs that have a limit to meet. */
+  meter?: ReactNode;
   children?: ReactNode;
 }) {
   return (
@@ -55,6 +105,7 @@ function Block({
       >
         {children ?? text}
       </div>
+      {meter}
     </div>
   );
 }
@@ -87,6 +138,81 @@ export function ImageOutput({
   );
 }
 
+/**
+ * One platform's caption (S-11). Editable in place so the indicators are live: a caption that
+ * is too long can be trimmed here and watched come back under the limit. The edit is local to
+ * this screen, not stored: what is kept is the output the generator made, and the way out is
+ * Copy or the Composer.
+ */
+function CaptionCard({
+  platform,
+  label,
+  initial,
+  locked,
+}: {
+  platform: TargetPlatform | null;
+  label: string;
+  initial: string;
+  locked: boolean;
+}) {
+  const [text, setText] = useState(initial);
+  return (
+    <div className="rounded-xl border border-line bg-raised px-4 py-3">
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-xs font-medium uppercase tracking-wide text-muted">{label}</p>
+        <div className="flex shrink-0 items-center gap-2">
+          {text === initial ? null : (
+            <button
+              type="button"
+              onClick={() => setText(initial)}
+              className="rounded-lg border border-line px-2.5 py-1 text-xs text-muted transition hover:text-ink"
+            >
+              Reset
+            </button>
+          )}
+          <CopyButton text={text} locked={locked} />
+        </div>
+      </div>
+      <textarea
+        value={text}
+        onChange={(event) => setText(event.target.value)}
+        rows={Math.min(12, Math.max(3, Math.ceil(text.length / 60)))}
+        aria-label={`${label} caption`}
+        className={cx(
+          'mt-2 w-full resize-y rounded-lg border border-transparent bg-transparent text-[15px] leading-7 text-ink outline-none transition focus:border-line focus:bg-surface focus:px-3 focus:py-2',
+          locked && 'opacity-80',
+        )}
+      />
+      {platform ? <CaptionMeter platform={platform} text={text} /> : null}
+    </div>
+  );
+}
+
+/**
+ * How long a script takes to say (S-10), at the rate the compiler budgets words by. Against
+ * the length that was asked for, when one was, so a script that overruns is visible before it
+ * is ever recorded.
+ */
+function ScriptMeter({ text, targetSeconds }: { text: string; targetSeconds?: number | null }) {
+  const spoken = words(text);
+  const seconds = Math.round(spoken / WORDS_PER_SECOND);
+  // A tenth either way of the requested length still reads as the length asked for.
+  const over = targetSeconds ? seconds > targetSeconds * 1.1 : false;
+  const under = targetSeconds ? seconds < targetSeconds * 0.9 : false;
+  return (
+    <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted">
+      <span className="tabular-nums">
+        {spoken.toLocaleString('en-IN')} words, about {seconds}s spoken
+      </span>
+      {targetSeconds ? (
+        <span className={cx('tabular-nums', over || under ? 'text-accent' : 'text-muted')}>
+          {over ? 'longer than' : under ? 'shorter than' : 'as asked:'} {targetSeconds}s
+        </span>
+      ) : null}
+    </p>
+  );
+}
+
 function parse(text: string): unknown {
   try {
     return JSON.parse(text) as unknown;
@@ -101,10 +227,13 @@ export function OutputView({
   kind,
   text,
   locked,
+  targetSeconds,
 }: {
   kind: string;
   text: string;
   locked: boolean;
+  /** The length the script was asked for, when one was chosen. */
+  targetSeconds?: number | null;
 }) {
   const data = parse(text);
 
@@ -130,7 +259,11 @@ export function OutputView({
                   className="flex items-start justify-between gap-3 rounded-xl border border-line bg-raised px-4 py-2.5"
                 >
                   <p className="text-[15px] leading-6 text-ink">{item}</p>
-                  <CopyButton text={item} locked={locked} />
+                  <div className="flex shrink-0 items-center gap-2">
+                    {/* No platform publishes a limit on these, so it is a count, not a verdict. */}
+                    <span className="text-[11px] tabular-nums text-faint">{item.length}</span>
+                    <CopyButton text={item} locked={locked} />
+                  </div>
                 </div>
               ))}
             </div>
@@ -146,10 +279,11 @@ export function OutputView({
       <div className="flex flex-col gap-3">
         {Object.entries(captions).map(([platform, caption]) =>
           typeof caption === 'string' ? (
-            <Block
+            <CaptionCard
               key={platform}
-              title={NAMES[platform] ?? platform}
-              text={caption}
+              platform={platform in PLATFORM_TEXT_LIMITS ? (platform as TargetPlatform) : null}
+              label={NAMES[platform] ?? platform}
+              initial={caption}
               locked={locked}
             />
           ) : null,
@@ -159,5 +293,12 @@ export function OutputView({
   }
 
   // Scripts, and anything that did not come back in the expected shape: shown as written.
-  return <Block title={kind === 'script' ? 'Script' : undefined} text={text} locked={locked} />;
+  return (
+    <Block
+      title={kind === 'script' ? 'Script' : undefined}
+      text={text}
+      locked={locked}
+      meter={kind === 'script' ? <ScriptMeter text={text} targetSeconds={targetSeconds} /> : null}
+    />
+  );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import type { PostTargetStatus, TargetPlatform } from '@cgp/contracts';
+import { PLATFORM_TEXT_LIMITS, type PostTargetStatus, type TargetPlatform } from '@cgp/contracts';
 import { Button, cx } from '@cgp/ui';
 import Link from 'next/link';
 import {
@@ -44,7 +44,7 @@ interface Draft {
   savedAt: string;
 }
 
-const LIMITS: Record<TargetPlatform, number> = { instagram: 2200, linkedin: 3000 };
+const LIMITS = PLATFORM_TEXT_LIMITS;
 const NAMES: Record<TargetPlatform, string> = { instagram: 'Instagram', linkedin: 'LinkedIn' };
 const SHORT: Record<TargetPlatform, string> = { instagram: 'IG', linkedin: 'IN' };
 const DOT: Record<TargetPlatform, string> = {

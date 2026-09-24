@@ -14,6 +14,7 @@ import { PromptDisclosure } from './prompt-disclosure';
 
 export interface StudioJobSummary extends JobView {
   intentText: string;
+  durationSeconds: number | null;
 }
 
 interface Output {
@@ -272,7 +273,10 @@ export function Studio({
 
   const checking = job !== null && !TERMINAL.has(job.status);
   // The recent list knows every job's intent, so it survives a refresh or a return visit.
-  const shownIntent = (job && jobs.find((j) => j.id === job.id)?.intentText) || jobIntent;
+  const openJobRow = job ? jobs.find((j) => j.id === job.id) : undefined;
+  const shownIntent = openJobRow?.intentText || jobIntent;
+  // The length that job asked for, which the script meter measures the result against.
+  const shownDuration = openJobRow?.durationSeconds ?? null;
   const credit = (n: number) => `${n} ${n === 1 ? 'credit' : 'credits'}`;
 
   return (
@@ -595,6 +599,7 @@ export function Studio({
                       kind={output.kind}
                       text={output.text}
                       locked={false}
+                      targetSeconds={shownDuration}
                     />
                   ))
                 )

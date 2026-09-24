@@ -1,3 +1,5 @@
+import type { TargetPlatform } from './generator';
+
 /**
  * Status lives on each post target, never on the publication (plan section 14).
  *
@@ -19,3 +21,22 @@ export const POST_TARGET_STATUSES = [
 ] as const;
 
 export type PostTargetStatus = (typeof POST_TARGET_STATUSES)[number];
+
+/**
+ * Published platform limits on post text, in characters. They live here because the compiler,
+ * the publishing checks and every length indicator in the UI have to agree on one number.
+ */
+export const PLATFORM_TEXT_LIMITS: Record<TargetPlatform, number> = {
+  instagram: 2200,
+  linkedin: 3000,
+};
+
+/** Published hashtag limits. LinkedIn publishes none, so nothing is enforced there. */
+export const PLATFORM_HASHTAG_LIMITS: Partial<Record<TargetPlatform, number>> = {
+  instagram: 30,
+};
+
+/** Hashtags as the platforms count them: `#` then letters, digits or underscores. */
+export function countHashtags(text: string): number {
+  return (text.match(/#[\p{L}\p{N}_]+/gu) ?? []).length;
+}

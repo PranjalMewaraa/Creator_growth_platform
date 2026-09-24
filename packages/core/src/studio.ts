@@ -8,6 +8,8 @@ import { toJobView } from './generate';
 export interface StudioJob extends JobView {
   /** What the user asked for, from the job's input. */
   intentText: string;
+  /** The length a script was asked for, so its output can be measured against it (S-10). */
+  durationSeconds: number | null;
 }
 
 /** A stored JSON field that should be a string, or empty when it is anything else. */
@@ -30,10 +32,14 @@ export async function recentGenerationJobs(
   });
   return rows
     .filter((row) => row.generatorKey !== 'noop')
-    .map((row) => ({
-      ...toJobView(row),
-      intentText: text((row.input as { intentText?: unknown }).intentText),
-    }));
+    .map((row) => {
+      const input = row.input as { intentText?: unknown; durationSeconds?: unknown };
+      return {
+        ...toJobView(row),
+        intentText: text(input.intentText),
+        durationSeconds: typeof input.durationSeconds === 'number' ? input.durationSeconds : null,
+      };
+    });
 }
 
 export interface StudioOutput {

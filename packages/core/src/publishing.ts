@@ -1,12 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import type { Logger } from '@cgp/config';
-import type {
-  ModerationAdapter,
-  ModerationCategory,
-  ObjectStore,
-  PostContent,
-  PostTargetStatus,
-  TargetPlatform,
+import {
+  PLATFORM_TEXT_LIMITS,
+  type ModerationAdapter,
+  type ModerationCategory,
+  type ObjectStore,
+  type PostContent,
+  type PostTargetStatus,
+  type TargetPlatform,
 } from '@cgp/contracts';
 import {
   brandKits,
@@ -20,8 +21,8 @@ import type { InputIssue } from './generators/registry';
 import { fitToFrame, INSTAGRAM_FRAMES, type InstagramFrame } from './media';
 import { enqueue, type Queues } from './queues';
 
-/** Published limits on post text. */
-export const TEXT_LIMITS: Record<TargetPlatform, number> = { instagram: 2200, linkedin: 3000 };
+/** Published limits on post text, from the one place they are written down. */
+export const TEXT_LIMITS = PLATFORM_TEXT_LIMITS;
 
 export const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
 

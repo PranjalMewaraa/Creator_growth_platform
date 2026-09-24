@@ -1,4 +1,10 @@
-import type { Directive, OutputType, TargetPlatform } from '@cgp/contracts';
+import {
+  PLATFORM_HASHTAG_LIMITS,
+  PLATFORM_TEXT_LIMITS,
+  type Directive,
+  type OutputType,
+  type TargetPlatform,
+} from '@cgp/contracts';
 
 // Safety policy and platform hard constraints: the two sources above the user (FR-PO-06).
 // They live in code because nobody may configure them away.
@@ -31,11 +37,12 @@ const FRAMES: Partial<Record<OutputType, Record<TargetPlatform, string>>> = {
   video: { instagram: '9:16', linkedin: '9:16' },
 };
 
-/** Published platform limits on post text. */
-const CAPTION_LIMITS: Record<TargetPlatform, string> = {
-  instagram: 'Instagram: at most 2,200 characters and 30 hashtags.',
-  linkedin: 'LinkedIn: at most 3,000 characters.',
-};
+/** The published limits, said in words for the model, so the numbers cannot drift apart. */
+function captionLimit(platform: TargetPlatform): string {
+  const chars = `at most ${PLATFORM_TEXT_LIMITS[platform].toLocaleString('en-IN')} characters`;
+  const tags = PLATFORM_HASHTAG_LIMITS[platform];
+  return `${PLATFORM_NAMES[platform]}: ${chars}${tags ? ` and ${tags} hashtags` : ''}.`;
+}
 
 export function platformDirectives(
   outputType: OutputType,
@@ -51,7 +58,7 @@ export function platformDirectives(
     if (platforms.length > 0) {
       directives.push({
         key: 'captionLimits',
-        value: platforms.map((p) => CAPTION_LIMITS[p]).join(' '),
+        value: platforms.map(captionLimit).join(' '),
         source: 'platform',
       });
     }
