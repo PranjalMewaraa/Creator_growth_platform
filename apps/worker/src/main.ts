@@ -14,6 +14,7 @@ import {
   createRedis,
   createPublishHandler,
   type JobHandler,
+  createImageHandlers,
   createTextHandlers,
   generators,
   processJob,
@@ -21,7 +22,7 @@ import {
   sweepOnBoot,
   waitForRedis,
 } from '@cgp/core';
-import { createProviders } from '@cgp/adapters';
+import { createProviders, warmProviders } from '@cgp/adapters';
 import { createDatabase, PUBLISH_TARGET } from '@cgp/db';
 import { Worker } from 'bullmq';
 import { createErrorThrottle } from './error-throttle';
@@ -46,6 +47,9 @@ const queues = createQueues(connection);
 await sweepOnBoot({ db, queues, log });
 
 const providers = createProviders({ ...env, log });
+// Pays the connection and token cost before the first job does (D17). Best effort, in the
+// background: the worker takes work whether or not it finishes.
+void warmProviders(providers, log);
 const handlers = {
   ...baseHandlers,
   ...createTextHandlers({
@@ -54,6 +58,14 @@ const handlers = {
     adapters: providers.text,
     publishDelta: (jobId, text) => publishDelta(connection, jobId, text),
     costInr: providers.textCostInr,
+    providerLabel: providers.mode === 'real' ? 'vertex' : 'fake',
+  }),
+  ...createImageHandlers({
+    db,
+    registry: generators,
+    adapters: providers.image,
+    store: providers.store,
+    costInr: providers.imageCostInr,
     providerLabel: providers.mode === 'real' ? 'vertex' : 'fake',
   }),
   ...publishHandlers(),

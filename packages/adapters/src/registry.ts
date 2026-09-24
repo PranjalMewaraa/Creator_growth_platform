@@ -1,5 +1,6 @@
 import type { Logger } from '@cgp/config';
 import type {
+  ImageAdapter,
   ModerationAdapter,
   ObjectStore,
   Publisher,
@@ -7,13 +8,23 @@ import type {
   TextAdapter,
   TokenUsage,
 } from '@cgp/contracts';
-import { createFakeModeration, createFakePublisher } from './fakes';
+import { createFakeImage, createFakeModeration, createFakePublisher } from './fakes';
+import { createGeminiImage } from './image/gemini';
 import { createInstagramPublisher } from './publishers/instagram';
 import { createLinkedInPublisher } from './publishers/linkedin';
 import { createGcsStore } from './storage/gcs';
 import { createMemoryStore } from './storage/memory';
 import { createGoogleModeration } from './moderation/google';
-import { isTextModelKey, TEXT_MODELS, textCostInr, type TextModelKey } from './models';
+import {
+  IMAGE_MODELS,
+  imageCostInr,
+  isImageModelKey,
+  isTextModelKey,
+  TEXT_MODELS,
+  textCostInr,
+  type ImageModelKey,
+  type TextModelKey,
+} from './models';
 import { createClaudeText } from './text/claude';
 import { createFakeText } from './text/fake';
 import { createGeminiText } from './text/gemini';
@@ -68,9 +79,34 @@ function createRealText(key: TextModelKey, { project, log }: RealProviderOptions
   }
 }
 
+export type ImageAdapters = Record<ImageModelKey, ImageAdapter>;
+
+/** Every image model behind the same switch as text, and the same adapter shape either way. */
+export function createImageAdapters(mode: 'fake'): ImageAdapters;
+export function createImageAdapters(mode: ProviderMode, real: RealProviderOptions): ImageAdapters;
+export function createImageAdapters(mode: ProviderMode, real?: RealProviderOptions): ImageAdapters {
+  const entries = (Object.keys(IMAGE_MODELS) as ImageModelKey[]).map((key) => {
+    if (mode === 'fake') return [key, createFakeImage(key)] as const;
+    if (!real?.project) throw new Error('PROVIDERS=real needs a GCP project');
+    const config = IMAGE_MODELS[key];
+    return [
+      key,
+      createGeminiImage({
+        key,
+        project: real.project,
+        location: config.location,
+        model: config.model,
+        log: real.log,
+      }),
+    ] as const;
+  });
+  return Object.fromEntries(entries) as ImageAdapters;
+}
+
 export interface Providers {
   mode: ProviderMode;
   text: TextAdapters;
+  image: ImageAdapters;
   /** The compile rewrite pass, in order: Flash-Lite, then gpt-oss (plan section 6). */
   rewriters: TextAdapter[];
   /** Chosen by MODERATION, separately from PROVIDERS (D3). */
@@ -81,6 +117,8 @@ export interface Providers {
   store: ObjectStore;
   /** Realised cost of a text call in rupees; zero for fakes. */
   textCostInr: (adapterKey: string, usage: TokenUsage) => number;
+  /** Realised cost of an image call in rupees; zero for fakes. */
+  imageCostInr: (adapterKey: string, usage: TokenUsage) => number;
 }
 
 /** Everything a process needs to call providers, chosen by PROVIDERS. */
@@ -103,9 +141,14 @@ export function createProviders(env: {
     env.PROVIDERS === 'real'
       ? createTextAdapters('real', { project: env.GOOGLE_CLOUD_PROJECT ?? '', log: env.log })
       : createTextAdapters('fake');
+  const image =
+    env.PROVIDERS === 'real'
+      ? createImageAdapters('real', { project: env.GOOGLE_CLOUD_PROJECT ?? '', log: env.log })
+      : createImageAdapters('fake');
   return {
     mode: env.PROVIDERS,
     text,
+    image,
     rewriters: [text['gemini-flash-lite'], text['gpt-oss-20b']],
     moderation,
     publishers:
@@ -127,6 +170,8 @@ export function createProviders(env: {
       : createMemoryStore(),
     textCostInr: (key, usage) =>
       env.PROVIDERS === 'real' && isTextModelKey(key) ? textCostInr(key, usage) : 0,
+    imageCostInr: (key, usage) =>
+      env.PROVIDERS === 'real' && isImageModelKey(key) ? imageCostInr(key, usage) : 0,
   };
 }
 

@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { artStyle } from '@/lib/art';
-import { OutputView } from './output-view';
+import { ImageOutput, OutputView } from './output-view';
 import { PromptDisclosure } from './prompt-disclosure';
 
 // Studio (plan section 13, WP14): plain intent in, compiled prompt visible and editable, cost
@@ -20,6 +20,7 @@ interface Output {
   id: string;
   kind: string;
   text: string;
+  media: { url: string; width: number; height: number } | null;
 }
 
 interface Kind {
@@ -33,8 +34,8 @@ const KINDS: Kind[] = [
   { key: 'script', label: 'Script', hint: 'The words to say on camera' },
   { key: 'hook_title_set', label: 'Hooks & titles', hint: 'Openers that stop the scroll' },
   { key: 'caption_set', label: 'Captions', hint: 'One caption per platform' },
-  { key: 'image', label: 'Image', hint: 'Arrives with the image week', soon: true },
-  { key: 'thumbnail_set', label: 'Thumbnail', hint: 'Arrives with the image week', soon: true },
+  { key: 'image', label: 'Image', hint: 'A picture for the post' },
+  { key: 'thumbnail_set', label: 'Thumbnail', hint: 'Three to choose between' },
   { key: 'video', label: 'Video', hint: 'Arrives with the video weeks', soon: true },
 ];
 const LABEL: Record<string, string> = Object.fromEntries(KINDS.map((k) => [k.key, k.label]));
@@ -44,6 +45,10 @@ const PLATFORMS: Array<{ value: TargetPlatform; label: string }> = [
   { value: 'linkedin', label: 'LinkedIn' },
 ];
 const LENGTHS = [15, 30, 45, 60, 90];
+const COUNTS = [1, 2, 3, 4];
+
+/** Pictures are drawn, not written, so the running state says what is actually happening. */
+const DRAWN: ReadonlySet<string> = new Set(['image', 'thumbnail_set']);
 
 const TERMINAL: ReadonlySet<JobStatus> = new Set(['COMPLETE', 'BLOCKED', 'FAILED', 'CANCELLED']);
 
@@ -115,6 +120,7 @@ export function Studio({
   const [platform, setPlatform] = useState<TargetPlatform | null>('instagram');
   const [captionFor, setCaptionFor] = useState<TargetPlatform[]>([]);
   const [length, setLength] = useState<number | null>(null);
+  const [count, setCount] = useState(1);
   const [tone, setTone] = useState('');
 
   const [cost, setCost] = useState<number | null>(null);
@@ -135,6 +141,7 @@ export function Studio({
     targetPlatform: platform,
     ...(tone.trim() ? { tone: tone.trim() } : {}),
     ...(kind === 'script' && length ? { durationSeconds: length } : {}),
+    ...(kind === 'image' ? { count } : {}),
     ...(kind === 'caption_set' && captionFor.length ? { platforms: captionFor } : {}),
   };
   const requestKey = JSON.stringify({ kind, input });
@@ -396,6 +403,33 @@ export function Studio({
               </div>
             ) : null}
 
+            {kind === 'image' ? (
+              <div className="flex flex-col gap-2">
+                <span className="text-xs font-medium uppercase tracking-wide text-muted">
+                  How many
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {COUNTS.map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      aria-pressed={count === n}
+                      onClick={() => setCount(n)}
+                      className={cx(
+                        'rounded-full border px-3 py-1.5 text-sm transition',
+                        count === n
+                          ? 'border-accent bg-accent/10 text-ink'
+                          : 'border-line bg-raised text-muted hover:text-ink',
+                      )}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+                <span className="text-[11px] text-muted">Each one costs its own credits.</span>
+              </div>
+            ) : null}
+
             {kind === 'caption_set' ? (
               <div className="flex flex-col gap-2">
                 <span className="text-xs font-medium uppercase tracking-wide text-muted">
@@ -523,7 +557,9 @@ export function Studio({
                   className={cx('rounded-full border px-3 py-1 text-xs', STATUS[job.status].tone)}
                 >
                   {checking && job.status !== 'QUEUED' ? 'Checking · ' : ''}
-                  {STATUS[job.status].label}
+                  {job.status === 'RUNNING' && DRAWN.has(job.generatorKey)
+                    ? 'Drawing'
+                    : STATUS[job.status].label}
                 </span>
               </div>
 
@@ -544,14 +580,22 @@ export function Studio({
               ) : null}
 
               {outputs.length > 0 ? (
-                outputs.map((output) => (
-                  <OutputView
-                    key={output.id}
-                    kind={output.kind}
-                    text={output.text}
-                    locked={false}
-                  />
-                ))
+                outputs[0]?.media ? (
+                  <div className={cx('grid gap-3', outputs.length > 1 && 'sm:grid-cols-2')}>
+                    {outputs.map((output) =>
+                      output.media ? <ImageOutput key={output.id} {...output.media} /> : null,
+                    )}
+                  </div>
+                ) : (
+                  outputs.map((output) => (
+                    <OutputView
+                      key={output.id}
+                      kind={output.kind}
+                      text={output.text}
+                      locked={false}
+                    />
+                  ))
+                )
               ) : streamed ? (
                 <div className="flex flex-col gap-2">
                   <p className="text-xs text-muted">
@@ -564,7 +608,11 @@ export function Studio({
                   </p>
                 </div>
               ) : checking ? (
-                <p className="text-sm text-muted">Waiting for the first words…</p>
+                <p className="text-sm text-muted">
+                  {DRAWN.has(job.generatorKey)
+                    ? 'Drawing it now; pictures arrive all at once.'
+                    : 'Waiting for the first words…'}
+                </p>
               ) : job.status === 'COMPLETE' ? (
                 <p className="text-sm text-muted">Loading the result…</p>
               ) : null}

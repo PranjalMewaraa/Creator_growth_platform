@@ -2,7 +2,7 @@
 
 **Companion to `plan.md`.** `plan.md` says what and why. This file says how, in what order, and what has been decided. Where the two disagree, `plan.md` wins.
 
-**Status:** 2026-09-18. WP1 to WP5, WP7 to WP14 and a publishing slice built: the week 3 exit. Amendments A1 to A11 accepted and applied to `plan.md`. Items marked OPEN need an answer before the work package that depends on them.
+**Status:** 2026-09-24. WP1 to WP5, WP7 to WP15 and a publishing slice built: the week 3 exit, plus image generation. Amendments A1 to A11 accepted and applied to `plan.md`. Items marked OPEN need an answer before the work package that depends on them.
 
 ---
 
@@ -27,7 +27,9 @@
 | D14 | Exchange rate (open item 17.5) | 88, stored once in config, every rupee figure derived from it | proposed | |
 | D15 | Facebook Page publishing | Not for this demo. It would have cost about half a week, and the API posts only to Pages, never personal profiles, so it helps fewer individual creators than Instagram and LinkedIn do. Post-demo item: same Meta app, adding Facebook Login for Business (`pages_show_list`, `pages_manage_posts`, `pages_read_engagement`) | DECIDED 2026-09-18: dropped | |
 | D16 | Claude Haiku access on Vertex | Checked 2026-09-18: `claude-haiku-4-5@20251001` on `global` is the right id (it answers with a quota error, while `us-east5` returns 404), but project `creatorpltfrm` has a quota of 0 for `global_online_prediction_requests_per_base_model` on `anthropic-claude-haiku-4-5`, so every call gets 429. Partner models usually need a quota increase request, which free trial projects may not be granted. Options: request the increase, or run scripts on Gemini until it lands (a plan section 6 change, so it needs a yes). The adapter is built and returns `quota`, so nothing else waits on this until WP10 | DECIDED 2026-09-19: scripts run on Gemini 3.1 Flash-Lite until the Haiku quota is granted (one line in the script generator definition). The script price stays 6 credits; the provider cost is lower | |
-| D17 | Rewrite pass latency against the 1500ms budget (invariant 11) | Measured 2026-09-18 from the dev machine in India: Gemini 3.1 Flash-Lite answers a rewrite in about 1.26 to 1.3s warm and 2.1 to 2.8s on the first calls (auth and connection setup); gpt-oss-20b in 0.9 to 2.5s with `reasoning_effort: low`. Without low reasoning gpt-oss spent its whole token ceiling reasoning and returned nothing. The engine keeps the budget, so a cold or slow call falls back to the deterministic brief, which is safe but loses the rewrite. Options: measure again from the deployed region before deciding; warm the Vertex token and connection at boot; hedge by starting the second provider at about 900ms instead of after the first fails. Hedging changes how the "bounded retry" of invariant 11 works, so it needs a yes | OPEN | |
+| D17 | Rewrite pass latency against the 1500ms budget (invariant 11) | Measured 2026-09-18 from the dev machine in India: Gemini 3.1 Flash-Lite answers a rewrite in about 1.26 to 1.3s warm and 2.1 to 2.8s on the first calls (auth and connection setup); gpt-oss-20b in 0.9 to 2.5s with `reasoning_effort: low`. Without low reasoning gpt-oss spent its whole token ceiling reasoning and returned nothing. The engine keeps the budget, so a cold or slow call falls back to the deterministic brief, which is safe but loses the rewrite. Options: measure again from the deployed region before deciding; warm the Vertex token and connection at boot; hedge by starting the second provider at about 900ms instead of after the first fails. Hedging changes how the "bounded retry" of invariant 11 works, so it needs a yes | OPEN. Boot warming is built (2026-09-24, `warmProviders`): the web process warms as soon as it builds the providers, since the rewrite runs in the request, and the worker warms at boot. Measured again from the dev machine on an image rewrite of 250 output tokens: cold 1.7 to 3.7s, warmed 1.45 to 1.65s with an 8s outlier. So warming removes the connection penalty but the median still sits at or just over 1500ms, and the fallback still fires often. What is left is the budget itself (invariant 11, so it needs a yes), hedging the second provider at about 900ms, or a shorter rewrite ceiling per compiler profile: the image rewrite asks for 250 output tokens, and latency scales with them | |
+
+| D18 | Image model, since no Imagen is served to this project | Checked 2026-09-24 on project `creatorpltfrm`: `imagen-4.0-fast-generate-001`, `imagen-4.0-generate-001`, `imagen-4.0-ultra-generate-001` and `imagen-3.0-fast-generate-001` all return 404 in `us-central1`, `global`, `us-east4`, `asia-south1` and `europe-west4`, and the publisher list of 133 models contains no Imagen entry. Gemini's image models are GA: `gemini-3.1-flash-lite-image` and `gemini-3.1-flash-image` on `global`. They bill the picture as output tokens, not per image, so plan section 6 needed remeasuring: one 4:5 picture is 1120 output tokens, INR 2.96 on Flash-Lite Image and INR 5.91 on Flash Image, against the INR 1.76 the plan assumed for Imagen 4 Fast | DECIDED 2026-09-24 after comparing one picture from each model side by side: `gemini-3.1-flash-lite-image`. Flash Image composes better but costs twice as much, which would leave a thumbnail set at INR 17.73 against INR 18.00 of credits. Markups fall to 2.5x on an image and 2.0x on a thumbnail set, so the credit rates stay as they are. Switching back to Imagen, or up to Flash Image, is `IMAGE_ADAPTER` in the generator definitions plus a rate card entry | |
 
 **What D1 means for the rest of the plan:**
 - **Budget.** Vercel, R2, Postgres and Redis are cash lines. The costing in plan section 6 carries only the domain as cash, so the build budget table needs a cash line per service. The Vercel and R2 lines may be zero on free tiers, but check whether Vercel Hobby terms allow an investor demo, since they restrict commercial use.
@@ -130,7 +132,7 @@ The central design choice: **the rewrite model only rewrites free text slots. It
 
 ### 4.6 Render pipeline
 
-Veo scene clips (video only) are normalised to 1080x1920 or 720x1280 at 30fps, then concatenated. TTS voiceover is added, with a music bed ducked under the voice. Captions are generated as ASS from the script, with timings from TTS timepoints (invariant 13, no transcription), and burned in with libass using the pinned font set. Logo and brand overlay are applied, and output is H.264/AAC to the Reels spec. The storyboard preview is one Imagen Fast still per scene. The week 1 spike confirms TTS timepoint support before any of this is built.
+Veo scene clips (video only) are normalised to 1080x1920 or 720x1280 at 30fps, then concatenated. TTS voiceover is added, with a music bed ducked under the voice. Captions are generated as ASS from the script, with timings from TTS timepoints (invariant 13, no transcription), and burned in with libass using the pinned font set. Logo and brand overlay are applied, and output is H.264/AAC to the Reels spec. The storyboard preview is one still per scene, from the image model in D18. The week 1 spike confirms TTS timepoint support before any of this is built.
 
 ### 4.7 Publishing
 
@@ -174,7 +176,7 @@ Weeks 1 to 3 are detailed. Weeks 4 to 8 are scoped and get re-planned in detail 
 
 | WP | Owner | Scope |
 |---|---|---|
-| WP15 | A | Imagen 4 Fast and Imagen 4 adapters. Aspect ratio from target platform, never asked |
+| WP15 | A | Image adapters. Aspect ratio from target platform, never asked. Built 2026-09-24 on `gemini-3.1-flash-lite-image` instead of Imagen (D18): one adapter per configured image model behind PROVIDERS, a size reader for the returned bytes, and handlers that run the compiled prompt as persisted, take the frame from its resolved settings, store one row per picture in object storage and refund a refusal to draw as BLOCKED. Thumbnails are always three variants; an image is however many were priced. The Studio draws and shows them |
 | WP16 | A | Moderation post check on text and image. Refund with category stated |
 | WP17 | B | Script, hook, caption generators. Per platform caption variants with live length indicators (S-10, S-11) |
 | WP18 | B | Text compositing layer per D12 (S-12) |
@@ -224,6 +226,6 @@ Claude Code builds both streams. A and B in the tables are stream labels, not pe
 
 ## 7. Next steps
 
-1. Next in plan order: week 4, WP15 to WP20 (image and thumbnail adapters, moderation post check, text generators polish, text layer, templates, eval harness). The publishing slice (parts of WP28 to WP33) is built; the first real posts through it are the user's to make with PUBLISHING=real.
+1. Next in plan order: week 4, WP16 to WP20 (moderation post check, text generators polish, text layer, templates, eval harness). The publishing slice (parts of WP28 to WP33) is built; the first real posts through it are the user's to make with PUBLISHING=real.
 2. Decide D1b before WP6, D3 before WP11, and D16 and D17 before the week 3 exit.
 3. Start the section 3 items. They have the longest lead times.

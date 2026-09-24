@@ -23,6 +23,15 @@ const base = {
 /** Veo 3.1 Lite clips are 8 seconds; a reel is up to three of them (plan section 6). */
 export const SECONDS_PER_SCENE = 8;
 
+/** A thumbnail is bought as a set to choose between, not as one picture (plan section 7). */
+export const THUMBNAIL_VARIANTS = 3;
+
+/**
+ * No Imagen model is served to this project, so images run on Gemini's image model (D18).
+ * Switching back when Imagen appears is these two lines.
+ */
+const IMAGE_ADAPTER = 'gemini-flash-lite-image';
+
 const script = register({
   key: 'script',
   outputType: 'script',
@@ -77,7 +86,7 @@ const image = register({
   jobClass: 'inference',
   inputSchema: z.object({ ...base, count: z.int().min(1).max(4).default(1) }),
   compilerProfile: 'image',
-  providerAdapter: 'imagen-4-fast',
+  providerAdapter: IMAGE_ADAPTER,
   estimate: (input, rates) => {
     const each = rateFor(rates, 'image_standard');
     return {
@@ -98,10 +107,13 @@ const thumbnailSet = register({
   jobClass: 'inference',
   inputSchema: z.object(base),
   compilerProfile: 'thumbnail',
-  providerAdapter: 'imagen-4-fast',
+  providerAdapter: IMAGE_ADAPTER,
   estimate: (_input, rates) => {
     const credits = rateFor(rates, 'thumbnail_set');
-    return { credits, breakdown: [{ label: 'Thumbnail set, three variants', credits }] };
+    return {
+      credits,
+      breakdown: [{ label: `Thumbnail set, ${THUMBNAIL_VARIANTS} variants`, credits }],
+    };
   },
 });
 

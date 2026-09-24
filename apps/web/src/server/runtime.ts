@@ -1,6 +1,6 @@
 import 'server-only';
 import { createDatabase, type Database } from '@cgp/db';
-import { createProviders, type Providers } from '@cgp/adapters';
+import { createProviders, warmProviders, type Providers } from '@cgp/adapters';
 import { createQueues, createRedis, type Queues } from '@cgp/core';
 import type { Redis } from 'ioredis';
 import { baseEnvSchema, createLogger, parseEnv, type Logger } from '@cgp/config';
@@ -49,7 +49,16 @@ export function getQueues(): Queues {
 
 const providers = globalThis as typeof globalThis & { cgpProviders?: Providers };
 
-/** Provider adapters chosen by PROVIDERS: fakes unless real calls were asked for. */
+/**
+ * Provider adapters chosen by PROVIDERS: fakes unless real calls were asked for. The compile
+ * rewrite pass runs here, in the request, so this process warms the providers as soon as it
+ * builds them: otherwise the first compile of every server instance breaches the 1500ms
+ * budget on connection setup alone and silently falls back (D17).
+ */
 export function getProviders(): Providers {
-  return (providers.cgpProviders ??= createProviders({ ...getEnv(), log: getLogger() }));
+  if (providers.cgpProviders) return providers.cgpProviders;
+  const created = createProviders({ ...getEnv(), log: getLogger() });
+  providers.cgpProviders = created;
+  void warmProviders(created, getLogger());
+  return created;
 }

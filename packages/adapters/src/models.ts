@@ -41,6 +41,32 @@ export const TEXT_MODELS = {
 
 export type TextModelKey = keyof typeof TEXT_MODELS;
 
+export interface ImageModel {
+  model: string;
+  location: string;
+  /**
+   * USD per million tokens. An image is billed as output tokens, not per picture: a 4:5
+   * 928x1152 costs 1120 of them, measured 2026-09-24.
+   */
+  usdPerMillion: { input: number; output: number };
+}
+
+export const IMAGE_MODELS = {
+  /**
+   * Imagen is the plan's image model, but no Imagen id is served to this project (D18), so
+   * images run on Gemini's image model. Checked 2026-09-24 across five Vertex regions.
+   */
+  'gemini-flash-lite-image': {
+    model: 'gemini-3.1-flash-lite-image',
+    location: 'global',
+    usdPerMillion: { input: 0.25, output: 30 },
+  },
+} as const satisfies Record<string, ImageModel>;
+
+export type ImageModelKey = keyof typeof IMAGE_MODELS;
+
+export const IMAGE_MODEL_KEYS = Object.keys(IMAGE_MODELS) as ImageModelKey[];
+
 export const TEXT_MODEL_KEYS = Object.keys(TEXT_MODELS) as TextModelKey[];
 
 /** What a call cost in rupees, for cost_telemetry (plan section 18). */
@@ -52,4 +78,15 @@ export function textCostInr(key: TextModelKey, usage: TokenUsage): number {
 
 export function isTextModelKey(key: string): key is TextModelKey {
   return key in TEXT_MODELS;
+}
+
+/** What an image call cost in rupees. Same shape as text, on the image rate card. */
+export function imageCostInr(key: ImageModelKey, usage: TokenUsage): number {
+  const { input, output } = IMAGE_MODELS[key].usdPerMillion;
+  const usd = (usage.inputTokens * input + usage.outputTokens * output) / 1_000_000;
+  return Number((usd * INR_PER_USD).toFixed(4));
+}
+
+export function isImageModelKey(key: string): key is ImageModelKey {
+  return key in IMAGE_MODELS;
 }

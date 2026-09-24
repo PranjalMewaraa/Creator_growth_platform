@@ -190,8 +190,8 @@ All slots run on one Google Cloud account against the trial credit. Every call r
 | Compile pass, second provider | gpt-oss-20b | $0.07 / $0.25 per 1M | partner model, credit eligible |
 | Script, English | Claude Haiku 4.5 (Gemini 3.1 Flash-Lite until the Haiku quota is granted, D16) | $1.00 / $5.00 per 1M | partner model, credit eligible |
 | Captions and hooks | Gemini 3.1 Flash-Lite | as above | batched |
-| Image | Imagen 4 Fast | $0.02 per image | INR 1.76 |
-| Thumbnail | Imagen 4 Fast or Imagen 4 | $0.02 / $0.04 | INR 1.76 / 3.52 |
+| Image | Gemini 3.1 Flash-Lite Image (no Imagen model is served to this project, D18) | $30 per 1M output tokens; a 4:5 picture is 1120 of them | INR 2.96 |
+| Thumbnail | Gemini 3.1 Flash-Lite Image | as above | INR 2.96 each |
 | Video, budget tier | Veo 3.1 Lite, video only, 1080p | $0.05 per unit | INR 4.40. 720p is $0.03 / INR 2.64 |
 | Voiceover | Google Cloud Text to Speech, Neural2 `en-IN` | USD 16 per 1M characters after 1M free per month | about INR 0.63 per 30s clip (verified 2026-09-18) |
 | Music | Free licensed library | 0 | licence recorded per track (FR-VD-08) |
@@ -207,13 +207,13 @@ All slots run on one Google Cloud account against the trial credit. Every call r
 | Caption set, five platforms | INR 0.11 |
 | Hook and title set | INR 0.08 |
 | Script, English | INR 0.92 |
-| Image, standard | INR 1.76 |
-| Thumbnail set, three variants | INR 5.28 |
+| Image, standard | INR 2.96 (measured 2026-09-24, D18) |
+| Thumbnail set, three variants | INR 8.88 (measured 2026-09-24, D18) |
 | Voiceover, 30s | INR 0.63 on Neural2 (verified; free inside 1M characters a month) |
 | Render compute, 24s composite | ~INR 0.88 (estimated, replace with measurement) |
 | Video, per unit 1080p | INR 4.40 |
 
-**Composite:** one image post INR 1.96. One 24 second reel at 1080p INR 114, at 720p INR 71. Reel to image post ratio is **58 to 1**, not 48 to 1. Use the corrected figure in any external material.
+**Composite:** one image post INR 3.16. One 24 second reel at 1080p INR 114, at 720p INR 71. Reel to image post ratio is **36 to 1** (it was 58 to 1 while images were costed on Imagen, D18). Use the corrected figure in any external material.
 
 ### Build budget
 
@@ -247,8 +247,8 @@ Credit anchor: **1 credit = INR 0.50**. Costs live in configuration, not code (F
 | Caption set | 1 | INR 0.50 | INR 0.11 | 4.5x |
 | Hook and title set | 1 | INR 0.50 | INR 0.08 | 6.3x |
 | Script | 6 | INR 3.00 | INR 0.92 | 3.3x |
-| Image, standard | 15 | INR 7.50 | INR 1.76 | 4.3x |
-| Thumbnail set | 36 | INR 18.00 | INR 5.28 | 3.4x |
+| Image, standard | 15 | INR 7.50 | INR 2.96 | 2.5x |
+| Thumbnail set | 36 | INR 18.00 | INR 8.88 | 2.0x |
 | Prompt compile | 0 | absorbed | INR 0.09 | not metered (FR-PO-14) |
 | Video | per second of rendered output | | | held on requested duration, settled on delivered |
 
@@ -405,7 +405,7 @@ packages/
   orchestration/    assembly, rewrite pass, enforcement, artifact persistence
   adapters/
     text/           gemini-flash-lite, haiku
-    image/          imagen
+    image/          gemini-flash-lite-image
     video/          veo-lite, <stubbed second provider>
     voice/          google-tts
     moderation/

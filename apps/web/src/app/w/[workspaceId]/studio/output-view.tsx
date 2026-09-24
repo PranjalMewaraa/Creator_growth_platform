@@ -59,6 +59,34 @@ function Block({
   );
 }
 
+/** A generated picture, shown at the size it was drawn and openable at full size. */
+export function ImageOutput({
+  url,
+  width,
+  height,
+}: {
+  url: string;
+  width: number;
+  height: number;
+}) {
+  return (
+    <figure className="overflow-hidden rounded-xl border border-line bg-raised">
+      <a href={url} target="_blank" rel="noreferrer" className="block">
+        {/* A picture from our bucket: next/image would need the host configured, and the
+            model already drew it at the size the platform wants. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={url} alt="" className="w-full bg-black object-contain" />
+      </a>
+      <figcaption className="flex items-center justify-between px-3 py-2 text-[11px] text-muted">
+        <span className="tabular-nums">{width > 0 ? `${width} x ${height}` : 'Image'}</span>
+        <a href={url} target="_blank" rel="noreferrer" className="hover:text-ink">
+          Open
+        </a>
+      </figcaption>
+    </figure>
+  );
+}
+
 function parse(text: string): unknown {
   try {
     return JSON.parse(text) as unknown;

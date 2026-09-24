@@ -28,6 +28,16 @@ export function attempt<T>(work: () => T): Promise<T> {
   }
 }
 
+/** A cancelled fake call fails the way a real one does, so callers can test both the same. */
+function failIfCancelled(key: string, signal: AbortSignal | undefined): void {
+  if (!signal?.aborted) return;
+  throw new AdapterError({
+    code: 'ABORTED',
+    message: `${key} request was cancelled or timed out`,
+    category: 'retriable',
+  });
+}
+
 function failIfAsked(key: string, text: string): void {
   const failure = /FAKE_FAIL:(\w+)/.exec(text)?.[1];
   if (!failure) return;
@@ -47,6 +57,7 @@ export function createFakeImage(key = 'fake-image'): ImageAdapter {
     key,
     generate(request) {
       return attempt(() => {
+        failIfCancelled(key, request.signal);
         failIfAsked(key, request.prompt);
         const [width, height] = FAKE_SIZE[request.aspectRatio];
         const images = Array.from({ length: request.count }, (_, i) => ({
@@ -55,7 +66,7 @@ export function createFakeImage(key = 'fake-image'): ImageAdapter {
           width,
           height,
         }));
-        return { images };
+        return { images, usage: { inputTokens: 0, outputTokens: 0 } };
       });
     },
   };
