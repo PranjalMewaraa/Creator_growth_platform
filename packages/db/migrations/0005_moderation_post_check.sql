@@ -1,0 +1,2 @@
+ALTER TABLE "moderation_events" DROP CONSTRAINT "moderation_events_subject";--> statement-breakpoint
+ALTER TABLE "moderation_events" ADD CONSTRAINT "moderation_events_subject" CHECK (subject_type IN ('compiled_prompt', 'output', 'job'));

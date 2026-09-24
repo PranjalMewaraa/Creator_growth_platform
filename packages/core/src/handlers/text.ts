@@ -1,5 +1,6 @@
 import type {
   CompilerProfileConfig,
+  ModerationAdapter,
   OutputType,
   TextAdapter,
   TextResult,
@@ -8,6 +9,7 @@ import type {
 import { catalog, compilerProfiles, outputs, scoped, type Database } from '@cgp/db';
 import { findCompiledPrompt } from '@cgp/orchestration';
 import type { GeneratorRegistry } from '../generators/registry';
+import { postCheckOutput } from '../moderation';
 import { JobBlocked, type JobHandler } from '../process';
 
 const TEXT_OUTPUTS: ReadonlySet<OutputType> = new Set(['script', 'hook', 'caption']);
@@ -17,6 +19,8 @@ export interface TextHandlerDeps {
   registry: GeneratorRegistry;
   /** By model key, as generators name them in `providerAdapter`. */
   adapters: Readonly<Record<string, TextAdapter>>;
+  /** Checks what came back before any of it is stored. */
+  moderation: ModerationAdapter;
   /** Relays a streamed delta (D9). Best effort: a failure never fails the job. */
   publishDelta: (jobId: string, text: string) => Promise<void>;
   /** Realised cost for telemetry; zero for fakes. */
@@ -103,6 +107,14 @@ export function createTextHandlers(deps: TextHandlerDeps): Record<string, JobHan
           throw new Error(`${adapter.key} returned text that is not JSON`);
         }
       }
+
+      // Checked before it is stored, so a blocked generation is never readable (WP16).
+      const blocked = await postCheckOutput(
+        { db: deps.db, moderation: deps.moderation, log },
+        job,
+        { text: result.text },
+      );
+      if (blocked) throw new JobBlocked(blocked);
 
       // Text is small, so it lives on the output row until object storage exists (WP6).
       await ws.insert(outputs, {

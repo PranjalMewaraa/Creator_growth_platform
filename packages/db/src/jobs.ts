@@ -125,6 +125,19 @@ export async function markJobRunning(db: Database, jobId: string): Promise<JobRo
   return row;
 }
 
+/**
+ * Moves a running job to MODERATING while its output is checked, which is what the Studio
+ * shows as "Checking" with copy locked. A job that has already ended is left alone.
+ */
+export async function markJobModerating(db: Database, jobId: string): Promise<JobRow | undefined> {
+  const [row] = await unwrap(db)
+    .update(jobs)
+    .set({ status: 'MODERATING' })
+    .where(and(eq(jobs.id, jobId), inArray(jobs.status, ['RUNNING', 'MODERATING'])))
+    .returning();
+  return row;
+}
+
 export type EndJobResult = { applied: true; job: JobRow } | { applied: false; job: JobRow };
 
 /**

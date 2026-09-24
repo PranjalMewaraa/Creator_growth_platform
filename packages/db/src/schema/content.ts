@@ -144,6 +144,11 @@ export const moderationEvents = pgTable(
   {
     id: id(),
     workspaceId: workspaceId(),
+    /**
+     * `compiled_prompt` is the pre check before dispatch (invariant 10). `job` is the post
+     * check on what came back, which is recorded against the job because a blocked output is
+     * never stored. `output` is for a check on something already kept.
+     */
     subjectType: text('subject_type').notNull(),
     subjectId: uuid('subject_id').notNull(),
     verdict: text('verdict').notNull(),
@@ -151,7 +156,7 @@ export const moderationEvents = pgTable(
     createdAt: createdAt(),
   },
   (t) => [
-    check('moderation_events_subject', sql`subject_type IN ('compiled_prompt', 'output')`),
+    check('moderation_events_subject', sql`subject_type IN ('compiled_prompt', 'output', 'job')`),
     check('moderation_events_verdict', sql`verdict IN ('allowed', 'blocked')`),
     index('moderation_events_subject_idx').on(t.subjectType, t.subjectId),
   ],

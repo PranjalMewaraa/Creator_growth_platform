@@ -60,8 +60,15 @@ export async function processJob(deps: ProcessDeps, data: QueuedJobData): Promis
     outcome = await handler(job, deps.log);
   } catch (err) {
     const blocked = err instanceof JobBlocked;
+    // A check that could not run is a failure, not a block: nothing was found, and nothing
+    // was released either. Both refund in full.
+    const unavailable = err instanceof Error && err.name === 'ModerationUnavailable';
     await refundJob(deps.db, job.id, blocked ? 'BLOCKED' : 'FAILED', {
-      code: blocked ? 'MODERATION_BLOCKED' : 'GENERATION_FAILED',
+      code: blocked
+        ? 'MODERATION_BLOCKED'
+        : unavailable
+          ? 'MODERATION_UNAVAILABLE'
+          : 'GENERATION_FAILED',
       message: err instanceof Error ? err.message : String(err),
       ...(blocked ? { category: err.category } : {}),
     });

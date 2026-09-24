@@ -36,7 +36,13 @@ export {
 export { generators, SECONDS_PER_SCENE, THUMBNAIL_VARIANTS } from './generators/definitions';
 export { createImageHandlers, type ImageHandlerDeps } from './handlers/image';
 export { createTextHandlers, type TextHandlerDeps } from './handlers/text';
-export { preCheckPrompt, type PreCheck } from './moderation';
+export {
+  ModerationUnavailable,
+  postCheckOutput,
+  preCheckPrompt,
+  type GeneratedContent,
+  type PreCheck,
+} from './moderation';
 export {
   createPublishHandler,
   PublishNotCompleted,

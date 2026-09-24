@@ -36,6 +36,13 @@
       "when": 1789735749969,
       "tag": "0004_post_target_permalink",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790267178409,
+      "tag": "0005_moderation_post_check",
+      "breakpoints": true
     }
   ]
 }

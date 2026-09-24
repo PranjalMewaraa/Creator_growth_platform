@@ -1,6 +1,7 @@
 import type {
   AspectRatio,
   ImageAdapter,
+  ModerationAdapter,
   ObjectStore,
   OutputType,
   TokenUsage,
@@ -10,6 +11,7 @@ import { outputs, scoped, type Database } from '@cgp/db';
 import { findCompiledPrompt, settingValue } from '@cgp/orchestration';
 import { THUMBNAIL_VARIANTS } from '../generators/definitions';
 import type { GeneratorRegistry } from '../generators/registry';
+import { postCheckOutput } from '../moderation';
 import { JobBlocked, type JobHandler } from '../process';
 
 const IMAGE_OUTPUTS: ReadonlySet<OutputType> = new Set(['image', 'thumbnail']);
@@ -32,6 +34,8 @@ export interface ImageHandlerDeps {
   registry: GeneratorRegistry;
   /** By model key, as generators name them in `providerAdapter`. */
   adapters: Readonly<Record<string, ImageAdapter>>;
+  /** Checks every picture before any of it is stored or given a public URL. */
+  moderation: ModerationAdapter;
   store: ObjectStore;
   /** Realised cost for telemetry; zero for fakes. */
   costInr: (adapterKey: string, usage: TokenUsage) => number;
@@ -103,6 +107,15 @@ export function createImageHandlers(deps: ImageHandlerDeps): Record<string, JobH
         throw err;
       }
       if (result.images.length === 0) throw new Error(`${adapter.key} returned no images`);
+
+      // Every picture is checked before it is stored, so a blocked one never reaches the
+      // bucket, where it would have a public URL (WP16).
+      const flagged = await postCheckOutput(
+        { db: deps.db, moderation: deps.moderation, log },
+        job,
+        { media: result.images },
+      );
+      if (flagged) throw new JobBlocked(flagged);
 
       // Stored one row per image, so a variant can be picked, posted or reused on its own.
       for (const [index, image] of result.images.entries()) {

@@ -2,7 +2,7 @@
 
 **Companion to `plan.md`.** `plan.md` says what and why. This file says how, in what order, and what has been decided. Where the two disagree, `plan.md` wins.
 
-**Status:** 2026-09-24. WP1 to WP5, WP7 to WP15 and a publishing slice built: the week 3 exit, plus image generation. Amendments A1 to A11 accepted and applied to `plan.md`. Items marked OPEN need an answer before the work package that depends on them.
+**Status:** 2026-09-24. WP1 to WP5, WP7 to WP16 and a publishing slice built: the week 3 exit, plus image generation and the moderation post check. Amendments A1 to A11 accepted and applied to `plan.md`. Items marked OPEN need an answer before the work package that depends on them.
 
 ---
 
@@ -177,7 +177,7 @@ Weeks 1 to 3 are detailed. Weeks 4 to 8 are scoped and get re-planned in detail 
 | WP | Owner | Scope |
 |---|---|---|
 | WP15 | A | Image adapters. Aspect ratio from target platform, never asked. Built 2026-09-24 on `gemini-3.1-flash-lite-image` instead of Imagen (D18): one adapter per configured image model behind PROVIDERS, a size reader for the returned bytes, and handlers that run the compiled prompt as persisted, take the frame from its resolved settings, store one row per picture in object storage and refund a refusal to draw as BLOCKED. Thumbnails are always three variants; an image is however many were priced. The Studio draws and shows them |
-| WP16 | A | Moderation post check on text and image. Refund with category stated |
+| WP16 | A | Moderation post check on text and image. Refund with category stated. Built 2026-09-24: the check runs before anything is kept, so a blocked generation never reaches the outputs table, the bucket or a public URL. The job sits in MODERATING while it runs, which is the Studio's "Checking" state with copy locked, and streamed text is dropped from the screen on a block rather than left behind. Verdicts are recorded against the job (migration 0005 allows `subject_type = 'job'`, since a blocked output is never stored). A block refunds in full as BLOCKED with the category shown; a check that cannot run refunds in full as FAILED with `MODERATION_UNAVAILABLE`, because an unchecked output is never released either |
 | WP17 | B | Script, hook, caption generators. Per platform caption variants with live length indicators (S-10, S-11) |
 | WP18 | B | Text compositing layer per D12 (S-12) |
 | WP19 | B | 8 to 12 templates as versioned rows. Preview pipeline runs each template through its real generator and stores `is_real_output = true`. Cost band shown |
@@ -226,6 +226,6 @@ Claude Code builds both streams. A and B in the tables are stream labels, not pe
 
 ## 7. Next steps
 
-1. Next in plan order: week 4, WP16 to WP20 (moderation post check, text generators polish, text layer, templates, eval harness). The publishing slice (parts of WP28 to WP33) is built; the first real posts through it are the user's to make with PUBLISHING=real.
+1. Next in plan order: week 4, WP17 to WP20 (text generators polish, text layer, templates, eval harness). Real checking needs `MODERATION=google` in the environment; without it the post check runs against the fake and passes everything. The publishing slice (parts of WP28 to WP33) is built; the first real posts through it are the user's to make with PUBLISHING=real.
 2. Decide D1b before WP6, D3 before WP11, and D16 and D17 before the week 3 exit.
 3. Start the section 3 items. They have the longest lead times.

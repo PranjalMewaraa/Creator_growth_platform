@@ -574,8 +574,10 @@ export function Studio({
               {job.error ? (
                 <p className="rounded-lg border border-bad/40 bg-bad/10 px-3 py-2 text-sm text-ink">
                   {job.status === 'BLOCKED'
-                    ? `Blocked by the safety check${job.error.category ? ` (${job.error.category})` : ''}.`
-                    : 'This one did not work. Nothing was charged; try again.'}
+                    ? `Blocked by the safety check${job.error.category ? ` (${job.error.category})` : ''}. Nothing was charged.`
+                    : job.error.code === 'MODERATION_UNAVAILABLE'
+                      ? 'The safety check was unavailable, so this was not released. Nothing was charged; try again.'
+                      : 'This one did not work. Nothing was charged; try again.'}
                 </p>
               ) : null}
 
@@ -596,7 +598,9 @@ export function Studio({
                     />
                   ))
                 )
-              ) : streamed ? (
+              ) : /* A blocked or failed job releases nothing: what streamed is replaced by
+                    the refusal above, never left on screen (plan section 14). */
+              streamed && (!TERMINAL.has(job.status) || job.status === 'COMPLETE') ? (
                 <div className="flex flex-col gap-2">
                   <p className="text-xs text-muted">
                     {job.status === 'COMPLETE'

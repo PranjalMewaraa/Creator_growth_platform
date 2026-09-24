@@ -280,6 +280,7 @@ describe('text generation end to end', () => {
       db,
       registry: generators,
       adapters,
+      moderation: createFakeModeration(),
       publishDelta: (_jobId, text) => {
         deltas.push(text);
         return Promise.resolve();
@@ -373,6 +374,7 @@ describe('text generation end to end', () => {
           },
         },
       },
+      moderation: createFakeModeration(),
       publishDelta: () => Promise.resolve(),
       costInr: () => 0,
       providerLabel: 'fake',
@@ -450,6 +452,7 @@ describe('studio helpers', () => {
       db,
       registry: generators,
       adapters: createTextAdapters('fake'),
+      moderation: createFakeModeration(),
       publishDelta: () => Promise.resolve(),
       costInr: () => 0,
       providerLabel: 'fake',

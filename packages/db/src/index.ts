@@ -18,6 +18,7 @@ export {
   createJobWithHold,
   jobsToRecover,
   ledgerDrift,
+  markJobModerating,
   markJobRunning,
   refundJob,
   settleJob,

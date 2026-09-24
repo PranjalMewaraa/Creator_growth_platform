@@ -1,6 +1,11 @@
 import { createFakeModeration, createImageAdapters, createMemoryStore } from '@cgp/adapters';
 import { createLogger } from '@cgp/config';
-import { AdapterError, type ImageAdapter, type QueuedJobData } from '@cgp/contracts';
+import {
+  AdapterError,
+  type ImageAdapter,
+  type ModerationAdapter,
+  type QueuedJobData,
+} from '@cgp/contracts';
 import { costTelemetry, creditLedger, jobs, outputs, scoped, type Database } from '@cgp/db';
 import {
   addTestProfile,
@@ -52,11 +57,16 @@ function deps() {
   };
 }
 
-function handlersWith(adapters: Record<string, ImageAdapter>, costInr = () => 0) {
+function handlersWith(
+  adapters: Record<string, ImageAdapter>,
+  moderation: ModerationAdapter = createFakeModeration(),
+  costInr = () => 0,
+) {
   return createImageHandlers({
     db,
     registry: generators,
     adapters,
+    moderation,
     store,
     costInr,
     providerLabel: 'fake',
