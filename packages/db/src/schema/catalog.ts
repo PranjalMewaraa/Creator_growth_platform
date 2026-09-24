@@ -21,6 +21,9 @@ export const templates = pgTable('templates', {
   slug: text('slug').notNull().unique(),
   outputType: outputTypeEnum('output_type').notNull(),
   currentVersion: integer('current_version').notNull().default(1),
+  /** What the gallery calls it. Shown to people, so it is refreshed by every seed. */
+  title: text('title').notNull().default(''),
+  description: text('description').notNull().default(''),
   createdAt: createdAt(),
 });
 
@@ -61,11 +64,20 @@ export const templatePreviews = pgTable(
     templateVersionId: uuid('template_version_id')
       .notNull()
       .references(() => templateVersions.id),
-    mediaUrl: text('media_url').notNull(),
+    /** A picture's URL. Null for the templates whose output is words. */
+    mediaUrl: text('media_url'),
+    /** Generated words, kept inline: a caption preview is read, not fetched. */
+    text: text('text'),
     isRealOutput: boolean('is_real_output').notNull(),
     createdAt: createdAt(),
   },
-  (t) => [check('template_previews_real_output_only', sql`${t.isRealOutput}`)],
+  (t) => [
+    check('template_previews_real_output_only', sql`${t.isRealOutput}`),
+    // A preview with neither is not a preview.
+    check('template_previews_has_content', sql`${t.mediaUrl} IS NOT NULL OR ${t.text} IS NOT NULL`),
+    // One preview per template version, replaced when it is generated again.
+    unique('template_previews_once').on(t.templateVersionId),
+  ],
 );
 
 /** Versioned config, changeable without a deploy. */

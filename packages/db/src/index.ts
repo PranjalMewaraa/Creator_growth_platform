@@ -31,6 +31,7 @@ export {
   type NewJob,
 } from './jobs';
 export { currentMeteringRates } from './rates';
+export { saveTemplatePreview } from './template-previews';
 export {
   brandKits,
   compiledPrompts,

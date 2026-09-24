@@ -1,0 +1,212 @@
+import type { Logger } from '@cgp/config';
+import type { ImageAdapter, ModerationAdapter, ObjectStore, TextAdapter } from '@cgp/contracts';
+import {
+  catalog,
+  outputs,
+  saveTemplatePreview,
+  scoped,
+  templatePreviews,
+  templates,
+  templateVersions,
+  type Database,
+} from '@cgp/db';
+import { startGeneration } from './generate';
+import type { GeneratorRegistry } from './generators/registry';
+import { createImageHandlers } from './handlers/image';
+import { createTextHandlers } from './handlers/text';
+import { processJob } from './process';
+import type { Queues } from './queues';
+
+/**
+ * The preview pipeline (WP19, invariant 14): every gallery preview is real output from that
+ * template version, made by running the template through its own generator. Nothing here
+ * fabricates an image or writes copy: if a template cannot produce output, it has no preview
+ * and the gallery says so.
+ *
+ * Runs the job in this process rather than through the queue, because the point is to finish
+ * and record the result, not to exercise the worker. The credits are spent from the workspace
+ * it runs in, and the provider calls are real when PROVIDERS is.
+ */
+
+/** What each output type is asked for, so a preview shows the template rather than the intent. */
+const INTENTS: Record<string, string> = {
+  script: 'Cold brew coffee, brewed slowly and delivered across Jaipur the same morning',
+  hook: 'Cold brew coffee, brewed slowly and delivered across Jaipur the same morning',
+  caption: 'Cold brew coffee, brewed slowly and delivered across Jaipur the same morning',
+  image: 'A bottle of cold brew coffee on a balcony table in the morning',
+  thumbnail: 'A barista pouring cold brew over ice, caught mid pour',
+  video: 'A bottle of cold brew coffee on a balcony table in the morning',
+};
+
+/**
+ * Jobs are never queued here. The pipeline runs each one in this process, and enqueuing as
+ * well would hand the same job to a running worker, which then generates it a second time
+ * against the real providers and can refund it out from under this run. A job already RUNNING
+ * is accepted by design, for crash recovery, so nothing downstream stops the double run.
+ */
+const NOT_QUEUED = {
+  inference: { add: () => Promise.resolve() },
+  render: { add: () => Promise.resolve() },
+  publish: { add: () => Promise.resolve() },
+} as unknown as Queues;
+
+export interface TemplatePreviewDeps {
+  db: Database;
+  store: ObjectStore;
+  moderation: ModerationAdapter;
+  registry: GeneratorRegistry;
+  text: Readonly<Record<string, TextAdapter>>;
+  image: Readonly<Record<string, ImageAdapter>>;
+  rewriters: TextAdapter[];
+  log: Logger;
+}
+
+export interface PreviewOutcome {
+  slug: string;
+  outputType: string;
+  status: 'made' | 'skipped' | 'failed';
+  detail?: string;
+}
+
+/**
+ * Generates a preview for every template that has none, or for every template when `force` is
+ * set. Video is skipped until the video generator exists. Returns what happened to each.
+ */
+export async function buildTemplatePreviews(
+  deps: TemplatePreviewDeps,
+  workspaceId: string,
+  options: { force?: boolean; only?: string[] } = {},
+): Promise<PreviewOutcome[]> {
+  const cat = catalog(deps.db);
+  const [allTemplates, versions, existing] = await Promise.all([
+    cat.select(templates, { orderBy: (t, order) => order.asc(t.slug) }),
+    cat.select(templateVersions),
+    cat.select(templatePreviews),
+  ]);
+
+  const handlers = {
+    ...createTextHandlers({
+      db: deps.db,
+      registry: deps.registry,
+      adapters: deps.text,
+      moderation: deps.moderation,
+      publishDelta: () => Promise.resolve(),
+      costInr: () => 0,
+      providerLabel: 'preview',
+    }),
+    ...createImageHandlers({
+      db: deps.db,
+      registry: deps.registry,
+      adapters: deps.image,
+      moderation: deps.moderation,
+      store: deps.store,
+      costInr: () => 0,
+      providerLabel: 'preview',
+    }),
+  };
+
+  const outcomes: PreviewOutcome[] = [];
+  for (const template of allTemplates) {
+    const version = versions.find(
+      (row) => row.templateId === template.id && row.version === template.currentVersion,
+    );
+    const skip = (detail: string): void => {
+      outcomes.push({
+        slug: template.slug,
+        outputType: template.outputType,
+        status: 'skipped',
+        detail,
+      });
+    };
+    if (!version) {
+      skip('no current version');
+      continue;
+    }
+    if (options.only && !options.only.includes(template.slug)) continue;
+    if (!options.force && existing.some((row) => row.templateVersionId === version.id)) {
+      skip('already has one');
+      continue;
+    }
+    const generator = deps.registry
+      .list()
+      .find((entry) => entry.outputType === template.outputType);
+    if (!generator || !handlers[generator.key]) {
+      skip(`no handler for ${template.outputType}`);
+      continue;
+    }
+
+    try {
+      const preview = await runOne(deps, handlers, workspaceId, {
+        templateId: template.id,
+        generatorKey: generator.key,
+        outputType: template.outputType,
+      });
+      await saveTemplatePreview(deps.db, {
+        templateVersionId: version.id,
+        mediaUrl: preview.mediaUrl,
+        text: preview.text,
+      });
+      outcomes.push({ slug: template.slug, outputType: template.outputType, status: 'made' });
+      deps.log.info({ template: template.slug }, 'preview made');
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      outcomes.push({
+        slug: template.slug,
+        outputType: template.outputType,
+        status: 'failed',
+        detail,
+      });
+      deps.log.warn({ err, template: template.slug }, 'preview failed');
+    }
+  }
+  return outcomes;
+}
+
+/** One template, compiled, generated and settled, with whatever it produced read back. */
+async function runOne(
+  deps: TemplatePreviewDeps,
+  handlers: Record<string, Parameters<typeof processJob>[0]['handlers'][string]>,
+  workspaceId: string,
+  template: { templateId: string; generatorKey: string; outputType: string },
+): Promise<{ mediaUrl: string | null; text: string | null }> {
+  const started = await startGeneration(
+    {
+      db: deps.db,
+      queues: NOT_QUEUED,
+      log: deps.log,
+      registry: deps.registry,
+      compile: { rewriters: deps.rewriters },
+      moderation: deps.moderation,
+    },
+    {
+      workspaceId,
+      generatorKey: template.generatorKey,
+      input: {
+        intentText: INTENTS[template.outputType] ?? 'A short post about cold brew coffee',
+        templateId: template.templateId,
+        targetPlatform: 'instagram',
+      },
+    },
+  );
+  if (!started.ok) throw new Error(started.reason);
+
+  const result = await processJob(
+    { db: deps.db, handlers, log: deps.log },
+    {
+      jobId: started.job.id,
+      correlationId: started.job.id,
+    },
+  );
+  if (result !== 'settled') throw new Error(`job ${result}`);
+
+  const [output] = await scoped(deps.db, workspaceId).select(outputs, {
+    where: (t, op) => op.eq(t.jobId, started.job.id),
+    limit: 1,
+  });
+  if (!output) throw new Error('no output');
+  const metadata = output.metadata as { text?: unknown; url?: unknown };
+  return {
+    mediaUrl: typeof metadata.url === 'string' ? metadata.url : null,
+    text: typeof metadata.text === 'string' ? metadata.text : null,
+  };
+}

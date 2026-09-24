@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { artStyle } from '@/lib/art';
 import { ImageOutput, OutputView, type Rendition } from './output-view';
+import { TemplatePicker, type TemplateCard } from './template-picker';
 import { PromptDisclosure } from './prompt-disclosure';
 
 // Studio (plan section 13, WP14): plain intent in, compiled prompt visible and editable, cost
@@ -29,16 +30,39 @@ interface Kind {
   key: string;
   label: string;
   hint: string;
+  /** What this generator makes, which is how its templates are found. */
+  outputType: string;
   soon?: boolean;
 }
 
 const KINDS: Kind[] = [
-  { key: 'script', label: 'Script', hint: 'The words to say on camera' },
-  { key: 'hook_title_set', label: 'Hooks & titles', hint: 'Openers that stop the scroll' },
-  { key: 'caption_set', label: 'Captions', hint: 'One caption per platform' },
-  { key: 'image', label: 'Image', hint: 'A picture for the post' },
-  { key: 'thumbnail_set', label: 'Thumbnail', hint: 'Three to choose between' },
-  { key: 'video', label: 'Video', hint: 'Arrives with the video weeks', soon: true },
+  { key: 'script', label: 'Script', hint: 'The words to say on camera', outputType: 'script' },
+  {
+    key: 'hook_title_set',
+    label: 'Hooks & titles',
+    hint: 'Openers that stop the scroll',
+    outputType: 'hook',
+  },
+  {
+    key: 'caption_set',
+    label: 'Captions',
+    hint: 'One caption per platform',
+    outputType: 'caption',
+  },
+  { key: 'image', label: 'Image', hint: 'A picture for the post', outputType: 'image' },
+  {
+    key: 'thumbnail_set',
+    label: 'Thumbnail',
+    hint: 'Three to choose between',
+    outputType: 'thumbnail',
+  },
+  {
+    key: 'video',
+    label: 'Video',
+    hint: 'Arrives with the video weeks',
+    outputType: 'video',
+    soon: true,
+  },
 ];
 const LABEL: Record<string, string> = Object.fromEntries(KINDS.map((k) => [k.key, k.label]));
 
@@ -104,6 +128,7 @@ export function Studio({
   initialJobId,
   profileTone,
   brandColours,
+  templates,
   art,
 }: {
   workspaceId: string;
@@ -114,6 +139,8 @@ export function Studio({
   profileTone: string | null;
   /** The brand kit's colours, offered first when a text layer is coloured. */
   brandColours: string[];
+  /** Every template with its real preview and price (WP19). */
+  templates: TemplateCard[];
   /** Card art from public/art, for the generator tiles. */
   art: string[];
 }) {
@@ -127,6 +154,12 @@ export function Studio({
   const [length, setLength] = useState<number | null>(null);
   const [count, setCount] = useState(1);
   const [tone, setTone] = useState('');
+  const [templateId, setTemplateId] = useState<string | null>(null);
+  // The templates for what is being made, plain one first, since that is the default.
+  const outputType = KINDS.find((k) => k.key === kind)?.outputType;
+  const kindTemplates = templates
+    .filter((template) => template.outputType === outputType)
+    .sort((a, b) => Number(b.slug.startsWith('default-')) - Number(a.slug.startsWith('default-')));
 
   const [cost, setCost] = useState<number | null>(null);
   const [prompt, setPrompt] = useState<CompiledPromptView | null>(null);
@@ -147,6 +180,7 @@ export function Studio({
     ...(tone.trim() ? { tone: tone.trim() } : {}),
     ...(kind === 'script' && length ? { durationSeconds: length } : {}),
     ...(kind === 'image' ? { count } : {}),
+    ...(templateId ? { templateId } : {}),
     ...(kind === 'caption_set' && captionFor.length ? { platforms: captionFor } : {}),
   };
   const requestKey = JSON.stringify({ kind, input });
@@ -317,7 +351,11 @@ export function Studio({
                 type="button"
                 disabled={k.soon}
                 aria-pressed={kind === k.key}
-                onClick={() => setKind(k.key)}
+                onClick={() => {
+                  setKind(k.key);
+                  // Templates belong to one output type, so the choice does not carry over.
+                  setTemplateId(null);
+                }}
                 title={k.hint}
                 className={cx(
                   'relative flex h-24 flex-col justify-end overflow-hidden rounded-xl border p-2.5 text-left transition',
@@ -343,6 +381,12 @@ export function Studio({
               </button>
             ))}
           </div>
+
+          <TemplatePicker
+            templates={kindTemplates}
+            selected={templateId}
+            onSelect={setTemplateId}
+          />
 
           <div className="flex flex-col gap-2">
             <label

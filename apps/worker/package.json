@@ -7,6 +7,7 @@
     "start": "tsx src/main.ts",
     "enqueue:noop": "tsx scripts/enqueue-noop.ts",
     "accounts:import": "tsx scripts/import-accounts.ts",
+    "previews": "tsx scripts/template-previews.ts",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {

@@ -1,4 +1,4 @@
-import { profileHistory, recentGenerationJobs } from '@cgp/core';
+import { generators, listTemplates, profileHistory, recentGenerationJobs } from '@cgp/core';
 import { brandKits, scoped } from '@cgp/db';
 import { listArt } from '@/server/art';
 import { getDb } from '@/server/runtime';
@@ -25,6 +25,7 @@ export default async function StudioPage({
     }),
     recentGenerationJobs(db, workspaceId),
   ]);
+  const templates = await listTemplates(db, generators);
 
   return (
     <Studio
@@ -35,6 +36,7 @@ export default async function StudioPage({
       initialJobId={job ?? null}
       profileTone={profile?.profile.tone ?? null}
       brandColours={kit?.colors ?? []}
+      templates={templates}
       art={listArt()}
     />
   );

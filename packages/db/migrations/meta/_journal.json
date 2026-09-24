@@ -43,6 +43,13 @@
       "when": 1790267178409,
       "tag": "0005_moderation_post_check",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790275057588,
+      "tag": "0006_template_gallery",
+      "breakpoints": true
     }
   ]
 }

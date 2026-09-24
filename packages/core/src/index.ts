@@ -87,6 +87,12 @@ export {
   type SaveBrandKitResult,
 } from './brand-kit';
 export { jobOutputs, recentGenerationJobs, type StudioJob, type StudioOutput } from './studio';
+export { listTemplates, type TemplateCard } from './templates';
+export {
+  buildTemplatePreviews,
+  type PreviewOutcome,
+  type TemplatePreviewDeps,
+} from './template-previews';
 export {
   flattenTextLayer,
   saveTextLayer,

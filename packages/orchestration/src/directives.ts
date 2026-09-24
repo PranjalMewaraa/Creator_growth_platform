@@ -71,8 +71,10 @@ export function collectDirectives(sources: DirectiveSources): Directive[] {
   ];
 
   const templateDefaults: Directive[] = [
-    ...entries('template', config.defaults),
+    // The template's own params come first: same precedence as the output type's defaults, and
+    // the resolver keeps the first of equals, so a template beats the generic default it sets.
     ...entries('template', template.styleParams as Record<string, unknown>),
+    ...entries('template', config.defaults),
     ...(template.aspectRatio !== 'none'
       ? [{ key: 'aspectRatio', value: template.aspectRatio, source: 'template' as const }]
       : []),
