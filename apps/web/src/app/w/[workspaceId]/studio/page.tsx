@@ -18,7 +18,11 @@ export default async function StudioPage({
   const db = getDb();
   const [[profile], [kit], jobs] = await Promise.all([
     profileHistory(db, workspaceId),
-    scoped(db, workspaceId).select(brandKits, { limit: 1 }),
+    // The newest kit: its colours are offered first when a text layer is coloured.
+    scoped(db, workspaceId).select(brandKits, {
+      orderBy: (t, order) => order.desc(t.version),
+      limit: 1,
+    }),
     recentGenerationJobs(db, workspaceId),
   ]);
 
@@ -30,6 +34,7 @@ export default async function StudioPage({
       initialJobs={jobs}
       initialJobId={job ?? null}
       profileTone={profile?.profile.tone ?? null}
+      brandColours={kit?.colors ?? []}
       art={listArt()}
     />
   );

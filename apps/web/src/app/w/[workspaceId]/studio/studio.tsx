@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { artStyle } from '@/lib/art';
-import { ImageOutput, OutputView } from './output-view';
+import { ImageOutput, OutputView, type Rendition } from './output-view';
 import { PromptDisclosure } from './prompt-disclosure';
 
 // Studio (plan section 13, WP14): plain intent in, compiled prompt visible and editable, cost
@@ -22,6 +22,7 @@ interface Output {
   kind: string;
   text: string;
   media: { url: string; width: number; height: number } | null;
+  rendition: Rendition | null;
 }
 
 interface Kind {
@@ -102,6 +103,7 @@ export function Studio({
   initialJobs,
   initialJobId,
   profileTone,
+  brandColours,
   art,
 }: {
   workspaceId: string;
@@ -110,6 +112,8 @@ export function Studio({
   initialJobs: StudioJobSummary[];
   initialJobId: string | null;
   profileTone: string | null;
+  /** The brand kit's colours, offered first when a text layer is coloured. */
+  brandColours: string[];
   /** Card art from public/art, for the generator tiles. */
   art: string[];
 }) {
@@ -589,7 +593,16 @@ export function Studio({
                 outputs[0]?.media ? (
                   <div className={cx('grid gap-3', outputs.length > 1 && 'sm:grid-cols-2')}>
                     {outputs.map((output) =>
-                      output.media ? <ImageOutput key={output.id} {...output.media} /> : null,
+                      output.media ? (
+                        <ImageOutput
+                          key={output.id}
+                          workspaceId={workspaceId}
+                          outputId={output.id}
+                          brandColours={brandColours}
+                          rendition={output.rendition}
+                          {...output.media}
+                        />
+                      ) : null,
                     )}
                   </div>
                 ) : (

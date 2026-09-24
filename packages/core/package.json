@@ -3,7 +3,9 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./package.json": "./package.json",
+    "./fonts/*": "./fonts/*"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"
@@ -13,12 +15,15 @@
     "@cgp/contracts": "workspace:*",
     "@cgp/db": "workspace:*",
     "@cgp/orchestration": "workspace:*",
+    "@resvg/resvg-js": "^2.6.2",
     "bullmq": "^6.3.4",
+    "fontkit": "^2.0.4",
     "ioredis": "^6.0.0",
     "sharp": "^0.35.4",
     "zod": "^4.6.4"
   },
   "devDependencies": {
-    "@cgp/adapters": "workspace:*"
+    "@cgp/adapters": "workspace:*",
+    "@types/fontkit": "^2.0.9"
   }
 }

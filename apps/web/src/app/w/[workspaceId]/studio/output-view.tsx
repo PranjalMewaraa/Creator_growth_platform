@@ -5,9 +5,11 @@ import {
   PLATFORM_HASHTAG_LIMITS,
   PLATFORM_TEXT_LIMITS,
   type TargetPlatform,
+  type TextLayerSpec,
 } from '@cgp/contracts';
 import { cx } from '@cgp/ui';
 import { useState, type ReactNode } from 'react';
+import { TextLayerEditor } from './text-layer-editor';
 
 // A finished output, shaped by what the generator makes: a script reads as paragraphs, hooks
 // and titles as lists, captions as one card per platform. Copy stays locked while checking.
@@ -110,29 +112,80 @@ function Block({
   );
 }
 
-/** A generated picture, shown at the size it was drawn and openable at full size. */
+export interface Rendition {
+  id: string;
+  url: string;
+  spec: TextLayerSpec;
+}
+
+/**
+ * A generated picture, with the text layer over it when one has been saved (S-12). The picture
+ * underneath never changes: the layer is a rendition beside it, so it can be redone or dropped.
+ */
 export function ImageOutput({
+  workspaceId,
+  outputId,
   url,
   width,
   height,
+  brandColours,
+  rendition,
 }: {
+  workspaceId: string;
+  outputId: string;
   url: string;
   width: number;
   height: number;
+  brandColours: string[];
+  rendition: Rendition | null;
 }) {
+  const [layer, setLayer] = useState(rendition);
+  const [editing, setEditing] = useState(false);
+  const shown = layer?.url ?? url;
+
   return (
     <figure className="overflow-hidden rounded-xl border border-line bg-raised">
-      <a href={url} target="_blank" rel="noreferrer" className="block">
-        {/* A picture from our bucket: next/image would need the host configured, and the
-            model already drew it at the size the platform wants. */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={url} alt="" className="w-full bg-black object-contain" />
-      </a>
-      <figcaption className="flex items-center justify-between px-3 py-2 text-[11px] text-muted">
-        <span className="tabular-nums">{width > 0 ? `${width} x ${height}` : 'Image'}</span>
-        <a href={url} target="_blank" rel="noreferrer" className="hover:text-ink">
-          Open
+      {editing ? (
+        <TextLayerEditor
+          workspaceId={workspaceId}
+          outputId={outputId}
+          imageUrl={url}
+          width={width}
+          height={height}
+          brandColours={brandColours}
+          initial={layer?.spec ?? null}
+          onSaved={(saved) => {
+            setLayer(saved);
+            setEditing(false);
+          }}
+          onClose={() => setEditing(false)}
+        />
+      ) : (
+        <a href={shown} target="_blank" rel="noreferrer" className="block">
+          {/* A picture from our bucket: next/image would need the host configured, and the
+              model already drew it at the size the platform wants. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            // The key makes the browser fetch the new layer rather than the cached one.
+            key={shown}
+            src={shown}
+            alt=""
+            className="w-full bg-black object-contain"
+          />
         </a>
+      )}
+      <figcaption className="flex items-center justify-between gap-3 px-3 py-2 text-[11px] text-muted">
+        <span className="tabular-nums">{width > 0 ? `${width} x ${height}` : 'Image'}</span>
+        <span className="flex items-center gap-3">
+          {editing ? null : (
+            <button type="button" onClick={() => setEditing(true)} className="hover:text-ink">
+              {layer ? 'Edit the text' : 'Add text'}
+            </button>
+          )}
+          <a href={shown} target="_blank" rel="noreferrer" className="hover:text-ink">
+            Open
+          </a>
+        </span>
       </figcaption>
     </figure>
   );

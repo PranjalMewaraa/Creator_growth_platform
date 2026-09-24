@@ -75,6 +75,7 @@ export {
   type PublicationRow,
   type SocialAccountRow,
 } from './publishing';
+export { findRendition, renditionsFor, saveRendition, type RenditionRow } from './renditions';
 export {
   createProfileVersion,
   listProfileVersions,

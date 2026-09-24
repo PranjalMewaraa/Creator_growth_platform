@@ -1,4 +1,4 @@
-import { createFakeModeration, createTextAdapters } from '@cgp/adapters';
+import { createFakeModeration, createMemoryStore, createTextAdapters } from '@cgp/adapters';
 import { createLogger } from '@cgp/config';
 import {
   AdapterError,
@@ -446,7 +446,7 @@ describe('studio helpers', () => {
       intentText: intent.intentText,
       status: 'QUEUED',
     });
-    expect(await jobOutputs(db, workspaceId, started.job.id)).toEqual([]);
+    expect(await jobOutputs(db, workspaceId, started.job.id, createMemoryStore())).toEqual([]);
 
     const handlers = createTextHandlers({
       db,
@@ -459,12 +459,12 @@ describe('studio helpers', () => {
     });
     await processJob({ db, handlers, log }, { jobId: started.job.id, correlationId: 'c' });
 
-    const [output] = await jobOutputs(db, workspaceId, started.job.id);
+    const [output] = await jobOutputs(db, workspaceId, started.job.id, createMemoryStore());
     expect(output).toMatchObject({ kind: 'caption', compiledPromptId: started.prompt.id });
     expect(JSON.parse(output?.text ?? '')).toMatchObject({ fake: true });
 
     const other = await createTestWorkspace(db);
-    expect(await jobOutputs(db, other, started.job.id)).toEqual([]);
+    expect(await jobOutputs(db, other, started.job.id, createMemoryStore())).toEqual([]);
     expect(await recentGenerationJobs(db, other)).toEqual([]);
   });
 });

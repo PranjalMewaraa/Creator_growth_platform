@@ -5,5 +5,6 @@ export * from './generator';
 export * from './jobs';
 export * from './media';
 export * from './publishing';
+export * from './text-layer';
 export * from './workspace';
 export * from './orchestration';

@@ -132,7 +132,7 @@ describe('image generation end to end', () => {
     }
 
     // The Studio sees them as media, not as text.
-    const studio = await jobOutputs(db, workspaceId, started.job.id);
+    const studio = await jobOutputs(db, workspaceId, started.job.id, store);
     expect(studio[0]?.media).toMatchObject({ width: 256, height: 320 });
     expect(studio[0]?.text).toBe('');
 

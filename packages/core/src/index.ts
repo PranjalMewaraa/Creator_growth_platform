@@ -87,3 +87,12 @@ export {
   type SaveBrandKitResult,
 } from './brand-kit';
 export { jobOutputs, recentGenerationJobs, type StudioJob, type StudioOutput } from './studio';
+export {
+  flattenTextLayer,
+  saveTextLayer,
+  textLayerSchema,
+  textLayerSvg,
+  wrapText,
+  type FlattenedLayer,
+  type SaveTextLayerResult,
+} from './text-layer';

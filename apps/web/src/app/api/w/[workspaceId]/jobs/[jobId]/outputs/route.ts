@@ -1,7 +1,7 @@
 import { jobOutputs } from '@cgp/core';
 import { apiWorkspace } from '@/server/api';
 import { withRequestContext } from '@/server/request-context';
-import { getDb } from '@/server/runtime';
+import { getDb, getProviders } from '@/server/runtime';
 
 type Context = { params: Promise<{ workspaceId: string; jobId: string }> };
 
@@ -10,5 +10,6 @@ export const GET = withRequestContext(async (_request: Request, { params }: Cont
   const { workspaceId, jobId } = await params;
   const access = await apiWorkspace(workspaceId);
   if (!access.ok) return access.response;
-  return Response.json({ outputs: await jobOutputs(getDb(), workspaceId, jobId) });
+  const outputs = await jobOutputs(getDb(), workspaceId, jobId, getProviders().store);
+  return Response.json({ outputs });
 });

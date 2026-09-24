@@ -1,5 +1,5 @@
-import type { JobView, OutputType } from '@cgp/contracts';
-import { jobs, outputs, PUBLISH_TARGET, scoped, type Database } from '@cgp/db';
+import type { JobView, ObjectStore, OutputType, TextLayerSpec } from '@cgp/contracts';
+import { jobs, outputs, PUBLISH_TARGET, renditionsFor, scoped, type Database } from '@cgp/db';
 import { toJobView } from './generate';
 
 // What the Studio needs beyond starting a job: the recent jobs to come back to, and a finished
@@ -49,6 +49,8 @@ export interface StudioOutput {
   text: string;
   /** Where the picture is, for the output types that make one. */
   media: { url: string; width: number; height: number } | null;
+  /** The composited text layer, when one has been saved over this picture (WP18). */
+  rendition: { id: string; url: string; spec: TextLayerSpec } | null;
   compiledPromptId: string;
   createdAt: string;
 }
@@ -64,23 +66,44 @@ function media(metadata: unknown): StudioOutput['media'] {
   };
 }
 
-/** A job's outputs, or nothing when the job is not in this workspace or has none yet. */
+/**
+ * A job's outputs, or nothing when the job is not in this workspace or has none yet. The store
+ * is needed only to say where a composited layer lives; renditions keep a key, not a URL.
+ */
 export async function jobOutputs(
   db: Database,
   workspaceId: string,
   jobId: string,
+  store: Pick<ObjectStore, 'publicUrl'>,
 ): Promise<StudioOutput[]> {
   if (!UUID.test(jobId)) return [];
   const rows = await scoped(db, workspaceId).select(outputs, {
     where: (t, op) => op.eq(t.jobId, jobId),
     orderBy: (t, order) => order.asc(t.createdAt),
   });
-  return rows.map((row) => ({
-    id: row.id,
-    kind: row.kind,
-    text: text((row.metadata as { text?: unknown }).text),
-    media: media(row.metadata),
-    compiledPromptId: row.compiledPromptId,
-    createdAt: row.createdAt.toISOString(),
-  }));
+  // Whatever has been composited over these pictures since, so the editor reopens on the
+  // layer that is already there rather than on a blank one.
+  const layers = await renditionsFor(
+    db,
+    workspaceId,
+    rows.map((row) => row.id),
+  );
+  return rows.map((row) => {
+    const layer = layers.find((rendition) => rendition.outputId === row.id);
+    return {
+      id: row.id,
+      kind: row.kind,
+      text: text((row.metadata as { text?: unknown }).text),
+      media: media(row.metadata),
+      rendition: layer
+        ? {
+            id: layer.id,
+            url: store.publicUrl(layer.storageKey),
+            spec: layer.spec as TextLayerSpec,
+          }
+        : null,
+      compiledPromptId: row.compiledPromptId,
+      createdAt: row.createdAt.toISOString(),
+    };
+  });
 }
