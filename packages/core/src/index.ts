@@ -67,6 +67,15 @@ export {
   type UploadResult,
 } from './publishing';
 export { fitToFrame, INSTAGRAM_FRAME, INSTAGRAM_FRAMES, type InstagramFrame } from './media';
+export { ffmpeg, ffmpegAvailable, RenderFailed, type FfmpegOptions } from './render/ffmpeg';
+export {
+  buildReel,
+  REEL_FRAMES,
+  type Reel,
+  type ReelRequest,
+  type ReelResolution,
+  type ReelScene,
+} from './render/reel';
 export { barColour, instagramKey } from './publishing';
 export {
   changedFields,

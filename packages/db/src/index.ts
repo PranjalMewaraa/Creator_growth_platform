@@ -31,6 +31,13 @@ export {
   type NewJob,
 } from './jobs';
 export { currentMeteringRates } from './rates';
+export {
+  addMusicTrack,
+  findMusicTrack,
+  listMusicTracks,
+  type MusicTrackRow,
+  type TrackLicence,
+} from './music';
 export { deleteTemplatePreview, saveTemplatePreview } from './template-previews';
 export {
   createScenes,

@@ -26,6 +26,12 @@ export const baseEnvSchema = z.object({
   TOKEN_ENCRYPTION_KEY: z.string().min(1).optional(),
   /** The GCP project Vertex bills. Required when PROVIDERS=real. */
   GOOGLE_CLOUD_PROJECT: z.string().min(1).optional(),
+  /**
+   * The ffmpeg the render worker runs (plan section 4.6). It needs libx264, AAC and libass.
+   * A name is looked up on PATH; a path is used as given. Renders fail without one, and
+   * nothing else does.
+   */
+  FFMPEG_PATH: z.string().min(1).default('ffmpeg'),
 });
 
 export type BaseEnv = z.infer<typeof baseEnvSchema>;

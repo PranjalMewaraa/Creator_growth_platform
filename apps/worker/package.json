@@ -8,6 +8,7 @@
     "enqueue:noop": "tsx scripts/enqueue-noop.ts",
     "accounts:import": "tsx scripts/import-accounts.ts",
     "previews": "tsx scripts/template-previews.ts",
+    "music:add": "tsx scripts/music-add.ts",
     "eval": "tsx scripts/eval.ts",
     "eval:score": "tsx scripts/eval-score.ts",
     "typecheck": "tsc -p tsconfig.json"

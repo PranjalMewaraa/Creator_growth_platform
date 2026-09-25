@@ -92,6 +92,9 @@ function handlersWith(
     store,
     costInr: () => 0,
     providerLabel: 'fake',
+    // A renderer that is not there: the scenes are kept and no reel is built, which is the
+    // path a machine without ffmpeg takes.
+    ffmpeg: { bin: process.env.FFMPEG_PATH ?? 'ffmpeg', preset: 'ultrafast' },
     pollEveryMs: 1,
   });
 }
@@ -153,7 +156,7 @@ describe('a video render', () => {
       const key = (scene.clipUrl ?? '').split('/').slice(3).join('/');
       await expect(store.get(key)).resolves.toBeInstanceOf(Uint8Array);
     }
-  });
+  }, 300_000);
 
   it('asks for the number of scenes the creator chose', async () => {
     const { workspaceId, started } = await startVideo({ sceneCount: 1 });
@@ -167,7 +170,7 @@ describe('a video render', () => {
     expect(await findJob(db, workspaceId, started.job.id)).toMatchObject({
       settled: { videoSeconds: 8 },
     });
-  });
+  }, 300_000);
 
   it('settles only what arrived when a scene is refused', async () => {
     const { workspaceId, started } = await startVideo();
@@ -183,7 +186,7 @@ describe('a video render', () => {
     const [output] = await scoped(db, workspaceId).select(outputs);
     const scenes = await listScenes(db, workspaceId, output?.id ?? '');
     expect(scenes.filter((scene) => scene.clipUrl !== null)).toHaveLength(2);
-  });
+  }, 300_000);
 
   it('refunds in full, as blocked, when every scene is refused', async () => {
     const { workspaceId, started } = await startVideo();
@@ -198,7 +201,7 @@ describe('a video render', () => {
     });
     // The seconds are back.
     expect((await scoped(db, workspaceId).workspace())?.videoSecondsBalance).toBe(120);
-  });
+  }, 300_000);
 
   it('never pays twice for a redelivered render', async () => {
     const { workspaceId, started } = await startVideo({ sceneCount: 1 });
@@ -215,7 +218,7 @@ describe('a video render', () => {
     expect(again.telemetry.realisedCostInr).toBe(0);
     const [output] = await scoped(db, workspaceId).select(outputs);
     expect(await listScenes(db, workspaceId, output?.id ?? '')).toHaveLength(1);
-  });
+  }, 300_000);
 
   it('refuses a clip the safety check will not pass, and charges nothing for it', async () => {
     const blocking: ModerationAdapter = {
@@ -235,7 +238,29 @@ describe('a video render', () => {
     );
     expect(result).toBe('refunded');
     expect(await findJob(db, workspaceId, started.job.id)).toMatchObject({ status: 'BLOCKED' });
-  });
+  }, 300_000);
+});
+
+describe('the reel', () => {
+  it('is rendered from the scenes and kept as the output, when a renderer is there', async () => {
+    const { workspaceId, started } = await startVideo({ sceneCount: 2 });
+    // The fake video adapter returns the same fixture clip, which is a real MP4.
+    const result = await processJob(
+      { db, handlers: handlersWith({ 'veo-3.1-lite': scripted([]) }), log },
+      { jobId: started.job.id, correlationId: 'c' },
+    );
+    expect(result).toBe('settled');
+
+    const [output] = await scoped(db, workspaceId).select(outputs);
+    const reel = (output?.metadata as { reel?: { url: string; durationSeconds: number } }).reel;
+    if (!reel) throw new Error('no reel was rendered; is FFMPEG_PATH set?');
+    expect(output?.storageKey).toContain(`${workspaceId}/reels/`);
+    expect(reel.url).toContain('.mp4');
+    // Two eight second scenes, joined into one file.
+    expect(reel.durationSeconds).toBeGreaterThan(15);
+    const stored = await store.get(output?.storageKey ?? '');
+    expect(stored.byteLength).toBeGreaterThan(1000);
+  }, 300_000);
 });
 
 describe('regenerating one scene', () => {
@@ -266,7 +291,7 @@ describe('regenerating one scene', () => {
     // The other scenes are untouched, clip and count.
     expect(after[0]?.clipUrl).toBe(before[0]?.clipUrl);
     expect(after[2]?.regeneratedCount).toBe(0);
-  });
+  }, 300_000);
 
   it('fails without a scene, rather than guessing which one', async () => {
     const handlers = fakeHandlers();
@@ -276,7 +301,7 @@ describe('regenerating one scene', () => {
       typeof handler
     >[0];
     await expect(handler(job, log)).rejects.toThrow(/no scene/i);
-  });
+  }, 300_000);
 });
 
 describe('the second provider', () => {
@@ -295,5 +320,5 @@ describe('the second provider', () => {
       { jobId: started.job.id, correlationId: 'c' },
     );
     expect(result).toBe('refunded');
-  });
+  }, 300_000);
 });

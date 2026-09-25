@@ -24,7 +24,7 @@ import {
   waitForRedis,
 } from '@cgp/core';
 import { createProviders, warmProviders } from '@cgp/adapters';
-import { createDatabase, PUBLISH_TARGET } from '@cgp/db';
+import { brandKits, createDatabase, PUBLISH_TARGET, scoped } from '@cgp/db';
 import { Worker } from 'bullmq';
 import { createErrorThrottle } from './error-throttle';
 import { handlers as baseHandlers } from './handlers';
@@ -81,9 +81,30 @@ const handlers = {
     store: providers.store,
     costInr: providers.videoCostInr,
     providerLabel: providers.mode === 'real' ? 'vertex' : 'fake',
+    ffmpeg: { bin: env.FFMPEG_PATH },
+    logo: (workspaceId) => workspaceLogo(db, providers.store, workspaceId),
   }),
   ...publishHandlers(),
 };
+
+/** The workspace's logo, for the corner of a reel. Absent until a brand kit has one. */
+async function workspaceLogo(
+  database: typeof db,
+  store: typeof providers.store,
+  workspaceId: string,
+) {
+  const [kit] = await scoped(database, workspaceId).select(brandKits, {
+    orderBy: (t, order) => order.desc(t.version),
+    limit: 1,
+  });
+  if (!kit?.logoUrl) return undefined;
+  const key = new URL(kit.logoUrl).pathname.split('/').slice(2).join('/');
+  try {
+    return { data: await store.get(key), mimeType: 'image/png' };
+  } catch {
+    return undefined;
+  }
+}
 
 /** Publishing needs the token key; without it the worker still runs everything else. */
 function publishHandlers(): Record<string, JobHandler> {

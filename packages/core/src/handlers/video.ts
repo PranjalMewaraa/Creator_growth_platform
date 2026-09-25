@@ -22,6 +22,8 @@ import {
 } from '@cgp/db';
 import { findCompiledPrompt, planScenes } from '@cgp/orchestration';
 import { SECONDS_PER_SCENE } from '../generators/definitions';
+import { buildReel, type ReelResolution, type ReelScene } from '../render/reel';
+import { ffmpegAvailable, type FfmpegOptions } from '../render/ffmpeg';
 import type { GeneratorRegistry } from '../generators/registry';
 import { postCheckOutput } from '../moderation';
 import { JobBlocked, type JobHandler } from '../process';
@@ -55,6 +57,12 @@ export interface VideoHandlerDeps {
   store: ObjectStore;
   costInr: (adapterKey: string, resolution: VideoRequest['resolution'], seconds: number) => number;
   providerLabel: string;
+  /** The renderer, which joins the scenes into one reel (plan section 4.6). */
+  ffmpeg: FfmpegOptions;
+  /** A licensed bed for the reel, chosen by the caller from the catalogue (FR-VD-08). */
+  music?: () => Promise<{ data: Uint8Array } | undefined>;
+  /** The workspace's logo, cornered on the reel. */
+  logo?: (workspaceId: string) => Promise<{ data: Uint8Array; mimeType: string } | undefined>;
   /** Only tests shorten these. */
   pollEveryMs?: number;
 }
@@ -66,7 +74,8 @@ interface VideoJobInput {
   sceneId?: unknown;
 }
 
-const RESOLUTION: VideoRequest['resolution'] = '720p';
+/** One tier for both the provider and the render, so they cannot drift apart. */
+const RESOLUTION = '720p' as const satisfies ReelResolution;
 
 /** Submits one scene and waits for it, or gives the reason it will never arrive. */
 async function renderScene(
@@ -200,6 +209,7 @@ export function createVideoHandlers(deps: VideoHandlerDeps): Record<string, JobH
 
       let delivered = 0;
       let blocked = false;
+      const rendered: ReelScene[] = [];
       for (const scene of scenes) {
         const result = await renderScene(deps, adapter, scene.prompt, log);
         if (!result.ok) {
@@ -222,12 +232,24 @@ export function createVideoHandlers(deps: VideoHandlerDeps): Record<string, JobH
           durationS: result.clip.durationSeconds,
         });
         delivered += result.clip.durationSeconds;
+        rendered.push({ data: result.clip.data, durationSeconds: result.clip.durationSeconds });
       }
 
       // Nothing usable came back: refunded in full, and blocked when that is why.
       if (delivered === 0) {
         if (blocked) throw new JobBlocked('other');
         throw new Error('No scene could be rendered');
+      }
+
+      // The reel itself: scenes joined, bed under them, logo cornered (plan section 4.6).
+      // A render that cannot run leaves the scenes, which are still worth what was paid.
+      const reel = await renderReel(deps, job.workspaceId, rendered, log);
+      if (reel) {
+        await ws.update(
+          outputs,
+          { storageKey: reel.key, metadata: { ...(output.metadata as object), reel: reel.view } },
+          (t, op) => op.eq(t.id, output.id),
+        );
       }
 
       const seconds = Math.round(delivered);
@@ -291,6 +313,47 @@ export function createVideoHandlers(deps: VideoHandlerDeps): Record<string, JobH
   };
 
   return handlers;
+}
+
+/**
+ * Joins what was rendered into one file. Returns nothing when there is no renderer on this
+ * machine or the render fails: the clips are already paid for and stored, and a reel that
+ * cannot be built is a missing convenience rather than a lost job.
+ */
+async function renderReel(
+  deps: VideoHandlerDeps,
+  workspaceId: string,
+  scenes: ReelScene[],
+  log: Parameters<JobHandler>[1],
+): Promise<{ key: string; view: Record<string, unknown> } | undefined> {
+  if (scenes.length === 0) return undefined;
+  if (!(await ffmpegAvailable(deps.ffmpeg))) {
+    log.warn({ bin: deps.ffmpeg.bin }, 'no renderer on this machine; scenes kept, reel not built');
+    return undefined;
+  }
+  try {
+    const reel = await buildReel(deps.ffmpeg, {
+      scenes,
+      resolution: RESOLUTION,
+      music: await deps.music?.(),
+      logo: await deps.logo?.(workspaceId),
+    });
+    const key = `${workspaceId}/reels/${crypto.randomUUID()}.mp4`;
+    const stored = await deps.store.put(key, reel.data, reel.mimeType);
+    log.info({ seconds: reel.durationSeconds, bytes: reel.data.byteLength }, 'reel rendered');
+    return {
+      key: stored.key,
+      view: {
+        url: stored.url,
+        width: reel.width,
+        height: reel.height,
+        durationSeconds: reel.durationSeconds,
+      },
+    };
+  } catch (err) {
+    log.warn({ err }, 'reel could not be rendered; scenes kept');
+    return undefined;
+  }
 }
 
 /** The seconds a reel of this many scenes asks for, which is what the hold is taken on. */

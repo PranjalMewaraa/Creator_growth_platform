@@ -16,3 +16,6 @@ Thumbs.db
 
 # Evaluation runs: research output, kept locally and not shared through git.
 evals/
+
+# Local binaries, fetched per machine.
+tools/
