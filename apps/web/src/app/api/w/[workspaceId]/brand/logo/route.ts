@@ -1,7 +1,8 @@
 import { MAX_LOGO_BYTES, storeLogo } from '@cgp/core';
 import { apiError, apiWorkspace, refusal } from '@/server/api';
 import { withRequestContext } from '@/server/request-context';
-import { getLogger, getProviders } from '@/server/runtime';
+import { getLogger } from '@/server/runtime';
+import { getProviders } from '@/server/providers';
 
 type Context = { params: Promise<{ workspaceId: string }> };
 

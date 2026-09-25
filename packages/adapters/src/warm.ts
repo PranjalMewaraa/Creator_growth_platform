@@ -16,7 +16,12 @@ import type { Providers } from './registry';
 /** Small enough to be free in practice: a few input tokens and a single output token. */
 const WARM_REQUEST = { prompt: 'ok', maxOutputTokens: 1, reasoning: 'minimal' } as const;
 
-const WARM_TIMEOUT_MS = 10_000;
+/**
+ * Generous, because this call is the slow one by definition: credentials, a token exchange and
+ * a handshake. At 10s it timed out on a cold boot and reported a failure while doing the very
+ * work it exists to do.
+ */
+const WARM_TIMEOUT_MS = 30_000;
 
 async function warm(adapter: TextAdapter, log?: Logger): Promise<void> {
   const started = Date.now();

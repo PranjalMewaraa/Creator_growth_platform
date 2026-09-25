@@ -2,7 +2,8 @@
 
 import { saveBrandKit, type BrandKitInput } from '@cgp/core';
 import { revalidatePath } from 'next/cache';
-import { getDb, getProviders } from '@/server/runtime';
+import { getDb } from '@/server/runtime';
+import { getProviders } from '@/server/providers';
 import { requireWorkspace } from '@/server/session';
 
 export type SaveBrandKitState =

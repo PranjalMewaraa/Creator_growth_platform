@@ -3,7 +3,8 @@ import { startPublication } from '@cgp/core';
 import { scoped } from '@cgp/db';
 import { apiError, apiWorkspace, jsonBody, refusal } from '@/server/api';
 import { withRequestContext } from '@/server/request-context';
-import { getDb, getLogger, getProviders, getQueues } from '@/server/runtime';
+import { getDb, getLogger, getQueues } from '@/server/runtime';
+import { getProviders } from '@/server/providers';
 
 type Context = { params: Promise<{ workspaceId: string }> };
 

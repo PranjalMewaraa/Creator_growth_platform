@@ -1,7 +1,8 @@
 import { jobOutputs } from '@cgp/core';
 import { apiWorkspace } from '@/server/api';
 import { withRequestContext } from '@/server/request-context';
-import { getDb, getProviders } from '@/server/runtime';
+import { getDb } from '@/server/runtime';
+import { getProviders } from '@/server/providers';
 
 type Context = { params: Promise<{ workspaceId: string; jobId: string }> };
 
