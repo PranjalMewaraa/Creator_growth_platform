@@ -2,7 +2,7 @@
 
 **Companion to `plan.md`.** `plan.md` says what and why. This file says how, in what order, and what has been decided. Where the two disagree, `plan.md` wins.
 
-**Status:** 2026-09-25. WP1 to WP5, WP7 to WP22 and WP24 built: weeks 1 to 4, plus the video adapter, the scene model and the render worker. WP23 (voiceover) and WP25 (captions) are the gaps in the video pipeline. The week 4 checkpoint is the one thing outstanding: the evaluation set has run, and the lift against the raw control needs a person to judge it. Amendments A1 to A11 accepted and applied to `plan.md`. Items marked OPEN need an answer before the work package that depends on them.
+**Status:** 2026-09-25. Compiler profiles are at v5: scenes and images are written as full shot specifications, with labelled lines for framing, subject, action, camera, setting, light, palette and texture, and continuity carried across the scenes of one reel. A one line summary was producing stock looking output; the detail is the product. WP1 to WP5, WP7 to WP22 and WP24 built: weeks 1 to 4, plus the video adapter, the scene model and the render worker. WP23 (voiceover) and WP25 (captions) are the gaps in the video pipeline. The week 4 checkpoint is the one thing outstanding: the evaluation set has run, and the lift against the raw control needs a person to judge it. Amendments A1 to A11 accepted and applied to `plan.md`. Items marked OPEN need an answer before the work package that depends on them.
 
 ---
 
