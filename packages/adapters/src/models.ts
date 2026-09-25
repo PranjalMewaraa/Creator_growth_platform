@@ -69,6 +69,44 @@ export const IMAGE_MODEL_KEYS = Object.keys(IMAGE_MODELS) as ImageModelKey[];
 
 export const TEXT_MODEL_KEYS = Object.keys(TEXT_MODELS) as TextModelKey[];
 
+export interface VideoModel {
+  model: string;
+  /** Veo is regional, unlike Gemini 3.x (D10). */
+  location: string;
+  /** USD per second of delivered video, by resolution (plan section 6). */
+  usdPerSecond: Record<'720p' | '1080p', number>;
+}
+
+export const VIDEO_MODELS = {
+  /**
+   * The budget tier, and the only one allowed: Veo 3.1 costs four times as much and Veo 2 ten
+   * times (plan section 6). Video only, no generated audio.
+   */
+  'veo-3.1-lite': {
+    model: 'veo-3.1-lite-generate-001',
+    location: 'us-central1',
+    usdPerSecond: { '720p': 0.03, '1080p': 0.05 },
+  },
+} as const satisfies Record<string, VideoModel>;
+
+export type VideoModelKey = keyof typeof VIDEO_MODELS;
+
+export const VIDEO_MODEL_KEYS = Object.keys(VIDEO_MODELS) as VideoModelKey[];
+
+/** What a clip cost in rupees, by the seconds actually delivered. */
+export function videoCostInr(
+  key: VideoModelKey,
+  resolution: '720p' | '1080p',
+  seconds: number,
+): number {
+  const usd = VIDEO_MODELS[key].usdPerSecond[resolution] * seconds;
+  return Number((usd * INR_PER_USD).toFixed(4));
+}
+
+export function isVideoModelKey(key: string): key is VideoModelKey {
+  return key in VIDEO_MODELS;
+}
+
 /** What a call cost in rupees, for cost_telemetry (plan section 18). */
 export function textCostInr(key: TextModelKey, usage: TokenUsage): number {
   const { input, output } = TEXT_MODELS[key].usdPerMillion;

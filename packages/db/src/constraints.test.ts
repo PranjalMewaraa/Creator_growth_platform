@@ -73,6 +73,7 @@ describe('migrations', () => {
       'metering_rates',
       'moderation_events',
       'music_tracks',
+      'output_edits',
       'outputs',
       'post_targets',
       'publications',

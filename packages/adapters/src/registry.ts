@@ -1,6 +1,7 @@
 import type { Logger } from '@cgp/config';
 import type {
   ImageAdapter,
+  VideoAdapter,
   ModerationAdapter,
   ObjectStore,
   Publisher,
@@ -8,14 +9,22 @@ import type {
   TextAdapter,
   TokenUsage,
 } from '@cgp/contracts';
-import { createFakeImage, createFakeModeration, createFakePublisher } from './fakes';
+import {
+  createFakeImage,
+  createFakeModeration,
+  createFakePublisher,
+  createFakeVideo,
+} from './fakes';
 import { createGeminiImage } from './image/gemini';
+import { createStubVideo } from './video/stub';
+import { createVeoVideo } from './video/veo';
 import { createInstagramPublisher } from './publishers/instagram';
 import { createLinkedInPublisher } from './publishers/linkedin';
 import { createGcsStore } from './storage/gcs';
 import { createMemoryStore } from './storage/memory';
 import { createGoogleModeration } from './moderation/google';
 import {
+  VIDEO_MODELS,
   IMAGE_MODELS,
   imageCostInr,
   isImageModelKey,
@@ -24,6 +33,7 @@ import {
   textCostInr,
   type ImageModelKey,
   type TextModelKey,
+  type VideoModelKey,
 } from './models';
 import { createClaudeText } from './text/claude';
 import { createFakeText } from './text/fake';
@@ -103,10 +113,36 @@ export function createImageAdapters(mode: ProviderMode, real?: RealProviderOptio
   return Object.fromEntries(entries) as ImageAdapters;
 }
 
+/** Both video providers: the one that generates, and the wired stub (FR-VD-17). */
+export type VideoAdapters = Record<VideoModelKey | 'second', VideoAdapter>;
+
+export function createVideoAdapters(mode: 'fake'): VideoAdapters;
+export function createVideoAdapters(mode: ProviderMode, real: RealProviderOptions): VideoAdapters;
+export function createVideoAdapters(mode: ProviderMode, real?: RealProviderOptions): VideoAdapters {
+  const entries = (Object.keys(VIDEO_MODELS) as VideoModelKey[]).map((key) => {
+    if (mode === 'fake') return [key, createFakeVideo(key)] as const;
+    if (!real?.project) throw new Error('PROVIDERS=real needs a GCP project');
+    const config = VIDEO_MODELS[key];
+    return [
+      key,
+      createVeoVideo({
+        key,
+        project: real.project,
+        location: config.location,
+        model: config.model,
+        log: real.log,
+      }),
+    ] as const;
+  });
+  // The second provider is a stub in both modes: there is no account to switch on.
+  return Object.fromEntries([...entries, ['second', createStubVideo()]]) as VideoAdapters;
+}
+
 export interface Providers {
   mode: ProviderMode;
   text: TextAdapters;
   image: ImageAdapters;
+  video: VideoAdapters;
   /** The compile rewrite pass, in order: Flash-Lite, then gpt-oss (plan section 6). */
   rewriters: TextAdapter[];
   /** Chosen by MODERATION, separately from PROVIDERS (D3). */
@@ -141,6 +177,10 @@ export function createProviders(env: {
     env.PROVIDERS === 'real'
       ? createTextAdapters('real', { project: env.GOOGLE_CLOUD_PROJECT ?? '', log: env.log })
       : createTextAdapters('fake');
+  const video =
+    env.PROVIDERS === 'real'
+      ? createVideoAdapters('real', { project: env.GOOGLE_CLOUD_PROJECT ?? '', log: env.log })
+      : createVideoAdapters('fake');
   const image =
     env.PROVIDERS === 'real'
       ? createImageAdapters('real', { project: env.GOOGLE_CLOUD_PROJECT ?? '', log: env.log })
@@ -149,6 +189,7 @@ export function createProviders(env: {
     mode: env.PROVIDERS,
     text,
     image,
+    video,
     rewriters: [text['gemini-flash-lite'], text['gpt-oss-20b']],
     moderation,
     publishers:

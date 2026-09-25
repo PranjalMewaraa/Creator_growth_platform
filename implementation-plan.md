@@ -2,7 +2,7 @@
 
 **Companion to `plan.md`.** `plan.md` says what and why. This file says how, in what order, and what has been decided. Where the two disagree, `plan.md` wins.
 
-**Status:** 2026-09-25. WP1 to WP5, WP7 to WP20 and a publishing slice built: weeks 1 to 4, less the video work. The week 4 checkpoint is the one thing outstanding: the evaluation set has run, and the lift against the raw control needs a person to judge it. Amendments A1 to A11 accepted and applied to `plan.md`. Items marked OPEN need an answer before the work package that depends on them.
+**Status:** 2026-09-25. WP1 to WP5, WP7 to WP21 and a publishing slice built: weeks 1 to 4, plus the video adapter. The week 4 checkpoint is the one thing outstanding: the evaluation set has run, and the lift against the raw control needs a person to judge it. Amendments A1 to A11 accepted and applied to `plan.md`. Items marked OPEN need an answer before the work package that depends on them.
 
 ---
 
@@ -187,7 +187,7 @@ Weeks 1 to 3 are detailed. Weeks 4 to 8 are scoped and get re-planned in detail 
 
 | WP | Owner | Scope |
 |---|---|---|
-| WP21 | A | Veo Lite adapter (submit and poll) plus wired stub second provider |
+| WP21 | A | Veo Lite adapter (submit and poll) plus wired stub second provider. Built 2026-09-25 on the WP5 spike's findings: `predictLongRunning` to submit, `fetchPredictOperation` to poll, nothing waiting in a loop, since the worker owns the waiting and a render job has to survive a restart. A refused clip comes back done and empty, so a safety filtered or provider rejected operation is reported as `failed` with a category rather than thrown as an error to retry. The clip is measured from its own MP4 header rather than from the request: one adapter serves every job, and a worker that restarts has forgotten what it asked for. `generateAudio: false`, because voiceover and music are added in the render and audio bills higher. The second provider is a stub that refuses plainly (FR-VD-17): it exists so the seam is real, and it never pretends. Verified with one real 8s 720p clip through the adapter, INR 21 |
 | WP22 | A | Scene model and sequencing, up to 3 scenes at 8 seconds, per scene regenerate |
 | WP23 | A | TTS voiceover with timepoints, voice tier picked from WP5 findings |
 | WP24 | A | Render worker per 4.6. Music catalog with licence per track |

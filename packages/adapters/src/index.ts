@@ -2,6 +2,12 @@ export { categoryForStatus, normalizeError } from './errors';
 export {
   IMAGE_MODELS,
   IMAGE_MODEL_KEYS,
+  VIDEO_MODELS,
+  VIDEO_MODEL_KEYS,
+  isVideoModelKey,
+  videoCostInr,
+  type VideoModel,
+  type VideoModelKey,
   TEXT_MODELS,
   TEXT_MODEL_KEYS,
   imageCostInr,
@@ -16,9 +22,11 @@ export {
 } from './models';
 export {
   createImageAdapters,
+  createVideoAdapters,
   createProviders,
   createTextAdapters,
   type ImageAdapters,
+  type VideoAdapters,
   type ProviderMode,
   type Providers,
   type RealProviderOptions,
@@ -26,6 +34,9 @@ export {
 } from './registry';
 export { warmProviders } from './warm';
 export { createGeminiImage, type GeminiImageOptions } from './image/gemini';
+export { createVeoVideo, veoFrame, type VeoOptions } from './video/veo';
+export { createStubVideo } from './video/stub';
+export { mp4Info, type Mp4Info } from './video/mp4';
 export { imageSize, type ImageSize } from './image/size';
 export { createFakeText } from './text/fake';
 export {
