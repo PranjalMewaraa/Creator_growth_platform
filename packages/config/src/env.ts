@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, isAbsolute, join } from 'node:path';
 import { z } from 'zod';
 
 /** Variables every process needs. Apps extend this with their own. */
@@ -47,10 +47,34 @@ export function parseEnv<T extends z.ZodType>(
   return result.data;
 }
 
+/** The workspace root, found by walking up from a directory, or nothing outside a workspace. */
+export function workspaceRoot(startDir: string = process.cwd()): string | undefined {
+  let dir = startDir;
+  for (;;) {
+    if (existsSync(join(dir, 'pnpm-workspace.yaml'))) return dir;
+    const parent = dirname(dir);
+    if (parent === dir) return undefined;
+    dir = parent;
+  }
+}
+
 /**
- * Local dev keeps one .env at the repo root. Walks up from startDir to the workspace
- * root and loads its .env if present. Deployed environments have no file and set real
- * env vars instead, which this never overrides.
+ * A tool path from the environment, made absolute. A relative one is resolved against the
+ * workspace root rather than the process's own directory: `pnpm --filter` runs a script from
+ * inside its package, so `tools/ffmpeg/ffmpeg.exe` means the repository's copy wherever the
+ * process happens to start. A bare name is left alone for PATH to find.
+ */
+export function resolveToolPath(value: string, startDir: string = process.cwd()): string {
+  if (!/[/\\]/.test(value)) return value;
+  if (isAbsolute(value)) return value;
+  const root = workspaceRoot(startDir);
+  return root ? join(root, value) : value;
+}
+
+/**
+ * Local dev keeps one .env at the repo root. Walks up from startDir to the workspace root and
+ * loads its .env if present. Deployed environments have no file and set real env vars instead,
+ * which this never overrides.
  */
 export function loadRootEnvFile(startDir: string = process.cwd()): string | undefined {
   let dir = startDir;

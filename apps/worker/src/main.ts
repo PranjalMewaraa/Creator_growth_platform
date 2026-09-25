@@ -6,6 +6,7 @@ import {
   loadRootEnvFile,
   parseEncryptionKey,
   parseEnv,
+  resolveToolPath,
   withCorrelation,
 } from '@cgp/config';
 import {
@@ -81,7 +82,7 @@ const handlers = {
     store: providers.store,
     costInr: providers.videoCostInr,
     providerLabel: providers.mode === 'real' ? 'vertex' : 'fake',
-    ffmpeg: { bin: env.FFMPEG_PATH },
+    ffmpeg: { bin: resolveToolPath(env.FFMPEG_PATH) },
     logo: (workspaceId) => workspaceLogo(db, providers.store, workspaceId),
   }),
   ...publishHandlers(),

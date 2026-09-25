@@ -782,7 +782,14 @@ export function Studio({
                     >
                       {STATUS[j.status].label}
                     </span>
-                    <span className="w-16 shrink-0 text-right text-[11px] text-muted">
+                    <span
+                      className="w-16 shrink-0 text-right text-[11px] text-muted"
+                      title={new Date(j.createdAt).toLocaleString('en-IN')}
+                      // "4 min ago" on the server is "5 min ago" by the time the browser
+                      // renders it, which React reports as a hydration mismatch. The clock is
+                      // the client's to read.
+                      suppressHydrationWarning
+                    >
                       {ago(j.createdAt)}
                     </span>
                   </button>
