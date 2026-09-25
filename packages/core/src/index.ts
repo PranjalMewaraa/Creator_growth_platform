@@ -68,6 +68,7 @@ export {
 } from './publishing';
 export { fitToFrame, INSTAGRAM_FRAME, INSTAGRAM_FRAMES, type InstagramFrame } from './media';
 export { ffmpeg, ffmpegAvailable, RenderFailed, type FfmpegOptions } from './render/ffmpeg';
+export { sampleFrames } from './render/frames';
 export {
   buildReel,
   REEL_FRAMES,

@@ -24,6 +24,7 @@ import { findCompiledPrompt, planScenes } from '@cgp/orchestration';
 import { SECONDS_PER_SCENE } from '../generators/definitions';
 import { buildReel, type ReelResolution, type ReelScene } from '../render/reel';
 import { ffmpegAvailable, type FfmpegOptions } from '../render/ffmpeg';
+import { sampleFrames } from '../render/frames';
 import type { GeneratorRegistry } from '../generators/registry';
 import { postCheckOutput } from '../moderation';
 import { JobBlocked, type JobHandler } from '../process';
@@ -216,11 +217,13 @@ export function createVideoHandlers(deps: VideoHandlerDeps): Record<string, JobH
           blocked ||= result.blocked;
           continue;
         }
+        // An image checker takes images, so a clip is checked on frames sampled out of it
+        // (plan section 6). Without a renderer there is no way to sample, and an unchecked
+        // clip is never released.
         const checked = await postCheckOutput(
           { db: deps.db, moderation: deps.moderation, log },
           job,
-          // A clip is checked on its own bytes; the image check reads the first frame.
-          { media: [{ data: result.clip.data, mimeType: result.clip.mimeType }] },
+          { media: await sampleFrames(deps.ffmpeg, result.clip.data, result.clip.durationSeconds) },
         );
         if (checked) {
           blocked = true;

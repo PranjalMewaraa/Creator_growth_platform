@@ -13,7 +13,8 @@ import { compilerProfiles, templates, templateVersions } from './schema';
 //   v2  context line names who is posting rather than an audience
 //   v3  a template can set the angle, which is what makes one template differ from another
 //   v4  video profiles say how a prompt is broken into scenes
-export const COMPILER_PROFILE_VERSION = 4;
+//   v5  scenes and images are written as full shot specifications, not one line summaries
+export const COMPILER_PROFILE_VERSION = 5;
 
 const REWRITE_SYSTEM = [
   'You sharpen creative briefs for a content generator.',
@@ -130,9 +131,21 @@ export const COMPILER_PROFILES: Record<OutputType, CompilerProfileConfig> = {
     ].join('\n'),
     requirements: IMAGE_REQUIREMENTS,
     rewrite: {
-      system:
-        'You write image generation prompts. Turn the brief into one vivid visual description: subject, setting, light, lens and composition. Keep every named subject. Never ask for text in the image. Reply with the description only, in under 80 words.',
-      maxOutputTokens: 250,
+      // Same reasoning as the video scenes: an image model returns the detail it is given.
+      system: [
+        'You write image generation prompts as a full shot specification, not a summary.',
+        'Write labelled lines, in this order, each on its own line:',
+        'SHOT: the framing and lens.',
+        'SUBJECT: what is in frame, with the material detail that makes it specific: surface, texture, wear, age, colour.',
+        'SETTING: the place, the hour, the weather, and what is behind the subject.',
+        'LIGHT: the sources, their direction and quality, and what is in shadow.',
+        'PALETTE: three or four colours that dominate the frame.',
+        'COMPOSITION: where the subject sits in the frame and what is left empty.',
+        'Keep every subject, fact and name from the brief, and invent no claim or offer.',
+        'Never ask for text, letters, numbers, logos or watermarks in the image.',
+        'Reply with the specification only, 80 to 140 words.',
+      ].join(' '),
+      maxOutputTokens: 500,
     },
     defaults: { style: 'natural light, editorial photography, shallow depth of field' },
   },
@@ -151,9 +164,19 @@ export const COMPILER_PROFILES: Record<OutputType, CompilerProfileConfig> = {
       },
     ],
     rewrite: {
-      system:
-        'You write image generation prompts for video thumbnails. Describe one bold, high contrast scene with a single clear subject. Never ask for text in the image. Reply with the description only, in under 80 words.',
-      maxOutputTokens: 250,
+      system: [
+        'You write thumbnail prompts as a full shot specification, not a summary.',
+        'Write labelled lines, in this order, each on its own line:',
+        'SHOT: the framing and lens, close enough to read at the size of a thumb.',
+        'SUBJECT: one clear subject, with the material detail that makes it specific, and the expression or gesture it holds.',
+        'SETTING: the place and what is behind the subject, kept simple enough not to compete.',
+        'LIGHT: hard or soft, its direction, and the rim or separation that lifts the subject off the background.',
+        'PALETTE: three colours at most, high contrast.',
+        'COMPOSITION: the subject to one side, and the empty space where a headline will be added later.',
+        'Never ask for text, letters, numbers, logos or watermarks in the image.',
+        'Reply with the specification only, 80 to 140 words.',
+      ].join(' '),
+      maxOutputTokens: 500,
     },
     defaults: { style: 'bold, high contrast, one clear subject', textSpace: true },
   },
@@ -177,15 +200,30 @@ export const COMPILER_PROFILES: Record<OutputType, CompilerProfileConfig> = {
     ],
     rewrite: { system: REWRITE_SYSTEM, maxOutputTokens: 400 },
     scenes: {
+      // A video model gives back what it is told, in the detail it is told it. A one line
+      // summary produces a stock looking eight seconds; a full shot specification produces a
+      // shot. Each scene is written as one, and the sections are the ones a director would
+      // hand a camera operator.
       system: [
-        'You break a video brief into consecutive scenes for a short vertical reel.',
-        'Each scene is one continuous shot of eight seconds: say what is in frame, how the camera moves, and the light.',
-        'The scenes must tell one story in order, and the last one must land the point.',
-        'Never ask for on screen text, captions, logos or watermarks; those are added later.',
-        'Keep every fact and name from the brief. Invent no claim, statistic or offer.',
-        'Reply with JSON: {"scenes": string[]}, one entry per scene, each under 60 words.',
+        'You write shot specifications for a short vertical reel, one per scene, in order.',
+        'Each scene is ONE continuous eight second shot. Never describe a cut, a split screen or a freeze frame inside a scene: the camera may move, the subject may move, but the shot does not end until the scene does.',
+        'Write each scene as labelled lines, in this order, each on its own line:',
+        'SHOT: the framing and lens, such as tight close up on a 50mm, or a wide on a 24mm.',
+        'SUBJECT: who or what is in frame, with the material detail that makes it specific: fabric, surface, wear, age, colour.',
+        'ACTION: what happens across the eight seconds, in the order it happens, as one continuous movement.',
+        'CAMERA: one move and one only, named plainly: slow push in, arc right, static, handheld drift, tilt up.',
+        'SETTING: the place, the hour, the weather, and what is behind the subject.',
+        'LIGHT: the sources, their direction and colour, and what is in shadow.',
+        'PALETTE: three or four colours that dominate the frame.',
+        'TEXTURE: how cloth, hair, water, steam, dust or smoke behave in this shot.',
+        'MOOD: the feeling in three or four words.',
+        'Carry the same subject, costume, location and palette across every scene, in the same words, so the scenes read as one piece rather than three unrelated shots.',
+        'The scenes must tell one story in order, and the last must land the point of the brief.',
+        'Never ask for on screen text, captions, subtitles, logos or watermarks: they are composited later and a model that renders them ruins the frame.',
+        'Keep every fact, name and number from the brief. Invent no claim, statistic or offer.',
+        'Reply with JSON: {"scenes": string[]}, one entry per scene, 90 to 150 words each.',
       ].join(' '),
-      maxOutputTokens: 700,
+      maxOutputTokens: 2400,
       fallback: 'Scene {{n}} of {{of}}, one continuous eight second shot.',
     },
   },
