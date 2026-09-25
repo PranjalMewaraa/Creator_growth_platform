@@ -55,7 +55,28 @@ function CaptionMeter({ platform, text }: { platform: TargetPlatform; text: stri
   );
 }
 
-function CopyButton({ text, locked }: { text: string; locked: boolean }) {
+/**
+ * Copying is how an output leaves the Studio, so it is also where it counts as accepted
+ * (WP20): what was copied is compared with what the engine wrote, and the difference recorded.
+ * Best effort, and never in the way of the copy itself.
+ */
+function recordAcceptance(accept: Accept | undefined, accepted: string): void {
+  if (!accept) return;
+  void fetch(`/api/w/${accept.workspaceId}/outputs/${accept.outputId}/accept`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ accepted, generated: accept.generated }),
+  }).catch(() => undefined);
+}
+
+export interface Accept {
+  workspaceId: string;
+  outputId: string;
+  /** The text the engine wrote, when the output holds several pieces. */
+  generated?: string;
+}
+
+function CopyButton({ text, locked, accept }: { text: string; locked: boolean; accept?: Accept }) {
   const [copied, setCopied] = useState(false);
   return (
     <button
@@ -64,6 +85,7 @@ function CopyButton({ text, locked }: { text: string; locked: boolean }) {
       title={locked ? 'Available once the check passes' : 'Copy'}
       onClick={() => {
         void navigator.clipboard.writeText(text).then(() => {
+          recordAcceptance(accept, text);
           setCopied(true);
           setTimeout(() => setCopied(false), 1500);
         });
@@ -80,6 +102,7 @@ function Block({
   text,
   locked,
   meter,
+  accept,
   children,
 }: {
   title?: string;
@@ -87,6 +110,7 @@ function Block({
   locked: boolean;
   /** A length indicator under the text, for the outputs that have a limit to meet. */
   meter?: ReactNode;
+  accept?: Accept;
   children?: ReactNode;
 }) {
   return (
@@ -97,7 +121,7 @@ function Block({
         ) : (
           <span />
         )}
-        <CopyButton text={text} locked={locked} />
+        <CopyButton text={text} locked={locked} accept={accept} />
       </div>
       <div
         className={cx(
@@ -202,11 +226,13 @@ function CaptionCard({
   label,
   initial,
   locked,
+  accept,
 }: {
   platform: TargetPlatform | null;
   label: string;
   initial: string;
   locked: boolean;
+  accept?: Accept;
 }) {
   const [text, setText] = useState(initial);
   return (
@@ -223,7 +249,7 @@ function CaptionCard({
               Reset
             </button>
           )}
-          <CopyButton text={text} locked={locked} />
+          <CopyButton text={text} locked={locked} accept={accept} />
         </div>
       </div>
       <textarea
@@ -281,14 +307,22 @@ export function OutputView({
   text,
   locked,
   targetSeconds,
+  workspaceId,
+  outputId,
 }: {
   kind: string;
   text: string;
   locked: boolean;
   /** The length the script was asked for, when one was chosen. */
   targetSeconds?: number | null;
+  /** Present once the output is stored, which is when accepting it can be recorded. */
+  workspaceId?: string;
+  outputId?: string;
 }) {
   const data = parse(text);
+  // One piece of a set, measured against the piece the engine wrote rather than the whole.
+  const acceptOf = (generated: string): Accept | undefined =>
+    workspaceId && outputId ? { workspaceId, outputId, generated } : undefined;
 
   const list = (value: unknown) =>
     Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
@@ -315,7 +349,7 @@ export function OutputView({
                   <div className="flex shrink-0 items-center gap-2">
                     {/* No platform publishes a limit on these, so it is a count, not a verdict. */}
                     <span className="text-[11px] tabular-nums text-faint">{item.length}</span>
-                    <CopyButton text={item} locked={locked} />
+                    <CopyButton text={item} locked={locked} accept={acceptOf(item)} />
                   </div>
                 </div>
               ))}
@@ -338,6 +372,7 @@ export function OutputView({
               label={NAMES[platform] ?? platform}
               initial={caption}
               locked={locked}
+              accept={acceptOf(caption)}
             />
           ) : null,
         )}
@@ -351,6 +386,7 @@ export function OutputView({
       title={kind === 'script' ? 'Script' : undefined}
       text={text}
       locked={locked}
+      accept={acceptOf(text)}
       meter={kind === 'script' ? <ScriptMeter text={text} targetSeconds={targetSeconds} /> : null}
     />
   );

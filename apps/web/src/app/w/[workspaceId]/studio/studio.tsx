@@ -657,6 +657,8 @@ export function Studio({
                       text={output.text}
                       locked={false}
                       targetSeconds={shownDuration}
+                      workspaceId={workspaceId}
+                      outputId={output.id}
                     />
                   ))
                 )

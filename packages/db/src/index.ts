@@ -43,6 +43,7 @@ export {
   meteringRates,
   moderationEvents,
   musicTracks,
+  outputEdits,
   outputs,
   postTargets,
   publications,

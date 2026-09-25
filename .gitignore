@@ -13,3 +13,6 @@ coverage/
 .DS_Store
 Thumbs.db
 *.log
+
+# Evaluation runs: research output, kept locally and not shared through git.
+evals/

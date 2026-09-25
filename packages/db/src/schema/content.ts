@@ -139,6 +139,25 @@ export const renditions = pgTable(
   (t) => [uniqueIndex('renditions_once_per_platform').on(t.outputId, t.platform)],
 );
 
+/**
+ * What a creator changed before accepting an output (WP20). The evaluation set says which
+ * prompt a judge prefers; this says what the engine costs in edits on real work, which is the
+ * number to quote once there is enough of it.
+ */
+export const outputEdits = pgTable('output_edits', {
+  id: id(),
+  workspaceId: workspaceId(),
+  outputId: uuid('output_id')
+    .notNull()
+    .references(() => outputs.id),
+  /** Characters changed, and that as a share of the longer text. */
+  distance: integer('distance').notNull(),
+  rate: real('rate').notNull(),
+  generatedChars: integer('generated_chars').notNull(),
+  acceptedChars: integer('accepted_chars').notNull(),
+  createdAt: createdAt(),
+});
+
 export const moderationEvents = pgTable(
   'moderation_events',
   {

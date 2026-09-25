@@ -89,6 +89,24 @@ export {
 export { jobOutputs, recentGenerationJobs, type StudioJob, type StudioOutput } from './studio';
 export { listTemplates, type TemplateCard } from './templates';
 export {
+  acceptOutput,
+  editRateSummary,
+  type AcceptOutputResult,
+  type EditRateSummary,
+} from './eval/accept';
+export { editDistance, editRate } from './eval/edit-distance';
+export { EVAL_INTENTS, type EvalIntent } from './eval/intents';
+export { runEvalSet, type EvalDeps, type EvalResult } from './eval/run';
+export {
+  blindPairs,
+  renderBlindHtml,
+  scoreEval,
+  type Blind,
+  type BlindKeyEntry,
+  type EvalScore,
+  type Verdict,
+} from './eval/score';
+export {
   buildTemplatePreviews,
   type PreviewOutcome,
   type TemplatePreviewDeps,
