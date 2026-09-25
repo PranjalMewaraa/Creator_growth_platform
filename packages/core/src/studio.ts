@@ -55,9 +55,14 @@ export interface StudioOutput {
   createdAt: string;
 }
 
-/** The stored media fields, when the row has them and they are the shape they should be. */
+/**
+ * The stored media fields, when the row has them and they are the shape they should be. A
+ * video keeps them under `reel`, since the scenes are media of their own.
+ */
 function media(metadata: unknown): StudioOutput['media'] {
-  const { url, width, height } = (metadata ?? {}) as Record<string, unknown>;
+  const record = (metadata ?? {}) as Record<string, unknown>;
+  const reel = record.reel as Record<string, unknown> | undefined;
+  const { url, width, height } = reel ?? record;
   if (typeof url !== 'string' || url.length === 0) return null;
   return {
     url,

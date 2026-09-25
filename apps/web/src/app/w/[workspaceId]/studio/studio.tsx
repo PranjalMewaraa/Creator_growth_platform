@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { artStyle } from '@/lib/art';
-import { ImageOutput, OutputView, type Rendition } from './output-view';
+import { ImageOutput, OutputView, VideoOutput, type Rendition } from './output-view';
 import { TemplatePicker, type TemplateCard } from './template-picker';
 import { PromptDisclosure } from './prompt-disclosure';
 
@@ -56,13 +56,7 @@ const KINDS: Kind[] = [
     hint: 'Three to choose between',
     outputType: 'thumbnail',
   },
-  {
-    key: 'video',
-    label: 'Video',
-    hint: 'Arrives with the video weeks',
-    outputType: 'video',
-    soon: true,
-  },
+  { key: 'video', label: 'Video', hint: 'Up to three eight second scenes', outputType: 'video' },
 ];
 const LABEL: Record<string, string> = Object.fromEntries(KINDS.map((k) => [k.key, k.label]));
 
@@ -74,7 +68,7 @@ const LENGTHS = [15, 30, 45, 60, 90];
 const COUNTS = [1, 2, 3, 4];
 
 /** Pictures are drawn, not written, so the running state says what is actually happening. */
-const DRAWN: ReadonlySet<string> = new Set(['image', 'thumbnail_set']);
+const DRAWN: ReadonlySet<string> = new Set(['image', 'thumbnail_set', 'video']);
 
 const TERMINAL: ReadonlySet<JobStatus> = new Set(['COMPLETE', 'BLOCKED', 'FAILED', 'CANCELLED']);
 
@@ -123,6 +117,7 @@ function ago(iso: string) {
 export function Studio({
   workspaceId,
   credits,
+  videoSeconds,
   ready,
   initialJobs,
   initialJobId,
@@ -133,6 +128,8 @@ export function Studio({
 }: {
   workspaceId: string;
   credits: number;
+  /** Video is paid in seconds, never in credits (plan section 7). */
+  videoSeconds: number;
   ready: { profile: boolean; brandKit: boolean };
   initialJobs: StudioJobSummary[];
   initialJobId: string | null;
@@ -153,6 +150,7 @@ export function Studio({
   const [captionFor, setCaptionFor] = useState<TargetPlatform[]>([]);
   const [length, setLength] = useState<number | null>(null);
   const [count, setCount] = useState(1);
+  const [sceneCount, setSceneCount] = useState(3);
   const [tone, setTone] = useState('');
   const [templateId, setTemplateId] = useState<string | null>(null);
   // The templates for what is being made, plain one first, since that is the default.
@@ -161,7 +159,7 @@ export function Studio({
     .filter((template) => template.outputType === outputType)
     .sort((a, b) => Number(b.slug.startsWith('default-')) - Number(a.slug.startsWith('default-')));
 
-  const [cost, setCost] = useState<number | null>(null);
+  const [cost, setCost] = useState<{ credits: number; videoSeconds: number } | null>(null);
   const [prompt, setPrompt] = useState<CompiledPromptView | null>(null);
   const [promptFor, setPromptFor] = useState<string | null>(null);
   const [busy, setBusy] = useState<'compiling' | 'starting' | null>(null);
@@ -180,6 +178,7 @@ export function Studio({
     ...(tone.trim() ? { tone: tone.trim() } : {}),
     ...(kind === 'script' && length ? { durationSeconds: length } : {}),
     ...(kind === 'image' ? { count } : {}),
+    ...(kind === 'video' ? { sceneCount } : {}),
     ...(templateId ? { templateId } : {}),
     ...(kind === 'caption_set' && captionFor.length ? { platforms: captionFor } : {}),
   };
@@ -197,8 +196,18 @@ export function Studio({
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(input),
       })
-        .then(async (r) => (r.ok ? ((await r.json()) as { estimate: { credits: number } }) : null))
-        .then((body) => setCost(body ? body.estimate.credits : null))
+        .then(async (r) =>
+          r.ok
+            ? ((await r.json()) as { estimate: { credits: number; videoSeconds?: number } })
+            : null,
+        )
+        .then((body) =>
+          setCost(
+            body
+              ? { credits: body.estimate.credits, videoSeconds: body.estimate.videoSeconds ?? 0 }
+              : null,
+          ),
+        )
         .catch(() => setCost(null));
     }, 300);
     return () => clearTimeout(timer);
@@ -482,6 +491,35 @@ export function Studio({
               </div>
             ) : null}
 
+            {kind === 'video' ? (
+              <div className="flex flex-col gap-2">
+                <span className="text-xs font-medium uppercase tracking-wide text-muted">
+                  Scenes
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {[1, 2, 3].map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      aria-pressed={sceneCount === n}
+                      onClick={() => setSceneCount(n)}
+                      className={cx(
+                        'rounded-full border px-3 py-1.5 text-sm transition',
+                        sceneCount === n
+                          ? 'border-accent bg-accent/10 text-ink'
+                          : 'border-line bg-raised text-muted hover:text-ink',
+                      )}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+                <span className="text-[11px] text-muted">
+                  Eight seconds each, so {sceneCount * 8}s in all. No voiceover or captions yet.
+                </span>
+              </div>
+            ) : null}
+
             {kind === 'caption_set' ? (
               <div className="flex flex-col gap-2">
                 <span className="text-xs font-medium uppercase tracking-wide text-muted">
@@ -556,7 +594,12 @@ export function Studio({
             <span className="text-muted">
               {input.intentText && cost !== null ? (
                 <>
-                  Costs <span className="font-semibold text-ink">{credit(cost)}</span>
+                  Costs{' '}
+                  <span className="font-semibold text-ink">
+                    {cost.videoSeconds > 0
+                      ? `${cost.videoSeconds}s of video`
+                      : credit(cost.credits)}
+                  </span>
                 </>
               ) : (
                 'Cost shows once you describe it'
@@ -564,7 +607,11 @@ export function Studio({
             </span>
             <span className="text-muted">
               Balance{' '}
-              <span className="tabular-nums text-ink">{credits.toLocaleString('en-IN')}</span>
+              <span className="tabular-nums text-ink">
+                {cost?.videoSeconds
+                  ? `${videoSeconds.toLocaleString('en-IN')}s`
+                  : credits.toLocaleString('en-IN')}
+              </span>
             </span>
           </div>
           <div className="flex gap-2">
@@ -609,18 +656,26 @@ export function Studio({
                   className={cx('rounded-full border px-3 py-1 text-xs', STATUS[job.status].tone)}
                 >
                   {checking && job.status !== 'QUEUED' ? 'Checking · ' : ''}
-                  {job.status === 'RUNNING' && DRAWN.has(job.generatorKey)
-                    ? 'Drawing'
-                    : STATUS[job.status].label}
+                  {job.status === 'RUNNING' && job.generatorKey === 'video'
+                    ? 'Filming'
+                    : job.status === 'RUNNING' && DRAWN.has(job.generatorKey)
+                      ? 'Drawing'
+                      : STATUS[job.status].label}
                 </span>
               </div>
 
               <p className="text-xs text-muted">
-                {job.status === 'COMPLETE'
-                  ? `${credit(job.settled?.credits ?? job.held.credits)} charged.`
-                  : TERMINAL.has(job.status)
-                    ? `${credit(job.held.credits)} refunded in full.`
-                    : `${credit(job.held.credits)} held until it is done.`}
+                {job.held.videoSeconds > 0
+                  ? job.status === 'COMPLETE'
+                    ? `${job.settled?.videoSeconds ?? job.held.videoSeconds}s of video charged.`
+                    : TERMINAL.has(job.status)
+                      ? `${job.held.videoSeconds}s refunded in full.`
+                      : `${job.held.videoSeconds}s held until it is done.`
+                  : job.status === 'COMPLETE'
+                    ? `${credit(job.settled?.credits ?? job.held.credits)} charged.`
+                    : TERMINAL.has(job.status)
+                      ? `${credit(job.held.credits)} refunded in full.`
+                      : `${credit(job.held.credits)} held until it is done.`}
               </p>
 
               {job.error ? (
@@ -634,7 +689,9 @@ export function Studio({
               ) : null}
 
               {outputs.length > 0 ? (
-                outputs[0]?.media ? (
+                outputs[0]?.kind === 'video' && outputs[0].media ? (
+                  <VideoOutput {...outputs[0].media} />
+                ) : outputs[0]?.media ? (
                   <div className={cx('grid gap-3', outputs.length > 1 && 'sm:grid-cols-2')}>
                     {outputs.map((output) =>
                       output.media ? (
@@ -677,9 +734,11 @@ export function Studio({
                 </div>
               ) : checking ? (
                 <p className="text-sm text-muted">
-                  {DRAWN.has(job.generatorKey)
-                    ? 'Drawing it now; pictures arrive all at once.'
-                    : 'Waiting for the first words…'}
+                  {job.generatorKey === 'video'
+                    ? 'Filming scene by scene, then joining them. Minutes, not seconds.'
+                    : DRAWN.has(job.generatorKey)
+                      ? 'Drawing it now; pictures arrive all at once.'
+                      : 'Waiting for the first words…'}
                 </p>
               ) : job.status === 'COMPLETE' ? (
                 <p className="text-sm text-muted">Loading the result…</p>

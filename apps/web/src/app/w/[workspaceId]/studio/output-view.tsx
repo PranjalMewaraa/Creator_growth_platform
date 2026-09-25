@@ -136,6 +136,37 @@ function Block({
   );
 }
 
+/** A finished reel: watchable in place, at the shape it was rendered. */
+export function VideoOutput({
+  url,
+  width,
+  height,
+}: {
+  url: string;
+  width: number;
+  height: number;
+}) {
+  return (
+    <figure className="overflow-hidden rounded-xl border border-line bg-raised">
+      <video
+        src={url}
+        controls
+        playsInline
+        preload="metadata"
+        className="mx-auto max-h-[70vh] w-full bg-black object-contain"
+      />
+      <figcaption className="flex items-center justify-between px-3 py-2 text-[11px] text-muted">
+        <span className="tabular-nums">
+          {width > 0 ? `${width} x ${height}` : 'Reel'} · no voiceover or captions yet
+        </span>
+        <a href={url} target="_blank" rel="noreferrer" className="hover:text-ink">
+          Open
+        </a>
+      </figcaption>
+    </figure>
+  );
+}
+
 export interface Rendition {
   id: string;
   url: string;

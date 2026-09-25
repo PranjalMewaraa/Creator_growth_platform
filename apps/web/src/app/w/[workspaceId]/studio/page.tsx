@@ -31,6 +31,7 @@ export default async function StudioPage({
     <Studio
       workspaceId={workspaceId}
       credits={workspace.creditBalance}
+      videoSeconds={workspace.videoSecondsBalance}
       ready={{ profile: Boolean(profile), brandKit: Boolean(kit) }}
       initialJobs={jobs}
       initialJobId={job ?? null}
