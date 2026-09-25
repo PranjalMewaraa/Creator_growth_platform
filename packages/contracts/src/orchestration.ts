@@ -45,6 +45,17 @@ export interface CompilerProfileConfig {
     temperature?: number;
     format?: 'text' | 'json';
   };
+  /**
+   * How a compiled prompt is broken into scenes, for the output types that have them. The
+   * engine owns this, not the generator (invariant 4), and it is versioned config like the
+   * rest: a fallback line is used when the model cannot be reached in time.
+   */
+  scenes?: {
+    system: string;
+    maxOutputTokens: number;
+    /** Deterministic scene text when the planner fails. `{{n}}` and `{{of}}` are filled. */
+    fallback: string;
+  };
   /** Settings this output type always has, at template precedence. */
   defaults?: Record<string, SettingValue>;
 }

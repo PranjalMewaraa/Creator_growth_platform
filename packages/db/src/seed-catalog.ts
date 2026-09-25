@@ -12,7 +12,8 @@ import { compilerProfiles, templates, templateVersions } from './schema';
 //   v1  first seed
 //   v2  context line names who is posting rather than an audience
 //   v3  a template can set the angle, which is what makes one template differ from another
-export const COMPILER_PROFILE_VERSION = 3;
+//   v4  video profiles say how a prompt is broken into scenes
+export const COMPILER_PROFILE_VERSION = 4;
 
 const REWRITE_SYSTEM = [
   'You sharpen creative briefs for a content generator.',
@@ -175,6 +176,18 @@ export const COMPILER_PROFILES: Record<OutputType, CompilerProfileConfig> = {
       { key: 'tone', line: 'Mood: {{tone}}.' },
     ],
     rewrite: { system: REWRITE_SYSTEM, maxOutputTokens: 400 },
+    scenes: {
+      system: [
+        'You break a video brief into consecutive scenes for a short vertical reel.',
+        'Each scene is one continuous shot of eight seconds: say what is in frame, how the camera moves, and the light.',
+        'The scenes must tell one story in order, and the last one must land the point.',
+        'Never ask for on screen text, captions, logos or watermarks; those are added later.',
+        'Keep every fact and name from the brief. Invent no claim, statistic or offer.',
+        'Reply with JSON: {"scenes": string[]}, one entry per scene, each under 60 words.',
+      ].join(' '),
+      maxOutputTokens: 700,
+      fallback: 'Scene {{n}} of {{of}}, one continuous eight second shot.',
+    },
   },
 };
 

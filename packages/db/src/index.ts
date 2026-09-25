@@ -33,6 +33,14 @@ export {
 export { currentMeteringRates } from './rates';
 export { deleteTemplatePreview, saveTemplatePreview } from './template-previews';
 export {
+  createScenes,
+  findScene,
+  listScenes,
+  replaceSceneClip,
+  setSceneClip,
+  type VideoSceneRow,
+} from './video-scenes';
+export {
   brandKits,
   compiledPrompts,
   compilerProfiles,

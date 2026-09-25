@@ -29,6 +29,8 @@ import {
   imageCostInr,
   isImageModelKey,
   isTextModelKey,
+  isVideoModelKey,
+  videoCostInr,
   TEXT_MODELS,
   textCostInr,
   type ImageModelKey,
@@ -155,6 +157,8 @@ export interface Providers {
   textCostInr: (adapterKey: string, usage: TokenUsage) => number;
   /** Realised cost of an image call in rupees; zero for fakes. */
   imageCostInr: (adapterKey: string, usage: TokenUsage) => number;
+  /** Realised cost of a clip in rupees, by the seconds delivered; zero for fakes. */
+  videoCostInr: (adapterKey: string, resolution: '720p' | '1080p', seconds: number) => number;
 }
 
 /** Everything a process needs to call providers, chosen by PROVIDERS. */
@@ -213,6 +217,8 @@ export function createProviders(env: {
       env.PROVIDERS === 'real' && isTextModelKey(key) ? textCostInr(key, usage) : 0,
     imageCostInr: (key, usage) =>
       env.PROVIDERS === 'real' && isImageModelKey(key) ? imageCostInr(key, usage) : 0,
+    videoCostInr: (key, resolution, seconds) =>
+      env.PROVIDERS === 'real' && isVideoModelKey(key) ? videoCostInr(key, resolution, seconds) : 0,
   };
 }
 

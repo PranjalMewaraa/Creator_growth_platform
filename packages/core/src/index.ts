@@ -35,6 +35,12 @@ export {
 } from './generators/registry';
 export { generators, SECONDS_PER_SCENE, THUMBNAIL_VARIANTS } from './generators/definitions';
 export { createImageHandlers, type ImageHandlerDeps } from './handlers/image';
+export {
+  createVideoHandlers,
+  REGENERATE_SCENE,
+  videoSecondsFor,
+  type VideoHandlerDeps,
+} from './handlers/video';
 export { createTextHandlers, type TextHandlerDeps } from './handlers/text';
 export {
   ModerationUnavailable,
