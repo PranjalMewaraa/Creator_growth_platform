@@ -1,5 +1,5 @@
 import type { JobStatus, NormalizedError, PostTargetStatus, TargetPlatform } from '@cgp/contracts';
-import { and, asc, eq, gte, inArray, isNull, lt, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNull, lt, sql } from 'drizzle-orm';
 import { unwrap, type Database } from './client';
 import { jobs, outputs, postTargets, publications, socialAccounts } from './schema';
 
@@ -227,6 +227,60 @@ export async function publicationsBetween(
     publication,
     targets: targets.filter((t) => t.target.publicationId === publication.id),
     renderStatus,
+  }));
+}
+
+export interface RecentPostTarget {
+  target: PostTargetRow;
+  account: SocialAccountRow;
+  publication: PublicationRow;
+  /** The publish job behind it: when it is next due, and how many attempts it has spent. */
+  job: { status: JobStatus; runAt: Date; attemptCount: number } | null;
+}
+
+/**
+ * The most recently touched post targets, for the Sync centre (WP35). Ordered by when each
+ * was last written to rather than when it was created, so a target that just failed its
+ * fourth attempt is at the top where someone can see it.
+ */
+export async function recentPostTargets(
+  db: Database,
+  workspaceId: string,
+  { limit = 50 }: { limit?: number } = {},
+): Promise<RecentPostTarget[]> {
+  const rows = await unwrap(db)
+    .select({
+      target: postTargets,
+      account: socialAccounts,
+      publication: publications,
+      jobStatus: jobs.status,
+      runAt: jobs.runAt,
+      attemptCount: jobs.attemptCount,
+    })
+    .from(postTargets)
+    .innerJoin(socialAccounts, eq(socialAccounts.id, postTargets.socialAccountId))
+    .innerJoin(publications, eq(publications.id, postTargets.publicationId))
+    // The job that publishes this target names it in its input. A left join because a target
+    // whose job was swept away still belongs in the list, saying so.
+    .leftJoin(
+      jobs,
+      and(
+        eq(jobs.jobClass, 'publish'),
+        sql`${jobs.input}->>'postTargetId' = ${postTargets.id}::text`,
+      ),
+    )
+    .where(eq(postTargets.workspaceId, workspaceId))
+    .orderBy(desc(postTargets.updatedAt))
+    .limit(limit);
+
+  return rows.map(({ target, account, publication, jobStatus, runAt, attemptCount }) => ({
+    target,
+    account,
+    publication,
+    job:
+      jobStatus && runAt !== null && attemptCount !== null
+        ? { status: jobStatus, runAt, attemptCount }
+        : null,
   }));
 }
 

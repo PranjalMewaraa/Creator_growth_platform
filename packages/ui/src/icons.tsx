@@ -148,3 +148,14 @@ export function BellIcon(props: SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
+
+/** Two arrows chasing each other: publishing in progress, and what came back. */
+export function SyncIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M20 12a8 8 0 0 1-13.7 5.6L4 15.4" />
+      <path d="M4 12a8 8 0 0 1 13.7-5.6L20 8.6" />
+      <path d="M20 4.5v4.1h-4.1M4 19.5v-4.1h4.1" />
+    </svg>
+  );
+}

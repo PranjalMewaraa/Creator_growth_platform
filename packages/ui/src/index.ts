@@ -18,6 +18,7 @@ export {
   PaletteIcon,
   PlusIcon,
   SparklesIcon,
+  SyncIcon,
 } from './icons';
 export { Stat } from './stat';
 export { cx } from './cx';

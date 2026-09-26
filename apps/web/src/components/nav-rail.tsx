@@ -9,6 +9,7 @@ import {
   LinkIcon,
   PaletteIcon,
   SparklesIcon,
+  SyncIcon,
 } from '@cgp/ui';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -30,6 +31,7 @@ const DESTINATIONS: Destination[] = [
   { segment: 'calendar', label: 'Calendar', hue: '#fb923c', Icon: CalendarIcon },
   { segment: 'brand', label: 'Brand', hue: '#facc15', Icon: PaletteIcon },
   { segment: 'accounts', label: 'Accounts', hue: '#38bdf8', Icon: LinkIcon },
+  { segment: 'sync', label: 'Sync centre', hue: '#22d3ee', Icon: SyncIcon },
   { segment: 'insights', label: 'Insights', hue: '#34d399', Icon: ChartIcon },
   { segment: 'settings', label: 'Settings', hue: '#fb7185', Icon: GearIcon },
 ];

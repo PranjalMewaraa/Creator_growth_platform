@@ -12,6 +12,7 @@ export { submitJob, type JobRequest, type SubmitDeps } from './submit';
 export { sweepOnBoot, type SweepResult } from './sweep';
 export { dispatchDue, startDispatcher, DISPATCH_EVERY_MS, type DispatchDeps } from './scheduler';
 export { backoffMs, nextAttemptAt, MAX_PUBLISH_ATTEMPTS } from './retry';
+export { syncCentre, type SyncAttempt, type SyncError, type SyncView } from './sync';
 export {
   calendarWeek,
   renderStateFor,
