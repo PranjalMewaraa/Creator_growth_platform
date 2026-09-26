@@ -11,6 +11,7 @@ import {
   type DragEvent,
   type ReactNode,
 } from 'react';
+import { COMING_BACK, IN_FLIGHT, STATUS_TEXT, STATUS_TONE } from '@/lib/post-status';
 import { InstagramPost, LinkedInPost } from './post-previews';
 
 // Split pane (Buffer, Typefully style): compose on the left, a pinned live preview on the
@@ -55,34 +56,6 @@ const EMOJIS =
   '😀 😂 😍 🥳 😎 🤩 🙏 👏 🙌 💪 👀 ✨ 🔥 💯 ❤️ 💛 🎉 🚀 📣 📌 ✅ 👉 ☕ 🌞 📸 🎥 💡 📈 🛍️ 🇮🇳 🪔 🌶️'.split(
     ' ',
   );
-
-/** Statuses the worker is still working through; anything else is where this attempt ended. */
-const IN_FLIGHT: ReadonlySet<PostTargetStatus> = new Set(['pending', 'claimed']);
-
-/** Ended this attempt, but the worker is bringing it back on its own (WP31). */
-const COMING_BACK: ReadonlySet<PostTargetStatus> = new Set(['retry_scheduled', 'quota_wait']);
-
-const STATUS_TEXT: Record<PostTargetStatus, string> = {
-  pending: 'Waiting',
-  claimed: 'Publishing',
-  published: 'Published',
-  retry_scheduled: 'Trying again shortly',
-  quota_wait: 'Platform limit reached, waiting',
-  reauth_required: 'Reconnect the account',
-  failed: 'Failed',
-  needs_verification: 'Check the account',
-};
-
-const STATUS_TONE: Record<PostTargetStatus, string> = {
-  pending: 'text-muted border-line',
-  claimed: 'text-accent border-accent/50',
-  published: 'text-good border-good/50',
-  retry_scheduled: 'text-hot border-hot/50',
-  quota_wait: 'text-hot border-hot/50',
-  reauth_required: 'text-bad border-bad/50',
-  failed: 'text-bad border-bad/50',
-  needs_verification: 'text-hot border-hot/50',
-};
 
 function describe(body: ApiError, fallback: string): string {
   const error = body.error;
@@ -135,6 +108,19 @@ function fullClock(iso: string) {
 function localInputValue(at: Date) {
   const shifted = new Date(at.getTime() - at.getTimezoneOffset() * 60_000);
   return shifted.toISOString().slice(0, 16);
+}
+
+/**
+ * The slot the calendar sent, if this page was opened from one. Read from the address rather
+ * than through a router hook because the composer is client only: the URL is already here.
+ */
+function slotFromUrl(): string {
+  if (typeof window === 'undefined') return '';
+  const at = new URLSearchParams(window.location.search).get('at');
+  if (!at) return '';
+  const when = new Date(at);
+  // A slot in the past is a stale link, not a schedule.
+  return Number.isNaN(when.getTime()) || when <= new Date() ? '' : localInputValue(when);
 }
 
 /** The default offered when scheduling: an hour from now, on the next quarter hour. */
@@ -192,8 +178,9 @@ export function Composer({
   const [error, setError] = useState<string | null>(null);
   const [publicationId, setPublicationId] = useState<string | null>(null);
   const [targets, setTargets] = useState<TargetView[]>([]);
-  // A datetime-local value, in the viewer's own clock. Empty means post now.
-  const [when, setWhen] = useState('');
+  // A datetime-local value, in the viewer's own clock. Empty means post now. An empty slot on
+  // the calendar sends its own time here as `?at=`, so the schedule is already filled in.
+  const [when, setWhen] = useState(() => slotFromUrl());
   const [scheduledAt, setScheduledAt] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const editor = useRef<HTMLTextAreaElement>(null);

@@ -1,14 +1,17 @@
 'use client';
 
+import type { CalendarPost } from '@cgp/core';
 import type { TargetPlatform } from '@cgp/contracts';
 import { cx } from '@cgp/ui';
 import Link from 'next/link';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { artStyle } from '@/lib/art';
+import { COMING_BACK, IN_FLIGHT, NEEDS_YOU, STATUS_SHORT, STATUS_TONE } from '@/lib/post-status';
 
-// Calendar week view (S-07), styled after a scheduling board: channels and posting settings on
-// the left, the week as a time grid on the right, one card per post. The posts are samples
-// until scheduling exists; the channels are the workspace's real connected accounts.
+// Calendar week view (S-07, WP34), styled after a scheduling board: channels and settings on
+// the left, the week as a time grid on the right, one card per post. The posts are the
+// workspace's own, fetched a week at a time, each carrying a chip per target, because status
+// lives on the target: one post can reach LinkedIn and fail on Instagram.
 
 interface Account {
   id: string;
@@ -16,91 +19,7 @@ interface Account {
   displayName: string;
 }
 
-interface SamplePost {
-  day: number;
-  /** Hours from midnight, e.g. 9.5 for 09:30. */
-  at: number;
-  platform: TargetPlatform;
-  caption: string;
-  tag: string;
-  draft?: boolean;
-}
-
-const SAMPLES: SamplePost[] = [
-  {
-    day: 0,
-    at: 9,
-    platform: 'instagram',
-    caption: 'Meet the new small-batch cold brew',
-    tag: '#newdrop',
-  },
-  {
-    day: 0,
-    at: 14.5,
-    platform: 'linkedin',
-    caption: 'Three things 18 hours of steeping taught us',
-    tag: '#behindthescenes',
-  },
-  {
-    day: 1,
-    at: 10.5,
-    platform: 'instagram',
-    caption: 'Discover our new 30 day brew pass',
-    tag: '#discovery',
-  },
-  {
-    day: 2,
-    at: 8.5,
-    platform: 'instagram',
-    caption: 'We are partnering with a Jaipur roastery',
-    tag: '#limited',
-  },
-  {
-    day: 2,
-    at: 15,
-    platform: 'linkedin',
-    caption: 'How a two-person team ships weekly',
-    tag: '#howto',
-    draft: true,
-  },
-  {
-    day: 3,
-    at: 11,
-    platform: 'instagram',
-    caption: 'Limited bottle, only 200 made',
-    tag: '#limited',
-  },
-  {
-    day: 4,
-    at: 9.5,
-    platform: 'linkedin',
-    caption: 'What customers told us in week one',
-    tag: '#customerstories',
-  },
-  {
-    day: 4,
-    at: 16,
-    platform: 'instagram',
-    caption: 'Friday pour: cold brew tonic',
-    tag: '#recipe',
-  },
-  {
-    day: 5,
-    at: 12,
-    platform: 'instagram',
-    caption: 'Weekend market stall: find us here',
-    tag: '#jaipur',
-  },
-  {
-    day: 6,
-    at: 10,
-    platform: 'linkedin',
-    caption: 'A week of numbers, honestly shared',
-    tag: '#buildinpublic',
-    draft: true,
-  },
-];
-
+/** The grid's usual span. It widens when a post falls outside it. */
 const START_HOUR = 8;
 const END_HOUR = 20;
 const HOUR_PX = 92;
@@ -111,16 +30,6 @@ const RING: Record<TargetPlatform, string> = {
   instagram: 'bg-gradient-to-tr from-[#f9ce34] via-[#ee2a7b] to-[#6228d7]',
   linkedin: 'bg-[#0a66c2]',
 };
-
-const CADENCES = ['Daily', '3x/week', 'Custom'] as const;
-
-/** The profile's cadence answer, as the nearest option. */
-function cadenceOption(cadence: string | null): (typeof CADENCES)[number] {
-  if (!cadence) return '3x/week';
-  if (/day|daily/i.test(cadence)) return 'Daily';
-  if (/3/.test(cadence)) return '3x/week';
-  return 'Custom';
-}
 
 function mondayOf(date: Date) {
   const d = new Date(date);
@@ -133,6 +42,12 @@ function hhmm(hours: number) {
   const h = Math.floor(hours);
   const m = Math.round((hours - h) * 60);
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+/** Hours past midnight, in the viewer's own clock, which is the clock the grid is drawn in. */
+function hourOf(iso: string) {
+  const at = new Date(iso);
+  return at.getHours() + at.getMinutes() / 60;
 }
 
 function initial(name: string) {
@@ -164,37 +79,6 @@ function Avatar({
   );
 }
 
-function Toggle({
-  on,
-  onChange,
-  label,
-}: {
-  on: boolean;
-  onChange: (on: boolean) => void;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={on}
-      aria-label={label}
-      onClick={() => onChange(!on)}
-      className={cx(
-        'relative h-7 w-12 shrink-0 rounded-full border transition',
-        on ? 'border-accent bg-accent' : 'border-line bg-raised',
-      )}
-    >
-      <span
-        className={cx(
-          'absolute top-1/2 size-5 -translate-y-1/2 rounded-full transition-all',
-          on ? 'left-6 bg-accent-ink' : 'left-1 bg-faint',
-        )}
-      />
-    </button>
-  );
-}
-
 function Section({
   title,
   action,
@@ -215,29 +99,51 @@ function Section({
   );
 }
 
+/** One chip per target: which platform, and where that platform's copy got to. */
+function TargetChips({ post }: { post: CalendarPost }) {
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      {post.targets.map((target) => (
+        <span
+          key={target.id}
+          title={`${NAMES[target.platform]} · ${target.account}`}
+          className={cx(
+            'flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px]',
+            STATUS_TONE[target.status],
+          )}
+        >
+          <span className={cx('size-1.5 shrink-0 rounded-full', RING[target.platform])} />
+          {STATUS_SHORT[target.status]}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export function WeekCalendar({
   workspaceId,
   workspaceName,
   timezone,
-  cadence,
   accounts,
   art,
 }: {
   workspaceId: string;
   workspaceName: string;
   timezone: string;
-  cadence: string | null;
   accounts: Account[];
   art: string[];
 }) {
   const [weekOffset, setWeekOffset] = useState(0);
-  const [plan, setPlan] = useState(cadenceOption(cadence));
-  const [bestTime, setBestTime] = useState(true);
-  const [recycle, setRecycle] = useState(false);
+  // The week a result belongs to is kept with it, so moving to another week shows that week
+  // as loading rather than briefly showing the last one's posts under the new dates.
+  const [loaded, setLoaded] = useState<{ week: string; posts: CalendarPost[] } | null>(null);
+  const [failed, setFailed] = useState(false);
 
   const now = new Date();
   const monday = mondayOf(now);
   monday.setDate(monday.getDate() + weekOffset * 7);
+  const nextMonday = new Date(monday);
+  nextMonday.setDate(monday.getDate() + 7);
   const days = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(monday);
     d.setDate(monday.getDate() + i);
@@ -245,18 +151,66 @@ export function WeekCalendar({
   });
   const today = now.toDateString();
   const month = monday.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
-  const hours = Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, i) => START_HOUR + i);
 
-  const accountFor = (platform: TargetPlatform) =>
-    accounts.find((a) => a.platform === platform) ?? {
-      id: platform,
-      platform,
-      displayName: platform === 'instagram' ? '@yourbrand' : 'Your Name',
+  const from = monday.toISOString();
+  const to = nextMonday.toISOString();
+
+  const posts = loaded?.week === from ? loaded.posts : null;
+
+  useEffect(() => {
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const run = async () => {
+      const url = `/api/w/${workspaceId}/calendar?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+      const response = await fetch(url).catch(() => null);
+      if (stopped) return;
+      if (!response?.ok) {
+        setFailed(true);
+        return;
+      }
+      const body = (await response.json()) as { posts: CalendarPost[] };
+      if (stopped) return;
+      setFailed(false);
+      setLoaded({ week: from, posts: body.posts });
+      // A post still moving is worth another look; a settled week is not asked about again.
+      const moving = body.posts.some((post) =>
+        post.targets.some((t) => IN_FLIGHT.has(t.status) || COMING_BACK.has(t.status)),
+      );
+      if (moving) timer = setTimeout(() => void run(), 20_000);
     };
+    void run();
+    return () => {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [workspaceId, from, to]);
+
+  // The grid usually runs 08:00 to 20:00, and stretches to reach a post outside that. It
+  // stops at the ends of the day: a post at 23:28 widens the grid to midnight, not to 25:00.
+  const hoursUsed = (posts ?? []).map((post) => hourOf(post.scheduledAt));
+  const startHour = Math.max(0, Math.min(START_HOUR, ...hoursUsed.map(Math.floor)));
+  const endHour = Math.min(24, Math.max(END_HOUR, ...hoursUsed.map((h) => Math.ceil(h) + 1)));
+  const hours = Array.from({ length: endHour - startHour + 1 }, (_, i) => startHour + i).filter(
+    (h) => h <= 23,
+  );
+
+  const settled = (posts ?? []).flatMap((p) => p.targets);
+  const summary = [
+    { label: 'Scheduled', count: settled.filter((t) => IN_FLIGHT.has(t.status)).length },
+    { label: 'Published', count: settled.filter((t) => t.status === 'published').length },
+    { label: 'Need you', count: settled.filter((t) => NEEDS_YOU.has(t.status)).length },
+  ];
+
+  /** Where an empty slot sends you: the composer, with that time already filled in. */
+  const slotHref = (day: Date, hour: number) => {
+    const at = new Date(day);
+    at.setHours(hour, 0, 0, 0);
+    return `/w/${workspaceId}/compose?at=${encodeURIComponent(at.toISOString())}`;
+  };
 
   return (
     <div className="grid items-start gap-5 lg:grid-cols-[300px_minmax(0,1fr)]">
-      {/* Left: channels and schedule settings. */}
+      {/* Left: channels and what the week holds. */}
       <aside className="flex flex-col gap-5 rounded-2xl border border-line bg-surface p-5">
         <h1 className="text-2xl font-semibold tracking-tight text-ink">{workspaceName}</h1>
 
@@ -296,59 +250,37 @@ export function WeekCalendar({
           </Link>
         </Section>
 
-        <Section title="Post schedule">
-          <span className="text-sm text-ink">Posting cadence</span>
-          <div className="grid grid-cols-3 rounded-xl border border-line bg-raised p-1">
-            {CADENCES.map((option) => (
-              <button
-                key={option}
-                type="button"
-                aria-pressed={plan === option}
-                onClick={() => setPlan(option)}
-                className={cx(
-                  'rounded-lg py-2 text-sm transition',
-                  plan === option
-                    ? 'bg-surface font-medium text-ink shadow'
-                    : 'text-muted hover:text-ink',
-                )}
+        <Section title="This week">
+          <div className="grid grid-cols-3 gap-2">
+            {summary.map(({ label, count }) => (
+              <div
+                key={label}
+                className="flex flex-col items-center gap-0.5 rounded-xl border border-line bg-raised px-2 py-3"
               >
-                {option}
-              </button>
+                <span className="text-xl font-semibold tabular-nums text-ink">
+                  {posts === null ? '·' : count}
+                </span>
+                <span className="text-center text-[11px] leading-tight text-muted">{label}</span>
+              </div>
             ))}
           </div>
+          <Link
+            href={`/w/${workspaceId}/compose`}
+            className="flex h-11 items-center justify-center rounded-xl bg-accent text-sm font-medium text-accent-ink transition hover:opacity-90"
+          >
+            Write a post
+          </Link>
+        </Section>
 
-          <span className="mt-1 text-sm text-ink">Time zone</span>
+        <Section title="Time zone">
           <div className="flex h-11 items-center justify-between rounded-xl border border-line bg-raised px-4 text-sm text-ink">
             {timezone} · Workspace
           </div>
-
-          <div className="mt-1 flex items-center justify-between gap-3">
-            <span className="text-sm text-ink">Auto-suggest best time</span>
-            <Toggle on={bestTime} onChange={setBestTime} label="Auto-suggest best time" />
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <span>
-              <span className="block text-sm text-ink">Auto-recycle evergreen</span>
-              <span className="block text-xs text-muted">Showcases top posts in rotation</span>
-            </span>
-            <Toggle on={recycle} onChange={setRecycle} label="Auto-recycle evergreen" />
-          </div>
+          <p className="text-xs leading-5 text-muted">
+            The grid is drawn in this browser&rsquo;s own clock. A scheduled post goes out within a
+            minute of its time.
+          </p>
         </Section>
-
-        {/* The agent, in the AI accent. */}
-        <div className="ai-surface ai-glow flex flex-col gap-3 rounded-2xl p-4">
-          <span className="ai-text text-xs font-semibold uppercase tracking-wide">✳ AI Agent</span>
-          <p className="ml-auto max-w-[85%] rounded-xl rounded-br-sm bg-white/10 px-3 py-2 text-xs leading-5 text-ink">
-            Plan next week across all my channels
-          </p>
-          <p className="max-w-[90%] rounded-xl rounded-bl-sm bg-black/30 px-3 py-2 text-xs leading-5 text-muted">
-            Drafted 7 posts across {Math.max(accounts.length, 2)} channels for next week, around
-            your pillars and your best times.
-          </p>
-          <span className="text-[11px] text-muted">
-            A preview: the agent arrives with scheduling.
-          </span>
-        </div>
       </aside>
 
       {/* Right: the week. */}
@@ -382,8 +314,14 @@ export function WeekCalendar({
               ›
             </button>
           </div>
-          <span className="ml-auto rounded-full border border-line px-3 py-1 text-xs text-muted">
-            Sample posts · real ones appear once scheduling lands
+          <span className="ml-auto text-xs text-muted" aria-live="polite">
+            {failed
+              ? 'Could not load this week'
+              : posts === null
+                ? 'Loading…'
+                : posts.length === 0
+                  ? 'Nothing scheduled — pick a slot'
+                  : `${posts.length} post${posts.length === 1 ? '' : 's'}`}
           </span>
         </header>
 
@@ -415,85 +353,130 @@ export function WeekCalendar({
             {/* The time grid, with posts placed at their time. */}
             <div
               className="relative grid grid-cols-[64px_repeat(7,minmax(0,1fr))]"
-              style={{ height: (END_HOUR - START_HOUR) * HOUR_PX + CARD_PX / 2 }}
+              style={{ height: (endHour - startHour) * HOUR_PX + CARD_PX / 2 }}
             >
               <div className="relative">
                 {hours.map((h) => (
                   <span
                     key={h}
                     className="absolute right-3 -translate-y-1/2 text-xs tabular-nums text-muted"
-                    style={{ top: (h - START_HOUR) * HOUR_PX + 12 }}
+                    style={{ top: (h - startHour) * HOUR_PX + 12 }}
                   >
                     {hhmm(h)}
                   </span>
                 ))}
               </div>
-              {days.map((d, dayIndex) => (
-                <div key={d.toISOString()} className="relative border-l border-line/60">
-                  {hours.map((h) => (
-                    <span
-                      key={h}
-                      className="absolute inset-x-0 border-t border-dashed border-line/50"
-                      style={{ top: (h - START_HOUR) * HOUR_PX + 12 }}
-                    />
-                  ))}
-                  {SAMPLES.filter((p) => p.day === dayIndex).map((post, i) => {
-                    const account = accountFor(post.platform);
-                    const when = new Date(d);
-                    when.setHours(Math.floor(post.at), Math.round((post.at % 1) * 60));
-                    const status = post.draft ? 'Draft' : when < now ? 'Published' : 'Scheduled';
-                    const index = SAMPLES.indexOf(post) + weekOffset * 3;
-                    return (
-                      <article
-                        key={i}
-                        className="group absolute inset-x-2 overflow-hidden rounded-2xl border border-line bg-raised/90 shadow-lg shadow-black/30 transition hover:-translate-y-0.5 hover:border-faint"
-                        style={{ top: (post.at - START_HOUR) * HOUR_PX + 12, height: CARD_PX }}
-                      >
-                        <div
-                          className="relative h-[120px] m-1.5 overflow-hidden rounded-xl"
-                          style={artStyle(index, art)}
+              {days.map((d) => {
+                const onThisDay = (posts ?? []).filter(
+                  (post) => new Date(post.scheduledAt).toDateString() === d.toDateString(),
+                );
+                return (
+                  <div key={d.toISOString()} className="relative border-l border-line/60">
+                    {hours.map((h) => (
+                      <span
+                        key={h}
+                        className="absolute inset-x-0 border-t border-dashed border-line/50"
+                        style={{ top: (h - startHour) * HOUR_PX + 12 }}
+                      />
+                    ))}
+
+                    {/* An empty slot is the primary way to start a post (S-07). Underneath the
+                        cards, so a click on a post opens the post. */}
+                    {hours.map((h) => {
+                      const at = new Date(d);
+                      at.setHours(h, 0, 0, 0);
+                      return (
+                        <Link
+                          key={h}
+                          href={slotHref(d, h)}
+                          aria-label={`Write a post for ${d.toLocaleDateString('en-IN', {
+                            weekday: 'long',
+                            day: 'numeric',
+                            month: 'short',
+                          })} at ${hhmm(h)}`}
+                          className={cx(
+                            'group absolute inset-x-2 grid place-items-center rounded-xl border border-dashed border-transparent transition',
+                            at > now
+                              ? 'hover:border-accent/50 hover:bg-accent/5'
+                              : 'pointer-events-none',
+                          )}
+                          style={{ top: (h - startHour) * HOUR_PX + 14, height: HOUR_PX - 4 }}
                         >
-                          <span className="absolute left-2 top-2 rounded-full bg-black/50 px-2 py-0.5 text-[10px] font-medium text-white backdrop-blur">
-                            {hhmm(post.at)}
+                          <span className="text-xl text-transparent transition group-hover:text-accent">
+                            +
                           </span>
-                          <span className="absolute right-2 top-2 grid size-7 place-items-center rounded-lg bg-black/50 text-white backdrop-blur">
-                            ⋮
-                          </span>
-                          <div className="absolute inset-x-1.5 bottom-1.5 flex items-center gap-2 rounded-lg bg-black/45 p-1.5 backdrop-blur">
-                            <Avatar platform={post.platform} name={account.displayName} size="sm" />
-                            <span className="min-w-0">
-                              <span className="block truncate text-xs font-medium text-white">
-                                {account.displayName.replace(/^@/, '')}
+                        </Link>
+                      );
+                    })}
+
+                    {onThisDay.map((post, i) => {
+                      const hour = hourOf(post.scheduledAt);
+                      const account = post.targets[0];
+                      return (
+                        <article
+                          key={post.id}
+                          className="group absolute inset-x-2 overflow-hidden rounded-2xl border border-line bg-raised/90 shadow-lg shadow-black/30 transition hover:-translate-y-0.5 hover:border-faint"
+                          style={{ top: (hour - startHour) * HOUR_PX + 12, height: CARD_PX }}
+                        >
+                          <div
+                            className="relative m-1.5 h-[120px] overflow-hidden rounded-xl"
+                            style={
+                              post.mediaUrl
+                                ? {
+                                    backgroundImage: `url("${post.mediaUrl}")`,
+                                    backgroundSize: 'cover',
+                                    backgroundPosition: 'center',
+                                  }
+                                : artStyle(i + weekOffset * 3, art)
+                            }
+                          >
+                            <span className="absolute left-2 top-2 rounded-full bg-black/50 px-2 py-0.5 text-[10px] font-medium text-white backdrop-blur">
+                              {hhmm(hour)}
+                            </span>
+                            {post.render ? (
+                              <span
+                                className={cx(
+                                  'absolute right-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-medium backdrop-blur',
+                                  post.render === 'rendering'
+                                    ? 'bg-black/60 text-white'
+                                    : 'bg-bad/80 text-white',
+                                )}
+                              >
+                                {post.render === 'rendering' ? 'Rendering…' : 'Render failed'}
                               </span>
-                              <span className="block truncate text-[10px] text-white/70">
-                                {NAMES[post.platform]}
-                              </span>
-                            </span>
+                            ) : null}
+                            {account ? (
+                              <div className="absolute inset-x-1.5 bottom-1.5 flex items-center gap-2 rounded-lg bg-black/45 p-1.5 backdrop-blur">
+                                <Avatar
+                                  platform={account.platform}
+                                  name={account.account}
+                                  size="sm"
+                                />
+                                <span className="min-w-0">
+                                  <span className="block truncate text-xs font-medium text-white">
+                                    {account.account.replace(/^@/, '')}
+                                  </span>
+                                  <span className="block truncate text-[10px] text-white/70">
+                                    {post.targets.length > 1
+                                      ? `${post.targets.length} accounts`
+                                      : NAMES[account.platform]}
+                                  </span>
+                                </span>
+                              </div>
+                            ) : null}
                           </div>
-                        </div>
-                        <div className="flex flex-col gap-2 px-3 pb-3 pt-1">
-                          <p className="truncate text-[13px] text-ink">{post.caption}</p>
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="truncate rounded-md bg-surface px-2 py-0.5 text-[11px] text-muted">
-                              {post.tag}
-                            </span>
-                            <span
-                              className={cx(
-                                'shrink-0 rounded-full border px-2 py-0.5 text-[10px]',
-                                status === 'Published' && 'border-good/50 text-good',
-                                status === 'Scheduled' && 'border-accent/50 text-accent',
-                                status === 'Draft' && 'border-line text-muted',
-                              )}
-                            >
-                              {status}
-                            </span>
+                          <div className="flex flex-col gap-2 px-3 pb-3 pt-1">
+                            <p className="truncate text-[13px] text-ink" title={post.text}>
+                              {post.text || 'No caption'}
+                            </p>
+                            <TargetChips post={post} />
                           </div>
-                        </div>
-                      </article>
-                    );
-                  })}
-                </div>
-              ))}
+                        </article>
+                      );
+                    })}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>

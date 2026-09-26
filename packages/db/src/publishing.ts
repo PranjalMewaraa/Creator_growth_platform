@@ -1,7 +1,7 @@
-import type { NormalizedError, PostTargetStatus, TargetPlatform } from '@cgp/contracts';
-import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import type { JobStatus, NormalizedError, PostTargetStatus, TargetPlatform } from '@cgp/contracts';
+import { and, asc, eq, gte, inArray, isNull, lt, sql } from 'drizzle-orm';
 import { unwrap, type Database } from './client';
-import { jobs, postTargets, publications, socialAccounts } from './schema';
+import { jobs, outputs, postTargets, publications, socialAccounts } from './schema';
 
 export type SocialAccountRow = typeof socialAccounts.$inferSelect;
 export type PostTargetRow = typeof postTargets.$inferSelect;
@@ -170,6 +170,64 @@ export async function findPublication(
     .where(eq(postTargets.publicationId, publication.id))
     .orderBy(asc(socialAccounts.platform));
   return { publication, targets };
+}
+
+export interface PublicationWithTargets {
+  publication: PublicationRow;
+  targets: Array<{ target: PostTargetRow; account: SocialAccountRow }>;
+  /** The job behind the post's media, when it came from the Studio rather than an upload. */
+  renderStatus: JobStatus | null;
+}
+
+/**
+ * Everything due in a stretch of time, for the calendar (WP34). One query for the
+ * publications and one for their targets, rather than one per publication: a week is a
+ * handful of posts, but a month view later would be a hundred.
+ */
+export async function publicationsBetween(
+  db: Database,
+  workspaceId: string,
+  from: Date,
+  to: Date,
+): Promise<PublicationWithTargets[]> {
+  const d = unwrap(db);
+  const rows = await d
+    .select({ publication: publications, renderStatus: jobs.status })
+    .from(publications)
+    // Outer joins: a post written in the composer has no source output, and that is the
+    // ordinary case rather than the exception.
+    .leftJoin(outputs, eq(outputs.id, publications.sourceOutputId))
+    .leftJoin(jobs, eq(jobs.id, outputs.jobId))
+    .where(
+      and(
+        eq(publications.workspaceId, workspaceId),
+        gte(publications.scheduledAt, from),
+        lt(publications.scheduledAt, to),
+      ),
+    )
+    .orderBy(asc(publications.scheduledAt));
+  if (rows.length === 0) return [];
+
+  const targets = await d
+    .select({ target: postTargets, account: socialAccounts })
+    .from(postTargets)
+    .innerJoin(socialAccounts, eq(socialAccounts.id, postTargets.socialAccountId))
+    .where(
+      and(
+        eq(postTargets.workspaceId, workspaceId),
+        inArray(
+          postTargets.publicationId,
+          rows.map((row) => row.publication.id),
+        ),
+      ),
+    )
+    .orderBy(asc(socialAccounts.platform));
+
+  return rows.map(({ publication, renderStatus }) => ({
+    publication,
+    targets: targets.filter((t) => t.target.publicationId === publication.id),
+    renderStatus,
+  }));
 }
 
 /** The platform draft id, kept so a restarted job polls the same draft instead of a new one. */
