@@ -107,6 +107,40 @@ export function isVideoModelKey(key: string): key is VideoModelKey {
   return key in VIDEO_MODELS;
 }
 
+export interface VoiceModel {
+  /** A voice id as Google names it. */
+  name: string;
+  language: string;
+  /** USD per million characters of input, SSML tags included (docs/spikes/tts.md). */
+  usdPerMillionChars: number;
+}
+
+export const VOICE_MODELS = {
+  /**
+   * Neural2, chosen in WP5: it returns timepoints at SSML marks, which captions are timed
+   * from (invariant 13). Chirp 3 HD sounds better and returns none, so it cannot drive them.
+   */
+  'neural2-en-in': {
+    name: 'en-IN-Neural2-A',
+    language: 'en-IN',
+    usdPerMillionChars: 16,
+  },
+} as const satisfies Record<string, VoiceModel>;
+
+export type VoiceModelKey = keyof typeof VOICE_MODELS;
+
+export const VOICE_MODEL_KEYS = Object.keys(VOICE_MODELS) as VoiceModelKey[];
+
+/** What a voiceover cost in rupees, by the characters sent. Free inside the monthly allowance. */
+export function voiceCostInr(key: VoiceModelKey, characters: number): number {
+  const usd = (characters / 1_000_000) * VOICE_MODELS[key].usdPerMillionChars;
+  return Number((usd * INR_PER_USD).toFixed(4));
+}
+
+export function isVoiceModelKey(key: string): key is VoiceModelKey {
+  return key in VOICE_MODELS;
+}
+
 /** What a call cost in rupees, for cost_telemetry (plan section 18). */
 export function textCostInr(key: TextModelKey, usage: TokenUsage): number {
   const { input, output } = TEXT_MODELS[key].usdPerMillion;

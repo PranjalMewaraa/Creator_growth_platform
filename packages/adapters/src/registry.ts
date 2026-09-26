@@ -2,6 +2,7 @@ import type { Logger } from '@cgp/config';
 import type {
   ImageAdapter,
   VideoAdapter,
+  VoiceAdapter,
   ModerationAdapter,
   ObjectStore,
   Publisher,
@@ -14,8 +15,10 @@ import {
   createFakeModeration,
   createFakePublisher,
   createFakeVideo,
+  createFakeVoice,
 } from './fakes';
 import { createGeminiImage } from './image/gemini';
+import { createGoogleVoice } from './voice/google';
 import { createStubVideo } from './video/stub';
 import { createVeoVideo } from './video/veo';
 import { createInstagramPublisher } from './publishers/instagram';
@@ -24,18 +27,22 @@ import { createGcsStore } from './storage/gcs';
 import { createMemoryStore } from './storage/memory';
 import { createGoogleModeration } from './moderation/google';
 import {
+  VOICE_MODELS,
   VIDEO_MODELS,
   IMAGE_MODELS,
   imageCostInr,
   isImageModelKey,
   isTextModelKey,
   isVideoModelKey,
+  isVoiceModelKey,
   videoCostInr,
+  voiceCostInr,
   TEXT_MODELS,
   textCostInr,
   type ImageModelKey,
   type TextModelKey,
   type VideoModelKey,
+  type VoiceModelKey,
 } from './models';
 import { createClaudeText } from './text/claude';
 import { createFakeText } from './text/fake';
@@ -140,11 +147,36 @@ export function createVideoAdapters(mode: ProviderMode, real?: RealProviderOptio
   return Object.fromEntries([...entries, ['second', createStubVideo()]]) as VideoAdapters;
 }
 
+export type VoiceAdapters = Record<VoiceModelKey, VoiceAdapter>;
+
+/** The voices, chosen by the same switch as everything else. */
+export function createVoiceAdapters(mode: 'fake'): VoiceAdapters;
+export function createVoiceAdapters(mode: ProviderMode, real: RealProviderOptions): VoiceAdapters;
+export function createVoiceAdapters(mode: ProviderMode, real?: RealProviderOptions): VoiceAdapters {
+  const entries = (Object.keys(VOICE_MODELS) as VoiceModelKey[]).map((key) => {
+    if (mode === 'fake') return [key, createFakeVoice(key)] as const;
+    if (!real?.project) throw new Error('PROVIDERS=real needs a GCP project');
+    const config = VOICE_MODELS[key];
+    return [
+      key,
+      createGoogleVoice({
+        key,
+        project: real.project,
+        voice: config.name,
+        language: config.language,
+        log: real.log,
+      }),
+    ] as const;
+  });
+  return Object.fromEntries(entries) as VoiceAdapters;
+}
+
 export interface Providers {
   mode: ProviderMode;
   text: TextAdapters;
   image: ImageAdapters;
   video: VideoAdapters;
+  voice: VoiceAdapters;
   /** The compile rewrite pass, in order: Flash-Lite, then gpt-oss (plan section 6). */
   rewriters: TextAdapter[];
   /** Chosen by MODERATION, separately from PROVIDERS (D3). */
@@ -159,6 +191,8 @@ export interface Providers {
   imageCostInr: (adapterKey: string, usage: TokenUsage) => number;
   /** Realised cost of a clip in rupees, by the seconds delivered; zero for fakes. */
   videoCostInr: (adapterKey: string, resolution: '720p' | '1080p', seconds: number) => number;
+  /** Realised cost of a voiceover in rupees, by the characters sent; zero for fakes. */
+  voiceCostInr: (adapterKey: string, characters: number) => number;
 }
 
 /** Everything a process needs to call providers, chosen by PROVIDERS. */
@@ -181,6 +215,10 @@ export function createProviders(env: {
     env.PROVIDERS === 'real'
       ? createTextAdapters('real', { project: env.GOOGLE_CLOUD_PROJECT ?? '', log: env.log })
       : createTextAdapters('fake');
+  const voice =
+    env.PROVIDERS === 'real'
+      ? createVoiceAdapters('real', { project: env.GOOGLE_CLOUD_PROJECT ?? '', log: env.log })
+      : createVoiceAdapters('fake');
   const video =
     env.PROVIDERS === 'real'
       ? createVideoAdapters('real', { project: env.GOOGLE_CLOUD_PROJECT ?? '', log: env.log })
@@ -194,6 +232,7 @@ export function createProviders(env: {
     text,
     image,
     video,
+    voice,
     rewriters: [text['gemini-flash-lite'], text['gpt-oss-20b']],
     moderation,
     publishers:
@@ -219,6 +258,8 @@ export function createProviders(env: {
       env.PROVIDERS === 'real' && isImageModelKey(key) ? imageCostInr(key, usage) : 0,
     videoCostInr: (key, resolution, seconds) =>
       env.PROVIDERS === 'real' && isVideoModelKey(key) ? videoCostInr(key, resolution, seconds) : 0,
+    voiceCostInr: (key, characters) =>
+      env.PROVIDERS === 'real' && isVoiceModelKey(key) ? voiceCostInr(key, characters) : 0,
   };
 }
 

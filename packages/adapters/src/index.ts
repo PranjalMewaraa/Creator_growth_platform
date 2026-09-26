@@ -4,6 +4,12 @@ export {
   IMAGE_MODEL_KEYS,
   VIDEO_MODELS,
   VIDEO_MODEL_KEYS,
+  VOICE_MODELS,
+  VOICE_MODEL_KEYS,
+  isVoiceModelKey,
+  voiceCostInr,
+  type VoiceModel,
+  type VoiceModelKey,
   isVideoModelKey,
   videoCostInr,
   type VideoModel,
@@ -23,10 +29,12 @@ export {
 export {
   createImageAdapters,
   createVideoAdapters,
+  createVoiceAdapters,
   createProviders,
   createTextAdapters,
   type ImageAdapters,
   type VideoAdapters,
+  type VoiceAdapters,
   type ProviderMode,
   type Providers,
   type RealProviderOptions,
@@ -36,6 +44,7 @@ export { warmProviders } from './warm';
 export { createGeminiImage, type GeminiImageOptions } from './image/gemini';
 export { createVeoVideo, veoFrame, type VeoOptions } from './video/veo';
 export { createStubVideo } from './video/stub';
+export { createGoogleVoice, segmentsToSsml, type GoogleVoiceOptions } from './voice/google';
 export { mp4Info, type Mp4Info } from './video/mp4';
 export { imageSize, type ImageSize } from './image/size';
 export { createFakeText } from './text/fake';

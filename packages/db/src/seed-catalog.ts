@@ -14,7 +14,8 @@ import { compilerProfiles, templates, templateVersions } from './schema';
 //   v3  a template can set the angle, which is what makes one template differ from another
 //   v4  video profiles say how a prompt is broken into scenes
 //   v5  scenes and images are written as full shot specifications, not one line summaries
-export const COMPILER_PROFILE_VERSION = 5;
+//   v6  video profiles say what is spoken over each scene
+export const COMPILER_PROFILE_VERSION = 6;
 
 const REWRITE_SYSTEM = [
   'You sharpen creative briefs for a content generator.',
@@ -225,6 +226,22 @@ export const COMPILER_PROFILES: Record<OutputType, CompilerProfileConfig> = {
       ].join(' '),
       maxOutputTokens: 2400,
       fallback: 'Scene {{n}} of {{of}}, one continuous eight second shot.',
+    },
+    voiceover: {
+      // One line per scene, which is also one caption segment: the voice times the captions,
+      // so the two cannot drift apart (invariant 13).
+      system: [
+        'You write the voiceover for a short vertical reel, one line per scene, in order.',
+        'Each line is spoken over its own eight second shot, so it must be sayable in about six seconds at a natural pace: roughly eighteen words, never more than twenty two.',
+        'Write as a person talks to one other person: plain words, short sentences, no slogans and no hashtags.',
+        'The first line earns the next eight seconds. The last line says what to do or what to take away.',
+        'Say nothing the footage already shows; add what it cannot.',
+        'Keep every fact, name and number from the brief, and invent no claim, statistic or offer.',
+        'No stage directions, no speaker labels, no emoji, no text that is meant to be read rather than heard.',
+        'Reply with JSON: {"lines": string[]}, exactly one line per scene.',
+      ].join(' '),
+      maxOutputTokens: 600,
+      wordsPerScene: 18,
     },
   },
 };

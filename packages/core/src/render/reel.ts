@@ -23,8 +23,10 @@ export type ReelResolution = keyof typeof REEL_FRAMES;
 
 const FPS = 30;
 
-/** Music sits under a voice without fighting it; with no voice yet this is simply quiet. */
+/** Music with nothing over it. */
 const MUSIC_GAIN = 0.18;
+/** Music under a voice: quieter still, and ducked further while the voice is actually speaking. */
+const MUSIC_UNDER_VOICE = 0.1;
 
 /** The logo's height as a share of the frame, and its margin from the edge. */
 const LOGO_HEIGHT = 0.06;
@@ -42,6 +44,8 @@ export interface ReelRequest {
   resolution: ReelResolution;
   /** A licensed track from the catalogue, laid under the whole reel. */
   music?: { data: Uint8Array } | undefined;
+  /** The voiceover, over the top. Music ducks under it while it speaks. */
+  voice?: { data: Uint8Array } | undefined;
   /** The brand kit's logo, cornered bottom right. */
   logo?: { data: Uint8Array; mimeType: string } | undefined;
 }
@@ -107,6 +111,13 @@ export async function buildReel(options: FfmpegOptions, request: ReelRequest): P
       // The bed is looped and cut to the reel, so a short track still covers a long one.
       inputs.push('-stream_loop', '-1', '-i', file);
     }
+    let voiceIndex: number | undefined;
+    if (request.voice) {
+      const file = join(dir, 'voice.mp3');
+      await writeFile(file, request.voice.data);
+      voiceIndex = nextInput++;
+      inputs.push('-i', file);
+    }
     let logoIndex: number | undefined;
     if (request.logo) {
       const file = join(dir, 'logo.png');
@@ -130,7 +141,22 @@ export async function buildReel(options: FfmpegOptions, request: ReelRequest): P
 
     const args = [...inputs, '-filter_complex'];
     const maps = ['-map', videoOut];
-    if (musicIndex !== undefined) {
+    // The audio graph: a bed, a voice, or a bed ducked under a voice.
+    if (musicIndex !== undefined && voiceIndex !== undefined) {
+      // The voice is used twice, once as what you hear and once as the key that ducks the
+      // bed, and a filter output can only be consumed once: hence the split.
+      filters.push(`[${voiceIndex}:a]aresample=44100,apad,asplit=2[voice][key]`);
+      filters.push(`[${musicIndex}:a]aresample=44100,volume=${MUSIC_UNDER_VOICE}[bedraw]`);
+      // Ducking proper: the bed drops while the voice speaks and recovers when it stops.
+      filters.push(
+        `[bedraw][key]sidechaincompress=threshold=0.05:ratio=8:attack=20:release=400[ducked]`,
+      );
+      filters.push(`[ducked][voice]amix=inputs=2:duration=first:dropout_transition=0[mixed]`);
+      maps.push('-map', '[mixed]', '-t', total.toFixed(3));
+    } else if (voiceIndex !== undefined) {
+      filters.push(`[${voiceIndex}:a]aresample=44100,apad[voice]`);
+      maps.push('-map', '[voice]', '-t', total.toFixed(3));
+    } else if (musicIndex !== undefined) {
       filters.push(`[${musicIndex}:a]volume=${MUSIC_GAIN}[bed]`);
       // `-t`, not `-shortest`: a looped input has no end, and ffmpeg will happily encode the
       // bed for as long as it is left running. The scenes say how long the reel is.
@@ -154,7 +180,9 @@ export async function buildReel(options: FfmpegOptions, request: ReelRequest): P
       String(FPS),
       '-pix_fmt',
       'yuv420p',
-      ...(musicIndex === undefined ? ['-an'] : ['-c:a', 'aac', '-b:a', '128k', '-ar', '44100']),
+      ...(musicIndex === undefined && voiceIndex === undefined
+        ? ['-an']
+        : ['-c:a', 'aac', '-b:a', '128k', '-ar', '44100']),
       '-movflags',
       '+faststart',
       output,

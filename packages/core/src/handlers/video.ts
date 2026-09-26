@@ -6,6 +6,7 @@ import type {
   TextAdapter,
   VideoAdapter,
   VideoRequest,
+  VoiceAdapter,
 } from '@cgp/contracts';
 import {
   catalog,
@@ -20,7 +21,7 @@ import {
   type Database,
   type VideoSceneRow,
 } from '@cgp/db';
-import { findCompiledPrompt, planScenes } from '@cgp/orchestration';
+import { findCompiledPrompt, planScenes, planVoiceover } from '@cgp/orchestration';
 import { SECONDS_PER_SCENE } from '../generators/definitions';
 import { buildReel, type ReelResolution, type ReelScene } from '../render/reel';
 import { ffmpegAvailable, type FfmpegOptions } from '../render/ffmpeg';
@@ -60,6 +61,10 @@ export interface VideoHandlerDeps {
   providerLabel: string;
   /** The renderer, which joins the scenes into one reel (plan section 4.6). */
   ffmpeg: FfmpegOptions;
+  /** The voice that speaks over the reel. Absent means a silent reel, which still renders. */
+  voice?: VoiceAdapter;
+  /** Realised cost of a voiceover, by the characters sent. */
+  voiceCostInr?: (adapterKey: string, characters: number) => number;
   /** A licensed bed for the reel, chosen by the caller from the catalogue (FR-VD-08). */
   music?: () => Promise<{ data: Uint8Array } | undefined>;
   /** The workspace's logo, cornered on the reel. */
@@ -244,13 +249,25 @@ export function createVideoHandlers(deps: VideoHandlerDeps): Record<string, JobH
         throw new Error('No scene could be rendered');
       }
 
-      // The reel itself: scenes joined, bed under them, logo cornered (plan section 4.6).
-      // A render that cannot run leaves the scenes, which are still worth what was paid.
-      const reel = await renderReel(deps, job.workspaceId, rendered, log);
+      // What is said over it, written by the engine from the same prompt and the scenes it
+      // planned (invariant 4), then spoken. A reel with no voice still renders.
+      const spoken = await speak(deps, config, prompt.text, plan.scenes, rendered.length, log);
+
+      // The reel itself: scenes joined, voice over them, bed ducked under it, logo cornered
+      // (plan section 4.6). A render that cannot run leaves the scenes, already paid for.
+      const reel = await renderReel(deps, job.workspaceId, rendered, spoken?.audio, log);
       if (reel) {
         await ws.update(
           outputs,
-          { storageKey: reel.key, metadata: { ...(output.metadata as object), reel: reel.view } },
+          {
+            storageKey: reel.key,
+            metadata: {
+              ...(output.metadata as object),
+              reel: reel.view,
+              // Kept for the captions, which are timed by the voice (invariant 13, WP25).
+              ...(spoken ? { voiceover: spoken.view } : {}),
+            },
+          },
           (t, op) => op.eq(t.id, output.id),
         );
       }
@@ -327,6 +344,7 @@ async function renderReel(
   deps: VideoHandlerDeps,
   workspaceId: string,
   scenes: ReelScene[],
+  voice: { data: Uint8Array } | undefined,
   log: Parameters<JobHandler>[1],
 ): Promise<{ key: string; view: Record<string, unknown> } | undefined> {
   if (scenes.length === 0) return undefined;
@@ -338,6 +356,7 @@ async function renderReel(
     const reel = await buildReel(deps.ffmpeg, {
       scenes,
       resolution: RESOLUTION,
+      voice,
       music: await deps.music?.(),
       logo: await deps.logo?.(workspaceId),
     });
@@ -355,6 +374,58 @@ async function renderReel(
     };
   } catch (err) {
     log.warn({ err }, 'reel could not be rendered; scenes kept');
+    return undefined;
+  }
+}
+
+/**
+ * The voiceover: one line per scene, spoken once, with the marks that will time the captions.
+ * Returns nothing when there is no voice provider, no lines, or the call fails: a silent reel
+ * is honest, and a render that dies over its narration would throw away the clips.
+ */
+async function speak(
+  deps: VideoHandlerDeps,
+  config: CompilerProfileConfig,
+  prompt: string,
+  scenes: string[],
+  delivered: number,
+  log: Parameters<JobHandler>[1],
+): Promise<{ audio: { data: Uint8Array }; view: Record<string, unknown> } | undefined> {
+  if (!deps.voice || delivered === 0) return undefined;
+  const plan = await planVoiceover({
+    prompt,
+    // Only the scenes that arrived have anything to speak over.
+    scenes: scenes.slice(0, delivered),
+    config,
+    provider: deps.planner,
+    log,
+  });
+  if (plan.lines.length === 0) {
+    log.info('no voiceover written; the reel stays silent');
+    return undefined;
+  }
+  try {
+    const result = await deps.voice.synthesize({
+      segments: plan.lines,
+      voice: '',
+      language: 'en',
+    });
+    log.info(
+      { seconds: result.durationSeconds, segments: plan.lines.length },
+      'voiceover synthesised',
+    );
+    return {
+      audio: { data: result.data },
+      view: {
+        lines: plan.lines,
+        segmentStartsSeconds: result.segmentStartsSeconds,
+        durationSeconds: result.durationSeconds,
+        adapter: deps.voice.key,
+        costInr: deps.voiceCostInr?.(deps.voice.key, plan.lines.join(' ').length) ?? 0,
+      },
+    };
+  } catch (err) {
+    log.warn({ err }, 'voiceover could not be spoken; the reel stays silent');
     return undefined;
   }
 }

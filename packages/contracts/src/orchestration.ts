@@ -56,6 +56,16 @@ export interface CompilerProfileConfig {
     /** Deterministic scene text when the planner fails. `{{n}}` and `{{of}}` are filled. */
     fallback: string;
   };
+  /**
+   * What is said over the scenes, for the output types that speak. One line per scene, which
+   * is also one caption segment, so the voice times the captions (invariant 13).
+   */
+  voiceover?: {
+    system: string;
+    maxOutputTokens: number;
+    /** Words a scene may carry, at the rate the compiler budgets speech. */
+    wordsPerScene: number;
+  };
   /** Settings this output type always has, at template precedence. */
   defaults?: Record<string, SettingValue>;
 }

@@ -83,6 +83,8 @@ const handlers = {
     costInr: providers.videoCostInr,
     providerLabel: providers.mode === 'real' ? 'vertex' : 'fake',
     ffmpeg: { bin: resolveToolPath(env.FFMPEG_PATH) },
+    voice: providers.voice['neural2-en-in'],
+    voiceCostInr: providers.voiceCostInr,
     logo: (workspaceId) => workspaceLogo(db, providers.store, workspaceId),
   }),
   ...publishHandlers(),

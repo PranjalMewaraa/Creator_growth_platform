@@ -85,6 +85,67 @@ describe.skipIf(!available)('buildReel', () => {
     expect(reel.durationSeconds).toBeGreaterThan(7);
   }, 180_000);
 
+  it('mixes a voiceover over the reel', async () => {
+    const voice = join(mkdtempSync(join(tmpdir(), 'cgp-voice-')), 'voice.mp3');
+    execFileSync(bin, [
+      '-hide_banner',
+      '-y',
+      '-f',
+      'lavfi',
+      '-i',
+      'sine=frequency=440:duration=5',
+      '-c:a',
+      'libmp3lame',
+      voice,
+    ]);
+    const reel = await buildReel(options, {
+      scenes: [scene],
+      resolution: '720p',
+      voice: { data: new Uint8Array(readFileSync(voice)) },
+    });
+    const info = probe(reel.data);
+    expect(info).toMatch(/Stream .*Audio: aac/);
+    // The voice is five seconds and the scene eight: the track is padded, not truncated.
+    expect(reel.durationSeconds).toBeGreaterThan(7);
+  }, 180_000);
+
+  it('ducks the music under the voice rather than letting them fight', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'cgp-mix-'));
+    const voice = join(dir, 'voice.mp3');
+    const music = join(dir, 'bed.m4a');
+    execFileSync(bin, [
+      '-hide_banner',
+      '-y',
+      '-f',
+      'lavfi',
+      '-i',
+      'sine=frequency=440:duration=4',
+      '-c:a',
+      'libmp3lame',
+      voice,
+    ]);
+    execFileSync(bin, [
+      '-hide_banner',
+      '-y',
+      '-f',
+      'lavfi',
+      '-i',
+      'sine=frequency=180:duration=4',
+      '-c:a',
+      'aac',
+      music,
+    ]);
+
+    const reel = await buildReel(options, {
+      scenes: [scene],
+      resolution: '720p',
+      voice: { data: new Uint8Array(readFileSync(voice)) },
+      music: { data: new Uint8Array(readFileSync(music)) },
+    });
+    expect(probe(reel.data)).toMatch(/Stream .*Audio: aac/);
+    expect(reel.durationSeconds).toBeGreaterThan(7);
+  }, 180_000);
+
   it('corners the brand logo without changing the frame', async () => {
     const logo = join(mkdtempSync(join(tmpdir(), 'cgp-logo-')), 'logo.png');
     execFileSync(bin, [
