@@ -27,9 +27,14 @@ export interface TemplateCard {
   preview: { mediaUrl: string | null; text: string | null; madeAt: string } | null;
 }
 
-/** The generator that makes a given output type, which is what prices a template. */
+/**
+ * The generator that makes a given output type, which is what prices a template. Video has
+ * two: the storyboard compiles as one to reach the profile that plans scenes, and the render
+ * class one makes the reel. A template is priced by what it makes.
+ */
 function generatorFor(registry: GeneratorRegistry, outputType: string) {
-  return registry.list().find((generator) => generator.outputType === outputType);
+  const matching = registry.list().filter((generator) => generator.outputType === outputType);
+  return matching.find((generator) => generator.jobClass === 'render') ?? matching[0];
 }
 
 function priceOf(registry: GeneratorRegistry, outputType: string, rates: MeteringRates): number {

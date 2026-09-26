@@ -1,12 +1,20 @@
 // Fills the template gallery with real output (WP19, invariant 14): every template is run
 // through its own generator, and what comes back becomes its preview.
 //
-//   pnpm --filter @cgp/worker previews <workspace id> [--force] [--only slug,slug]
+//   pnpm --filter @cgp/worker previews <workspace id> [--force] [--only slug,slug] [--no-video]
 //
 // The credits come out of that workspace, and with PROVIDERS=real the provider calls are real
-// and cost money: about INR 3 per image or thumbnail template, paise for the text ones. Run it
-// with PROVIDERS=fake first to check the pipeline without spending anything.
-import { baseEnvSchema, createLogger, loadRootEnvFile, parseEnv } from '@cgp/config';
+// and cost money: about INR 3 per image or thumbnail template, paise for the text ones, and
+// about INR 21 plus eight video seconds for each video template, which is filmed for real
+// because a preview that is not real output is not a preview (invariant 14). Pass --no-video
+// to leave those alone. Run it with PROVIDERS=fake first to check the pipeline for nothing.
+import {
+  baseEnvSchema,
+  createLogger,
+  loadRootEnvFile,
+  parseEnv,
+  resolveToolPath,
+} from '@cgp/config';
 import { createProviders } from '@cgp/adapters';
 import { buildTemplatePreviews, generators } from '@cgp/core';
 import { createDatabase } from '@cgp/db';
@@ -40,6 +48,20 @@ try {
       image: providers.image,
       rewriters: providers.rewriters,
       log,
+      // Video templates are filmed for real, one scene each, which spends the workspace's
+      // video seconds and about twenty one rupees a template. Left out with --no-video.
+      ...(args.includes('--no-video')
+        ? {}
+        : {
+            video: {
+              adapters: providers.video,
+              planner: providers.rewriters[0],
+              ffmpeg: { bin: resolveToolPath(env.FFMPEG_PATH) },
+              costInr: providers.videoCostInr,
+              voice: providers.voice['neural2-en-in'],
+              voiceCostInr: providers.voiceCostInr,
+            },
+          }),
     },
     workspaceId,
     { force, ...(only ? { only } : {}) },

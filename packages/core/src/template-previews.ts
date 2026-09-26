@@ -21,7 +21,9 @@ import {
 import { startGeneration } from './generate';
 import type { GeneratorRegistry } from './generators/registry';
 import { createImageHandlers } from './handlers/image';
+import { createStoryboardHandler } from './handlers/storyboard';
 import { createTextHandlers } from './handlers/text';
+import { createVideoHandlers, type VideoHandlerDeps } from './handlers/video';
 import { processJob } from './process';
 import type { Queues } from './queues';
 
@@ -43,8 +45,12 @@ const INTENTS: Record<string, string> = {
   caption: 'Cold brew coffee, brewed slowly and delivered across Jaipur the same morning',
   image: 'A bottle of cold brew coffee on a balcony table in the morning',
   thumbnail: 'A barista pouring cold brew over ice, caught mid pour',
+  // One scene, not three: a preview has to be real (invariant 14), not expensive.
   video: 'A bottle of cold brew coffee on a balcony table in the morning',
 };
+
+/** A video preview is one scene. Three would cost three times as much to say the same thing. */
+const PREVIEW_SCENE_COUNT = 1;
 
 /**
  * Jobs are never queued here. The pipeline runs each one in this process, and enqueuing as
@@ -70,6 +76,15 @@ export interface TemplatePreviewDeps {
   image: Readonly<Record<string, ImageAdapter>>;
   rewriters: TextAdapter[];
   log: Logger;
+  /**
+   * What it takes to film: a video template's preview is a real reel (invariant 14), which
+   * costs provider time and the workspace's video seconds. Absent, video templates are
+   * skipped and say so rather than showing something they did not make.
+   */
+  video?: Pick<
+    VideoHandlerDeps,
+    'adapters' | 'planner' | 'ffmpeg' | 'costInr' | 'voice' | 'voiceCostInr'
+  >;
 }
 
 export interface PreviewOutcome {
@@ -114,6 +129,26 @@ export async function buildTemplatePreviews(
       costInr: deps.imageCostInr,
       providerLabel: 'preview',
     }),
+    ...createStoryboardHandler({
+      db: deps.db,
+      registry: deps.registry,
+      adapters: deps.image,
+      planner: deps.rewriters[0],
+      moderation: deps.moderation,
+      store: deps.store,
+      costInr: deps.imageCostInr,
+      providerLabel: 'preview',
+    }),
+    ...(deps.video
+      ? createVideoHandlers({
+          db: deps.db,
+          registry: deps.registry,
+          moderation: deps.moderation,
+          store: deps.store,
+          providerLabel: 'preview',
+          ...deps.video,
+        })
+      : {}),
   };
 
   const outcomes: PreviewOutcome[] = [];
@@ -138,9 +173,7 @@ export async function buildTemplatePreviews(
       skip('already has one');
       continue;
     }
-    const generator = deps.registry
-      .list()
-      .find((entry) => entry.outputType === template.outputType);
+    const generator = generatorFor(deps.registry, template.outputType);
     if (!generator || !handlers[generator.key]) {
       skip(`no handler for ${template.outputType}`);
       continue;
@@ -198,6 +231,16 @@ async function withQuotaRetry<T>(deps: TemplatePreviewDeps, work: () => Promise<
   }
 }
 
+/**
+ * The generator that makes an output type. Video has two, because the storyboard compiles as
+ * one to reach the profile that plans scenes; the render class is the one that makes the
+ * thing itself, and a preview has to be the thing (invariant 14).
+ */
+function generatorFor(registry: GeneratorRegistry, outputType: string) {
+  const matching = registry.list().filter((entry) => entry.outputType === outputType);
+  return matching.find((entry) => entry.jobClass === 'render') ?? matching[0];
+}
+
 /** One template, compiled, generated and settled, with whatever it produced read back. */
 async function runOne(
   deps: TemplatePreviewDeps,
@@ -221,6 +264,7 @@ async function runOne(
         intentText: INTENTS[template.outputType] ?? 'A short post about cold brew coffee',
         templateId: template.templateId,
         targetPlatform: 'instagram',
+        ...(template.outputType === 'video' ? { sceneCount: PREVIEW_SCENE_COUNT } : {}),
       },
     },
   );
@@ -249,9 +293,12 @@ async function runOne(
     limit: 1,
   });
   if (!output) throw new Error('no output');
-  const metadata = output.metadata as { text?: unknown; url?: unknown };
+  const metadata = output.metadata as { text?: unknown; url?: unknown; reel?: unknown };
+  // A reel keeps its URL under `reel`, since its scenes are media of their own.
+  const reel = (metadata.reel as { url?: unknown } | undefined)?.url;
   return {
-    mediaUrl: typeof metadata.url === 'string' ? metadata.url : null,
+    mediaUrl:
+      typeof reel === 'string' ? reel : typeof metadata.url === 'string' ? metadata.url : null,
     text: typeof metadata.text === 'string' ? metadata.text : null,
   };
 }

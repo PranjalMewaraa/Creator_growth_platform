@@ -82,7 +82,18 @@ export function TemplatePicker({
               )}
             >
               <span className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-canvas text-[10px] leading-tight text-faint">
-                {template.preview?.mediaUrl ? (
+                {template.preview?.mediaUrl?.endsWith('.mp4') ? (
+                  // A video template's preview is a real reel, muted and looping so a gallery
+                  // of them is browsable rather than noisy.
+                  <video
+                    src={template.preview.mediaUrl}
+                    muted
+                    loop
+                    autoPlay
+                    playsInline
+                    className="h-full w-full object-cover"
+                  />
+                ) : template.preview?.mediaUrl ? (
                   // Real output from this template, made by the preview pipeline.
                   // eslint-disable-next-line @next/next/no-img-element
                   <img

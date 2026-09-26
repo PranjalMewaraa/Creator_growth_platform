@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
+    "start": "turbo run start",
     "typecheck": "tsc -p tsconfig.json && turbo run typecheck",
     "lint": "eslint .",
     "test": "vitest run",

@@ -36,11 +36,18 @@ afterAll(async () => {
 describe('the gallery', () => {
   it('has a template for every output type, and more than one for most', async () => {
     const cards = await listTemplates(db, generators);
-    // Ten in the gallery plus the plain one per output type.
-    expect(cards.length).toBeGreaterThanOrEqual(12);
-    for (const outputType of ['script', 'hook', 'caption', 'image', 'thumbnail']) {
+    // Thirteen in the gallery plus the plain one per output type.
+    expect(cards.length).toBeGreaterThanOrEqual(15);
+    for (const outputType of ['script', 'hook', 'caption', 'image', 'thumbnail', 'video']) {
       expect(cards.filter((card) => card.outputType === outputType).length).toBeGreaterThan(1);
     }
+  });
+
+  it('prices a video template by the reel it makes, not the storyboard that previews it', async () => {
+    const cards = await listTemplates(db, generators);
+    const reel = cards.find((card) => card.slug === 'slow-product-reel');
+    // Video is paid in seconds, so a reel costs no credits at all.
+    expect(reel).toMatchObject({ outputType: 'video', credits: 0, costBand: 'heavy' });
   });
 
   it('prices each template against the rates in force and names its cost band', async () => {
@@ -154,8 +161,12 @@ describe('the preview pipeline', () => {
 
     expect(outcomes.find((o) => o.slug === 'myth-buster')?.status).toBe('made');
     expect(outcomes.find((o) => o.slug === 'product-on-surface')?.status).toBe('made');
-    // Video has no generator handler yet, so it is skipped rather than faked.
-    expect(outcomes.find((o) => o.slug === 'default-video')).toMatchObject({ status: 'skipped' });
+    // With no way to film given, a video template is skipped rather than faked: a preview
+    // that is not real output is not a preview (invariant 14).
+    expect(outcomes.find((o) => o.slug === 'default-video')).toMatchObject({
+      status: 'skipped',
+      detail: 'no handler for video',
+    });
 
     const cards = await listTemplates(db, generators);
     const script = cards.find((card) => card.slug === 'myth-buster');

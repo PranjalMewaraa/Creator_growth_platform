@@ -371,6 +371,39 @@ export const TEMPLATE_SEEDS: TemplateSeed[] = [
     costBand: 'standard',
   },
   {
+    slug: 'slow-product-reel',
+    title: 'Slow product reel',
+    description: 'The thing doing its job, close and unhurried.',
+    outputType: 'video',
+    styleParams: {
+      angle: 'the product doing the one thing it is for, close and unhurried',
+      tone: 'calm, confident, unhurried',
+    },
+    costBand: 'heavy',
+  },
+  {
+    slug: 'day-in-the-work',
+    title: 'A day in the work',
+    description: 'A morning of it, in the order it happens.',
+    outputType: 'video',
+    styleParams: {
+      angle: 'a morning of the work in the order it happens, hands and tools rather than faces',
+      tone: 'warm, early, quiet',
+    },
+    costBand: 'heavy',
+  },
+  {
+    slug: 'place-and-craft',
+    title: 'Place and craft',
+    description: 'Where it is made, and the hands that make it.',
+    outputType: 'video',
+    styleParams: {
+      angle: 'the place this is made in and the hands that make it, with the city around it',
+      tone: 'textured, local, proud',
+    },
+    costBand: 'heavy',
+  },
+  {
     slug: 'bold-face-thumbnail',
     title: 'Bold face thumbnail',
     description: 'One face, one emotion, room for a headline.',
