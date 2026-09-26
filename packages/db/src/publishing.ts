@@ -44,6 +44,8 @@ export async function upsertSocialAccount(
 export interface NewPublication {
   workspaceId: string;
   timezone: string;
+  /** When it should go out. Now, for a post now (WP31). */
+  scheduledAt?: Date;
   /** The shared source, as the user wrote it. */
   body: Record<string, unknown>;
   /** One per account, each with its own body: the per platform variant (A7). */
@@ -86,11 +88,12 @@ export async function createPublication(
       return { ok: false, reason: 'account_not_found' };
     }
 
+    const scheduledAt = request.scheduledAt ?? new Date();
     const [publication] = await tx
       .insert(publications)
       .values({
         workspaceId: request.workspaceId,
-        scheduledAt: new Date(),
+        scheduledAt,
         timezone: request.timezone,
         body: request.body,
       })
@@ -117,6 +120,9 @@ export async function createPublication(
           generatorKey: PUBLISH_TARGET,
           input: { postTargetId: target.id },
           correlationId: request.correlationId,
+          // The schedule is the job's, not only the publication's: the dispatcher reads it
+          // here, and a worker that boots into a pending schedule leaves it alone.
+          runAt: scheduledAt,
         })),
       )
       .returning();
@@ -193,7 +199,9 @@ export async function claimPostTarget(
     .where(
       and(
         eq(postTargets.id, targetId),
-        inArray(postTargets.status, ['pending', 'retry_scheduled']),
+        // Every status that is still waiting its turn: never one that has ended, and never
+        // one a person has to deal with first (reauth_required, needs_verification).
+        inArray(postTargets.status, ['pending', 'retry_scheduled', 'quota_wait']),
         isNull(postTargets.platformPostId),
       ),
     )

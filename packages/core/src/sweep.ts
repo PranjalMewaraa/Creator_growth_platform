@@ -9,9 +9,12 @@ export interface SweepResult {
 
 /**
  * Runs when the worker starts (plan section 3: a sweep on boot stands in for a reconciler).
- * Postgres is the truth and Redis only transport (invariant 2), so every job still waiting,
- * and every job a dead worker left running, is enqueued again. Enqueue dedupes on the job id,
- * so a job that is still in Redis is not duplicated.
+ * Postgres is the truth and Redis only transport (invariant 2), so every job whose time has
+ * come, and every job a dead worker left running, is enqueued again. Enqueue dedupes on the
+ * job id, so a job that is still in Redis is not duplicated.
+ *
+ * A job scheduled for later is not swept up: booting a worker must not fire next week's posts
+ * (WP31). The dispatcher takes those when they are due.
  */
 export async function sweepOnBoot(
   deps: { db: Database; queues: Queues; log: Logger },

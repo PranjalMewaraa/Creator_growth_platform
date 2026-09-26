@@ -1,5 +1,5 @@
 import { settlementFor, type Currency, type JobClass } from '@cgp/contracts';
-import { and, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, lt, lte, or, sql } from 'drizzle-orm';
 import { unwrap, type Database } from './client';
 import { applyLedgerEntry } from './ledger';
 import { compiledPrompts, costTelemetry, creditLedger, jobs, workspaces } from './schema';
@@ -20,6 +20,8 @@ export interface NewJob {
   correlationId?: string;
   /** From the generator's estimate. Held now, settled or refunded when the job ends. */
   hold: Amounts;
+  /** Not before this time. Now, unless the work is scheduled for later (WP31). */
+  runAt?: Date;
   /** The compiled prompt this job runs. Its first job is recorded on it in the same transaction. */
   compiledPromptId?: string;
 }
@@ -81,6 +83,7 @@ export async function createJobWithHold(db: Database, job: NewJob): Promise<Crea
         correlationId: job.correlationId,
         creditsHeld: job.hold.credits,
         videoSecondsHeld: job.hold.videoSeconds,
+        ...(job.runAt ? { runAt: job.runAt } : {}),
       })
       .returning();
     if (!created) throw new Error('Job insert returned no row');
@@ -228,25 +231,53 @@ export function refundJob(
 }
 
 /**
- * For the boot sweep (invariant 2): jobs still waiting, and jobs a dead worker left running.
- * Scoped by status rather than workspace because the sweep serves every workspace.
+ * For the boot sweep and the dispatcher (invariant 2): jobs whose time has come, and jobs a
+ * dead worker left running. Scoped by status rather than workspace because both serve every
+ * workspace.
+ *
+ * A queued job with `run_at` in the future is deliberately left alone: that is a post waiting
+ * for its slot, or an attempt backing off, and enqueuing it now would publish it early. A job
+ * found running is past that question and is recovered whatever its time says.
  */
 export function jobsToRecover(
   db: Database,
-  { staleRunningBefore }: { staleRunningBefore: Date },
+  { staleRunningBefore, now = new Date() }: { staleRunningBefore: Date; now?: Date },
 ): Promise<JobRow[]> {
   return unwrap(db)
     .select()
     .from(jobs)
     .where(
       or(
-        eq(jobs.status, 'QUEUED'),
+        and(eq(jobs.status, 'QUEUED'), lte(jobs.runAt, now)),
         and(
           inArray(jobs.status, ['RUNNING', 'MODERATING']),
           lt(jobs.updatedAt, staleRunningBefore),
         ),
       ),
     );
+}
+
+/**
+ * Puts a job back in the queue to be tried again later (WP31). The hold stays exactly where it
+ * is: the work has not been done, so nothing is settled and nothing is refunded. Only a job
+ * that has not ended can be rescheduled, so a retry racing a finish loses.
+ */
+export async function rescheduleJob(
+  db: Database,
+  jobId: string,
+  runAt: Date,
+): Promise<JobRow | undefined> {
+  const [row] = await unwrap(db)
+    .update(jobs)
+    .set({
+      status: 'QUEUED',
+      runAt,
+      attemptCount: sql`${jobs.attemptCount} + 1`,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(jobs.id, jobId), inArray(jobs.status, ['QUEUED', 'RUNNING', 'MODERATING'])))
+    .returning();
+  return row;
 }
 
 export interface BalanceDrift {

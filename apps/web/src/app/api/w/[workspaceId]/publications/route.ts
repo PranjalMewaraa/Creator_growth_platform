@@ -13,11 +13,13 @@ interface Body {
   mediaKey?: unknown;
   instagramFrame?: unknown;
   accountIds?: unknown;
+  scheduledAt?: unknown;
 }
 
 /**
- * Post now: `{ text, mediaKey?, instagramFrame?, accountIds }`. Answers 202 with the publication; each account
- * gets its own target, published by the worker, with its own status.
+ * Post now, or later: `{ text, mediaKey?, instagramFrame?, accountIds, scheduledAt? }`, where
+ * `scheduledAt` is an ISO instant. Answers 202 with the publication; each account gets its own
+ * target, published by the worker, with its own status.
  */
 export const POST = withRequestContext(async (request: Request, { params }: Context) => {
   const { workspaceId } = await params;
@@ -32,12 +34,15 @@ export const POST = withRequestContext(async (request: Request, { params }: Cont
     (body.mediaKey !== undefined && typeof body.mediaKey !== 'string') ||
     (body.instagramFrame !== undefined &&
       body.instagramFrame !== 'portrait' &&
-      body.instagramFrame !== 'square')
+      body.instagramFrame !== 'square') ||
+    (body.scheduledAt !== undefined && typeof body.scheduledAt !== 'string')
   ) {
     return apiError(422, 'invalid_input', {
-      issues: [{ path: '', message: 'Expected { text, mediaKey?, accountIds }' }],
+      issues: [{ path: '', message: 'Expected { text, mediaKey?, accountIds, scheduledAt? }' }],
     });
   }
+  // Whether the instant is sane is the engine's call; this only turns the string into a Date.
+  const scheduledAt = body.scheduledAt ? new Date(body.scheduledAt) : undefined;
 
   const workspace = await scoped(getDb(), workspaceId).workspace();
   const providers = getProviders();
@@ -56,13 +61,18 @@ export const POST = withRequestContext(async (request: Request, { params }: Cont
       ...(body.instagramFrame ? { instagramFrame: body.instagramFrame } : {}),
       accountIds: body.accountIds,
       timezone: workspace?.timezone ?? 'Asia/Kolkata',
+      ...(scheduledAt ? { scheduledAt } : {}),
       correlationId: currentCorrelationId(),
     },
   );
   if (!result.ok) return refusal(result);
   const location = `/api/w/${workspaceId}/publications/${result.publicationId}`;
   return Response.json(
-    { publicationId: result.publicationId, status: location },
+    {
+      publicationId: result.publicationId,
+      status: location,
+      scheduledAt: result.scheduledAt?.toISOString() ?? null,
+    },
     { status: 202, headers: { location } },
   );
 });

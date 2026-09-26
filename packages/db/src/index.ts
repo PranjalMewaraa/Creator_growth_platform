@@ -21,6 +21,7 @@ export {
   markJobModerating,
   markJobRunning,
   refundJob,
+  rescheduleJob,
   settleJob,
   type Amounts,
   type BalanceDrift,

@@ -59,12 +59,15 @@ const EMOJIS =
 /** Statuses the worker is still working through; anything else is where this attempt ended. */
 const IN_FLIGHT: ReadonlySet<PostTargetStatus> = new Set(['pending', 'claimed']);
 
+/** Ended this attempt, but the worker is bringing it back on its own (WP31). */
+const COMING_BACK: ReadonlySet<PostTargetStatus> = new Set(['retry_scheduled', 'quota_wait']);
+
 const STATUS_TEXT: Record<PostTargetStatus, string> = {
   pending: 'Waiting',
   claimed: 'Publishing',
   published: 'Published',
-  retry_scheduled: 'Not sent, can retry',
-  quota_wait: 'Platform limit reached',
+  retry_scheduled: 'Trying again shortly',
+  quota_wait: 'Platform limit reached, waiting',
   reauth_required: 'Reconnect the account',
   failed: 'Failed',
   needs_verification: 'Check the account',
@@ -117,6 +120,31 @@ function clock(iso: string) {
   return new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
 }
 
+/** A scheduled time is days away as often as hours, so it says which day as well. */
+function fullClock(iso: string) {
+  return new Date(iso).toLocaleString('en-IN', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+/** `datetime-local` wants the viewer's own clock, to the minute, with no zone on the end. */
+function localInputValue(at: Date) {
+  const shifted = new Date(at.getTime() - at.getTimezoneOffset() * 60_000);
+  return shifted.toISOString().slice(0, 16);
+}
+
+/** The default offered when scheduling: an hour from now, on the next quarter hour. */
+function defaultSchedule(now = new Date()) {
+  const at = new Date(now.getTime() + 60 * 60_000);
+  at.setSeconds(0, 0);
+  at.setMinutes(Math.ceil(at.getMinutes() / 15) * 15);
+  return localInputValue(at);
+}
+
 function Badge({ tone, children }: { tone: 'info' | 'warn' | 'bad'; children: ReactNode }) {
   return (
     <p
@@ -164,6 +192,9 @@ export function Composer({
   const [error, setError] = useState<string | null>(null);
   const [publicationId, setPublicationId] = useState<string | null>(null);
   const [targets, setTargets] = useState<TargetView[]>([]);
+  // A datetime-local value, in the viewer's own clock. Empty means post now.
+  const [when, setWhen] = useState('');
+  const [scheduledAt, setScheduledAt] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const editor = useRef<HTMLTextAreaElement>(null);
   const previewRef = useRef<string | null>(null);
@@ -173,12 +204,17 @@ export function Composer({
   const platforms = [...new Set(selected.map((a) => a.platform))];
   const imageMissing = platforms.includes('instagram') && !file;
   const over = platforms.filter((p) => text.length > LIMITS[p]);
+  // A time that has already gone by is not a schedule. The server checks this too; here it
+  // only keeps the button from sending something it knows will come back refused.
+  const whenAt = when ? new Date(when) : null;
+  const whenValid = whenAt !== null && !Number.isNaN(whenAt.getTime()) && whenAt > new Date();
   const canPost =
     busy === null &&
     chosen.length > 0 &&
     (text.trim().length > 0 || file !== null) &&
     !imageMissing &&
-    over.length === 0;
+    over.length === 0 &&
+    (when === '' || whenValid);
 
   // The preview shows the chosen platforms; with none chosen, every connected one.
   const previewAccounts = selected.length > 0 ? selected : accounts;
@@ -221,15 +257,20 @@ export function Composer({
         publication: { targets: TargetView[] };
       };
       setTargets(publication.targets);
-      if (publication.targets.some((t) => IN_FLIGHT.has(t.status))) {
-        setTimeout(() => void tick(), 2000);
-      }
+      // A post waiting for its slot is checked every half minute rather than every two
+      // seconds: it may be days away, and this page may be open the whole time. Same for a
+      // target backing off, which comes back in minutes, not seconds.
+      const waiting = publication.targets.some((t) => IN_FLIGHT.has(t.status));
+      const later = scheduledAt !== null && new Date(scheduledAt) > new Date();
+      const again = publication.targets.some((t) => COMING_BACK.has(t.status));
+      if (waiting && !later) setTimeout(() => void tick(), 2000);
+      else if (later || again) setTimeout(() => void tick(), 30_000);
     };
     void tick();
     return () => {
       stopped = true;
     };
-  }, [base, publicationId]);
+  }, [base, publicationId, scheduledAt]);
 
   function chooseFile(next: File | null) {
     if (next && !['image/jpeg', 'image/png'].includes(next.type)) {
@@ -305,9 +346,13 @@ export function Composer({
           text,
           accountIds: chosen,
           ...(mediaKey ? { mediaKey, instagramFrame: frame } : {}),
+          ...(whenValid && whenAt ? { scheduledAt: whenAt.toISOString() } : {}),
         }),
       });
-      const body = (await response.json()) as ApiError & { publicationId?: string };
+      const body = (await response.json()) as ApiError & {
+        publicationId?: string;
+        scheduledAt?: string | null;
+      };
       if (!response.ok || !body.publicationId) {
         setError(describe(body, 'The post could not be sent'));
         return;
@@ -315,6 +360,7 @@ export function Composer({
       writeDraft(workspaceId, null);
       setSavedAt(null);
       setTargets([]);
+      setScheduledAt(body.scheduledAt ?? null);
       setPublicationId(body.publicationId);
     } catch {
       setError('Something went wrong on the way. Check your connection and try again.');
@@ -330,6 +376,8 @@ export function Composer({
     setFrame('portrait');
     setPublicationId(null);
     setTargets([]);
+    setWhen('');
+    setScheduledAt(null);
   }
 
   if (accounts.length === 0) {
@@ -349,7 +397,11 @@ export function Composer({
   }
 
   const suggestions = hashtags.filter((tag) => !text.toLowerCase().includes(tag.toLowerCase()));
-  const done = targets.length > 0 && !targets.some((t) => IN_FLIGHT.has(t.status));
+  const pendingSchedule = scheduledAt !== null && new Date(scheduledAt) > new Date();
+  const done =
+    targets.length > 0 &&
+    !pendingSchedule &&
+    !targets.some((t) => IN_FLIGHT.has(t.status) || COMING_BACK.has(t.status));
 
   return (
     <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,42fr)_minmax(0,58fr)]">
@@ -359,7 +411,9 @@ export function Composer({
           <h1 className="text-xl font-semibold tracking-tight text-ink">Create post</h1>
           <span className="text-xs text-muted" aria-live="polite">
             {publicationId
-              ? 'Sent'
+              ? pendingSchedule
+                ? 'Scheduled'
+                : 'Sent'
               : savedAt
                 ? `Draft saved · ${clock(savedAt)}`
                 : 'Drafts save as you type'}
@@ -369,11 +423,15 @@ export function Composer({
         {publicationId ? (
           <div className="flex flex-col gap-3 px-6 py-5">
             <p className="text-sm text-muted">
-              {done
-                ? 'Finished. Each account published on its own.'
-                : 'Publishing. Each account goes on its own, so one can succeed while another fails.'}
+              {pendingSchedule && scheduledAt
+                ? `Scheduled for ${fullClock(scheduledAt)}. It goes out on its own; you can close this.`
+                : done
+                  ? 'Finished. Each account published on its own.'
+                  : 'Publishing. Each account goes on its own, so one can succeed while another fails.'}
             </p>
-            {targets.length === 0 ? <p className="text-sm text-muted">Queued…</p> : null}
+            {targets.length === 0 ? (
+              <p className="text-sm text-muted">{pendingSchedule ? 'Waiting…' : 'Queued…'}</p>
+            ) : null}
             {targets.map((target) => (
               <div
                 key={target.id}
@@ -653,24 +711,44 @@ export function Composer({
                 </Button>
                 <Button
                   variant="secondary"
-                  disabled
                   className="flex-1"
-                  title="Scheduling arrives with the calendar"
+                  aria-pressed={when !== ''}
+                  onClick={() => setWhen(when ? '' : defaultSchedule())}
                 >
-                  Schedule
-                  <span className="rounded-full bg-raised px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted">
-                    Soon
-                  </span>
+                  {when ? 'Post now instead' : 'Schedule'}
                 </Button>
               </div>
+              {when ? (
+                <label className="flex flex-col gap-1.5 text-xs text-muted">
+                  Goes out at
+                  <input
+                    type="datetime-local"
+                    value={when}
+                    min={localInputValue(new Date())}
+                    onChange={(event) => setWhen(event.target.value)}
+                    className="rounded-lg border border-line bg-raised px-3 py-2 text-sm text-ink [color-scheme:dark]"
+                  />
+                  {when && !whenValid ? (
+                    <span className="text-bad">Pick a time in the future.</span>
+                  ) : (
+                    <span>Your time. The worker checks every fifteen seconds.</span>
+                  )}
+                </label>
+              ) : null}
               <Button onClick={() => void post()} disabled={!canPost} className="w-full">
                 {busy === 'uploading'
                   ? 'Uploading…'
                   : busy === 'posting'
-                    ? 'Posting…'
-                    : live
-                      ? 'Post now'
-                      : 'Post now (practice)'}
+                    ? when
+                      ? 'Scheduling…'
+                      : 'Posting…'
+                    : when
+                      ? whenValid && whenAt
+                        ? `Schedule for ${fullClock(whenAt.toISOString())}`
+                        : 'Schedule'
+                      : live
+                        ? 'Post now'
+                        : 'Post now (practice)'}
               </Button>
             </footer>
           </>

@@ -17,7 +17,8 @@ import {
   setPreparedRef,
   type Database,
 } from '@cgp/db';
-import type { JobHandler, JobOutcome } from '../process';
+import { JobRetry, type JobHandler, type JobOutcome } from '../process';
+import { nextAttemptAt } from '../retry';
 
 export interface PublishHandlerDeps {
   db: Database;
@@ -27,6 +28,9 @@ export interface PublishHandlerDeps {
   /** How long to wait for the platform to finish processing media. */
   maxProcessingMs?: number;
   pollMs?: number;
+  /** Injected in tests, so a backoff is a fact rather than a coin toss. */
+  now?: () => Date;
+  random?: () => number;
 }
 
 /** A target that ended somewhere other than published. The job fails; the target says why. */
@@ -44,6 +48,9 @@ const STATUS_FOR: Record<FailureCategory, Exclude<PostTargetStatus, 'published' 
   reauth: 'reauth_required',
   terminal: 'failed',
 };
+
+/** The two that come back on their own. The other two wait for a person (WP31). */
+const RETRIES: ReadonlySet<PostTargetStatus> = new Set(['retry_scheduled', 'quota_wait']);
 
 const DONE: ReadonlySet<PostTargetStatus> = new Set([
   'published',
@@ -75,6 +82,8 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 export function createPublishHandler(deps: PublishHandlerDeps): JobHandler {
   const pollMs = deps.pollMs ?? 2000;
   const maxProcessingMs = deps.maxProcessingMs ?? 120_000;
+  const now = deps.now ?? (() => new Date());
+  const random = deps.random ?? Math.random;
 
   return async (job, log) => {
     const outcome = (platform: string): JobOutcome => ({
@@ -93,6 +102,29 @@ export function createPublishHandler(deps: PublishHandlerDeps): JobHandler {
       error: NormalizedError | null,
       options?: { clearPublishStarted?: boolean },
     ): Promise<never> => {
+      // A category that comes back on its own gets another attempt, if any are left. The
+      // target keeps the waiting status so the Sync centre can say it is coming back; the job
+      // carries the time. When the attempts run out the target fails with the platform's own
+      // last error, category and all, so it stays visible that this was a retriable failure
+      // we stopped retrying rather than a refusal.
+      if (RETRIES.has(status)) {
+        const category = status === 'quota_wait' ? 'quota' : 'retriable';
+        const runAt = nextAttemptAt(job.attemptCount, category, { now: now(), random });
+        if (runAt) {
+          await markPostTarget(deps.db, target.id, status, error, options);
+          log.warn(
+            { postTargetId: target.id, status, error, runAt, attempt: job.attemptCount + 1 },
+            'post target not published, trying again later',
+          );
+          throw new JobRetry(runAt);
+        }
+        await markPostTarget(deps.db, target.id, 'failed', error, options);
+        log.error(
+          { postTargetId: target.id, error, attempts: job.attemptCount + 1 },
+          'post target failed: attempts exhausted',
+        );
+        throw new PublishNotCompleted('failed');
+      }
       await markPostTarget(deps.db, target.id, status, error, options);
       log.warn({ postTargetId: target.id, status, error }, 'post target not published');
       throw new PublishNotCompleted(status);
@@ -146,7 +178,9 @@ export function createPublishHandler(deps: PublishHandlerDeps): JobHandler {
         await sleep(pollMs);
       }
     } catch (err) {
-      if (err instanceof PublishNotCompleted) throw err;
+      // `end` throws to leave, and both of its exits pass through here: neither is a new
+      // failure to be classified again.
+      if (err instanceof PublishNotCompleted || err instanceof JobRetry) throw err;
       const error = normalized(err);
       return end(STATUS_FOR[error.category], error);
     }

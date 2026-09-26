@@ -281,3 +281,79 @@ describe('startPublication', () => {
     expect(await scoped(db, workspaceId).select(postTargets)).toEqual([]);
   });
 });
+
+describe('scheduling a post (WP31)', () => {
+  const deps = (queues: Queues) => ({
+    db,
+    queues,
+    store: createMemoryStore(),
+    moderation: createFakeModeration(),
+    log,
+  });
+
+  it('keeps a post for later out of the queue, with the time on the job', async () => {
+    const { workspaceId, accountIds } = await workspaceWith(['linkedin']);
+    const { queues, added } = recordingQueues();
+    const at = new Date(Date.now() + 3 * 60 * 60_000);
+
+    const result = await startPublication(deps(queues), {
+      workspaceId,
+      text: 'Thursday morning, then.',
+      accountIds,
+      timezone: 'Asia/Kolkata',
+      scheduledAt: at,
+    });
+
+    if (!result.ok) throw new Error(result.reason);
+    // The one thing a schedule must not do is publish now.
+    expect(added).toHaveLength(0);
+    expect(result.scheduledAt).toEqual(at);
+    const [job] = await scoped(db, workspaceId).select(jobs);
+    expect(job?.status).toBe('QUEUED');
+    expect(job?.runAt.toISOString()).toBe(at.toISOString());
+    const view = await publicationView(db, workspaceId, result.publicationId);
+    expect(view?.scheduledAt).toBe(at.toISOString());
+    expect(view?.targets.map((t) => t.status)).toEqual(['pending']);
+  });
+
+  it('queues a post for right now as it always did', async () => {
+    const { workspaceId, accountIds } = await workspaceWith(['linkedin']);
+    const { queues, added } = recordingQueues();
+
+    const result = await startPublication(deps(queues), {
+      workspaceId,
+      text: 'Out it goes.',
+      accountIds,
+      timezone: 'Asia/Kolkata',
+    });
+
+    if (!result.ok) throw new Error(result.reason);
+    expect(added).toHaveLength(1);
+    expect(result.scheduledAt).toBeUndefined();
+  });
+
+  it('refuses a time that has gone by, or one a year out', async () => {
+    const { workspaceId, accountIds } = await workspaceWith(['linkedin']);
+    const { queues } = recordingQueues();
+    const post = (scheduledAt: Date) =>
+      startPublication(deps(queues), {
+        workspaceId,
+        text: 'When?',
+        accountIds,
+        timezone: 'Asia/Kolkata',
+        scheduledAt,
+      });
+
+    expect(await post(new Date(Date.now() - 10 * 60_000))).toMatchObject({
+      ok: false,
+      reason: 'invalid_input',
+      issues: [{ path: 'scheduledAt', message: 'Pick a time in the future' }],
+    });
+    expect(await post(new Date(Date.now() + 400 * 24 * 60 * 60_000))).toMatchObject({
+      ok: false,
+      reason: 'invalid_input',
+    });
+    // A clock a few seconds behind the server's is not a mistake.
+    expect(await post(new Date(Date.now() - 5_000))).toMatchObject({ ok: true });
+  });
+});

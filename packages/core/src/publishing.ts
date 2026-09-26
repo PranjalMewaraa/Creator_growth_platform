@@ -133,19 +133,34 @@ export interface PublishRequest {
   instagramFrame?: InstagramFrame;
   accountIds: string[];
   timezone: string;
+  /** When to post. Absent means now (WP31). */
+  scheduledAt?: Date;
   correlationId?: string;
 }
 
+/**
+ * How far in the past a schedule may land before it is a mistake rather than a clock
+ * difference. A minute covers a browser whose clock drifts and the time a form takes to post.
+ */
+const SCHEDULE_SLACK_MS = 60_000;
+
+/** A year. Further than this is a typed year, not a plan. */
+const SCHEDULE_HORIZON_MS = 365 * 24 * 60 * 60_000;
+
 export type PublishResult =
-  | { ok: true; publicationId: string }
+  | { ok: true; publicationId: string; scheduledAt?: Date }
   | { ok: false; reason: 'invalid_input'; issues: InputIssue[] }
   | { ok: false; reason: 'account_not_found' }
   | { ok: false; reason: 'blocked'; category: ModerationCategory }
   | { ok: false; reason: 'moderation_unavailable' };
 
 /**
- * Post now: checks the post against each chosen platform's rules and moderation, then creates
- * the publication with one target and one publish job per account, and enqueues the jobs.
+ * Post now, or at a time you choose (WP31): checks the post against each chosen platform's
+ * rules and moderation, then creates the publication with one target and one publish job per
+ * account. A post due now is enqueued here; a post for later waits for the dispatcher.
+ *
+ * Moderation runs when the post is written, not when it goes out. The text cannot change
+ * between the two, so a second check would ask the same question of the same words.
  */
 export async function startPublication(
   deps: {
@@ -171,6 +186,18 @@ export async function startPublication(
   const issues: InputIssue[] = [];
   if (ids.length === 0) issues.push({ path: 'accountIds', message: 'Choose at least one account' });
   if (!text && !request.media) issues.push({ path: 'text', message: 'Write something to post' });
+
+  const now = Date.now();
+  const scheduledAt = request.scheduledAt;
+  if (scheduledAt) {
+    if (Number.isNaN(scheduledAt.getTime())) {
+      issues.push({ path: 'scheduledAt', message: 'That is not a time' });
+    } else if (scheduledAt.getTime() < now - SCHEDULE_SLACK_MS) {
+      issues.push({ path: 'scheduledAt', message: 'Pick a time in the future' });
+    } else if (scheduledAt.getTime() > now + SCHEDULE_HORIZON_MS) {
+      issues.push({ path: 'scheduledAt', message: 'Pick a time within the next year' });
+    }
+  }
 
   let media: PostContent['media'];
   if (request.media) {
@@ -228,6 +255,7 @@ export async function startPublication(
   const created = await createPublication(deps.db, {
     workspaceId: request.workspaceId,
     timezone: request.timezone,
+    ...(scheduledAt ? { scheduledAt } : {}),
     body: { ...content },
     targets: accounts.map((account) => ({
       socialAccountId: account.id,
@@ -237,10 +265,22 @@ export async function startPublication(
   });
   if (!created.ok) return created;
 
-  // After commit (invariant 7). A failed enqueue leaves the job QUEUED for the boot sweep.
+  // A post for later is not enqueued now: it waits in Postgres with its time on it, and the
+  // dispatcher puts it on the queue when the time comes. Enqueuing it here would publish it
+  // immediately, which is the one thing a schedule must not do.
+  const later = scheduledAt !== undefined && scheduledAt.getTime() > now;
+  if (later) {
+    deps.log.info(
+      { publicationId: created.publication.id, scheduledAt, targets: created.targets.length },
+      'publication scheduled',
+    );
+    return { ok: true, publicationId: created.publication.id, scheduledAt };
+  }
+
+  // After commit (invariant 7). A failed enqueue leaves the job QUEUED for the dispatcher.
   for (const job of created.jobs) {
     await enqueue(deps.queues, job).catch((err: unknown) => {
-      deps.log.error({ err, jobId: job.id }, 'enqueue failed; the boot sweep will recover it');
+      deps.log.error({ err, jobId: job.id }, 'enqueue failed; the dispatcher will recover it');
     });
   }
   return { ok: true, publicationId: created.publication.id };
@@ -253,6 +293,8 @@ function name(platform: TargetPlatform) {
 export interface PublicationView {
   id: string;
   createdAt: string;
+  /** When it goes out. The same as createdAt for a post now (WP31). */
+  scheduledAt: string;
   text: string;
   mediaUrl: string | null;
   targets: Array<{
@@ -278,6 +320,7 @@ export async function publicationView(
   return {
     id: found.publication.id,
     createdAt: found.publication.createdAt.toISOString(),
+    scheduledAt: found.publication.scheduledAt.toISOString(),
     text: body.text ?? '',
     mediaUrl: body.media?.url ?? null,
     targets: found.targets.map(({ target, account }) => {

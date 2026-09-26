@@ -3,6 +3,7 @@ import type { QueuedJobData } from '@cgp/contracts';
 import {
   markJobRunning,
   refundJob,
+  rescheduleJob,
   settleJob,
   type Amounts,
   type CostTelemetry,
@@ -17,6 +18,21 @@ export interface JobOutcome {
 }
 
 export type JobHandler = (job: JobRow, log: Logger) => Promise<JobOutcome>;
+
+/**
+ * Thrown by a handler that has not finished but should be tried again (WP31). The job goes
+ * back to QUEUED with its time set, and the hold stays where it is: nothing was delivered, so
+ * there is nothing to settle, and the work is still coming, so there is nothing to refund.
+ */
+export class JobRetry extends Error {
+  override readonly name = 'JobRetry';
+  constructor(
+    readonly runAt: Date,
+    message = `Retrying at ${runAt.toISOString()}`,
+  ) {
+    super(message);
+  }
+}
 
 /** Thrown by a handler when moderation stops the output. The job is refunded as BLOCKED. */
 export class JobBlocked extends Error {
@@ -35,7 +51,7 @@ export interface ProcessDeps {
   log: Logger;
 }
 
-export type ProcessResult = 'settled' | 'refunded' | 'skipped';
+export type ProcessResult = 'settled' | 'refunded' | 'skipped' | 'retrying';
 
 /**
  * Runs one queued job to its end. The charge already happened as a hold when the job was
@@ -59,6 +75,14 @@ export async function processJob(deps: ProcessDeps, data: QueuedJobData): Promis
   try {
     outcome = await handler(job, deps.log);
   } catch (err) {
+    if (err instanceof JobRetry) {
+      const rescheduled = await rescheduleJob(deps.db, job.id, err.runAt);
+      deps.log.info(
+        { jobId: job.id, runAt: err.runAt, attempts: rescheduled?.attemptCount },
+        'job will be tried again',
+      );
+      return 'retrying';
+    }
     const blocked = err instanceof JobBlocked;
     // A check that could not run is a failure, not a block: nothing was found, and nothing
     // was released either. Both refund in full.

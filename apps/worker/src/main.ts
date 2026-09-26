@@ -22,6 +22,7 @@ import {
   generators,
   processJob,
   publishDelta,
+  startDispatcher,
   sweepOnBoot,
   waitForRedis,
 } from '@cgp/core';
@@ -48,6 +49,10 @@ if (connection.status !== 'ready') {
 // previous process left waiting or running.
 const queues = createQueues(connection);
 await sweepOnBoot({ db, queues, log });
+
+// From here on the same query runs on a tick, which is what makes a scheduled post go out and
+// a failed one come back (WP31).
+const stopDispatcher = startDispatcher({ db, queues, log });
 
 const providers = createProviders({ ...env, log });
 // Pays the connection and token cost before the first job does (D17). Best effort, in the
@@ -173,6 +178,7 @@ log.info(
 
 async function shutdown(signal: string) {
   log.info({ signal }, 'worker stopping');
+  stopDispatcher();
   await Promise.all(workers.map((w) => w.close()));
   await closeQueues(queues);
   await connection.quit();

@@ -1,5 +1,6 @@
 export {
   JobBlocked,
+  JobRetry,
   processJob,
   type JobHandler,
   type JobOutcome,
@@ -9,6 +10,8 @@ export {
 export { closeQueues, createQueues, enqueue, type QueueOptions, type Queues } from './queues';
 export { submitJob, type JobRequest, type SubmitDeps } from './submit';
 export { sweepOnBoot, type SweepResult } from './sweep';
+export { dispatchDue, startDispatcher, DISPATCH_EVERY_MS, type DispatchDeps } from './scheduler';
+export { backoffMs, nextAttemptAt, MAX_PUBLISH_ATTEMPTS } from './retry';
 export { createRedis, waitForRedis } from './redis';
 export { jobChannel, publishDelta, subscribeDeltas, type JobChannelOptions } from './events';
 export { jobEventStream, type JobStreamOptions, type JobStreamSource } from './job-stream';
