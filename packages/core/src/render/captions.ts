@@ -58,8 +58,7 @@ function timecode(seconds: number): string {
 }
 
 /** Emoji are not rendered in colour by libass, so they are dropped rather than drawn as tofu. */
-const EMOJI =
-  /\p{Extended_Pictographic}(️|‍\p{Extended_Pictographic})*|\p{Regional_Indicator}{2}/gu;
+const EMOJI = /\p{Extended_Pictographic}(️|‍\p{Extended_Pictographic})*|\p{Regional_Indicator}{2}/gu;
 
 /** A caption line as ASS wants it: one line, braces neutralised, emoji gone. */
 export function assText(text: string): string {

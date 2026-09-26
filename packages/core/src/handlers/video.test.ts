@@ -123,6 +123,15 @@ async function startVideo(input: Record<string, unknown> = {}) {
   return { workspaceId, started };
 }
 
+describe('the handler map', () => {
+  it('films video and leaves the storyboard alone, though both compile as video', () => {
+    const keys = Object.keys(fakeHandlers()).sort();
+    // The storyboard shares the output type, because it needs the profile that plans scenes.
+    // Claiming its key here would have the image generator's adapter looked up as a video one.
+    expect(keys).toEqual(['regenerate_scene', 'video']);
+  });
+});
+
 describe('a video render', () => {
   it('plans the scenes, renders them in order, and settles the seconds delivered', async () => {
     const { workspaceId, started } = await startVideo();

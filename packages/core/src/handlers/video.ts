@@ -35,6 +35,7 @@ import { ffmpegAvailable, type FfmpegOptions } from '../render/ffmpeg';
 import { sampleFrames } from '../render/frames';
 import type { GeneratorRegistry } from '../generators/registry';
 import { postCheckOutput } from '../moderation';
+import { storyboardScenes } from './storyboard';
 import { JobBlocked, type JobHandler } from '../process';
 
 // The video render (WP22): a compiled prompt becomes up to three scenes, each an eight second
@@ -85,6 +86,8 @@ interface VideoJobInput {
   sceneCount?: unknown;
   /** Set on a regenerate job: the one scene to draw again. */
   sceneId?: unknown;
+  /** Set when this reel was committed from a storyboard, whose scenes it films. */
+  storyboardOutputId?: unknown;
 }
 
 /** One tier for both the provider and the render, so they cannot drift apart. */
@@ -155,7 +158,9 @@ export function createVideoHandlers(deps: VideoHandlerDeps): Record<string, JobH
   const handlers: Record<string, JobHandler> = {};
 
   for (const generator of deps.registry.list()) {
-    if (generator.outputType !== 'video') continue;
+    // Output type is not enough: the storyboard compiles as a video too, because that is the
+    // profile that plans scenes. The render class is what separates filming from previewing.
+    if (generator.outputType !== 'video' || generator.jobClass !== 'render') continue;
 
     handlers[generator.key] = async (job, log) => {
       const ws = scoped(deps.db, job.workspaceId);
@@ -192,14 +197,30 @@ export function createVideoHandlers(deps: VideoHandlerDeps): Record<string, JobH
       );
       if (!config) throw new Error(`${prompt.compilerProfileKey} is missing`);
 
-      const plan = await planScenes({
-        prompt: prompt.text,
-        config,
-        sceneCount,
-        provider: deps.planner,
-        log,
-      });
-      log.info({ jobId: job.id, sceneCount, fallbackUsed: plan.fallbackUsed }, 'scenes planned');
+      // A reel committed from a storyboard films the scenes that were approved, rather than
+      // planning again and arriving somewhere close but different (WP26).
+      const approved =
+        typeof input.storyboardOutputId === 'string'
+          ? await storyboardScenes(deps.db, job.workspaceId, input.storyboardOutputId)
+          : undefined;
+      const plan = approved
+        ? { scenes: approved.slice(0, sceneCount), fallbackUsed: false }
+        : await planScenes({
+            prompt: prompt.text,
+            config,
+            sceneCount,
+            provider: deps.planner,
+            log,
+          });
+      log.info(
+        {
+          jobId: job.id,
+          sceneCount,
+          fromStoryboard: Boolean(approved),
+          fallbackUsed: plan.fallbackUsed,
+        },
+        'scenes planned',
+      );
 
       // The output row exists before the first clip, so a render that dies halfway leaves the
       // scenes it planned and the clips it finished.
@@ -315,7 +336,9 @@ export function createVideoHandlers(deps: VideoHandlerDeps): Record<string, JobH
     const scene = await findScene(deps.db, job.workspaceId, input.sceneId);
     if (!scene) throw new Error('Scene not found');
 
-    const generator = deps.registry.list().find((entry) => entry.outputType === 'video');
+    const generator = deps.registry
+      .list()
+      .find((entry) => entry.outputType === 'video' && entry.jobClass === 'render');
     const adapter = generator ? deps.adapters[generator.providerAdapter] : undefined;
     if (!adapter) throw new Error('No video adapter');
 

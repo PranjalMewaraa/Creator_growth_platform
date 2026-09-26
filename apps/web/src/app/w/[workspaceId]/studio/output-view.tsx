@@ -7,7 +7,7 @@ import {
   type TargetPlatform,
   type TextLayerSpec,
 } from '@cgp/contracts';
-import { cx } from '@cgp/ui';
+import { Button, cx } from '@cgp/ui';
 import { useState, type ReactNode } from 'react';
 import { TextLayerEditor } from './text-layer-editor';
 
@@ -132,6 +132,45 @@ function Block({
         {children ?? text}
       </div>
       {meter}
+    </div>
+  );
+}
+
+/**
+ * The scenes as stills, before anything is filmed (WP26). A frame costs about a rupee of
+ * provider time and a clip about twenty one, so this is the cheap place to find out the reel
+ * is wrong.
+ */
+export function Storyboard({
+  frames,
+  committed,
+  onCommit,
+}: {
+  frames: Array<{ index: number; url: string }>;
+  committed: boolean;
+  onCommit: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-xs text-muted">
+        {frames.length} {frames.length === 1 ? 'scene' : 'scenes'}, as they would be shot. Filming
+        costs video seconds; this did not.
+      </p>
+      <div className="grid grid-cols-3 gap-2">
+        {frames.map((frame) => (
+          <figure key={frame.index} className="overflow-hidden rounded-lg border border-line">
+            {/* A still from our bucket: next/image would need the host configured. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={frame.url} alt="" className="aspect-[9/16] w-full bg-black object-cover" />
+            <figcaption className="px-2 py-1 text-[11px] text-faint">
+              Scene {frame.index + 1}
+            </figcaption>
+          </figure>
+        ))}
+      </div>
+      <Button onClick={onCommit} disabled={committed}>
+        {committed ? 'Filming…' : 'Film these scenes'}
+      </Button>
     </div>
   );
 }

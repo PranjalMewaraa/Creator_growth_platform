@@ -117,6 +117,33 @@ const thumbnailSet = register({
   },
 });
 
+/**
+ * The storyboard (WP26): one still per scene, from the image model, before committing to a
+ * render. A still costs about a rupee of provider time against twenty one for a clip, so
+ * seeing the reel before paying for it is the cheapest decision in the product.
+ */
+const storyboard = register({
+  key: 'storyboard',
+  // Compiled as a video, because that is the profile that knows how to plan scenes.
+  outputType: 'video',
+  jobClass: 'inference',
+  inputSchema: z.object({
+    ...base,
+    sceneCount: z.int().min(1).max(3).default(3),
+  }),
+  compilerProfile: 'video',
+  providerAdapter: IMAGE_ADAPTER,
+  estimate: (input, rates) => {
+    // Priced as the images it is: no separate rate to keep in step with the image one.
+    const each = rateFor(rates, 'image_standard');
+    const credits = each * input.sceneCount;
+    return {
+      credits,
+      breakdown: [{ label: `Storyboard, ${input.sceneCount} frames`, credits }],
+    };
+  },
+});
+
 const video = register({
   key: 'video',
   outputType: 'video',
@@ -125,6 +152,8 @@ const video = register({
     ...base,
     sceneCount: z.int().min(1).max(3).default(3),
     voiceover: z.boolean().default(true),
+    /** The storyboard this reel was committed from, so it films what was approved. */
+    storyboardOutputId: z.uuid().optional(),
   }),
   compilerProfile: 'video',
   providerAdapter: 'veo-3.1-lite',
@@ -143,5 +172,6 @@ export const generators = createGeneratorRegistry([
   captionSet,
   image,
   thumbnailSet,
+  storyboard,
   video,
 ]);

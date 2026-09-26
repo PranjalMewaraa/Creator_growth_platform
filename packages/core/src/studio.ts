@@ -51,8 +51,21 @@ export interface StudioOutput {
   media: { url: string; width: number; height: number } | null;
   /** The composited text layer, when one has been saved over this picture (WP18). */
   rendition: { id: string; url: string; spec: TextLayerSpec } | null;
+  /** The scenes as stills, before anything was filmed (WP26). */
+  storyboard: Array<{ index: number; url: string }> | null;
   compiledPromptId: string;
   createdAt: string;
+}
+
+/** The storyboard frames, when this output is one. */
+function storyboard(metadata: unknown): StudioOutput['storyboard'] {
+  const frames = (metadata as { storyboard?: unknown } | null)?.storyboard;
+  if (!Array.isArray(frames)) return null;
+  const usable = frames.flatMap((frame) => {
+    const { index, url } = (frame ?? {}) as Record<string, unknown>;
+    return typeof url === 'string' && typeof index === 'number' ? [{ index, url }] : [];
+  });
+  return usable.length > 0 ? usable : null;
 }
 
 /**
@@ -100,6 +113,7 @@ export async function jobOutputs(
       kind: row.kind,
       text: text((row.metadata as { text?: unknown }).text),
       media: media(row.metadata),
+      storyboard: storyboard(row.metadata),
       rendition: layer
         ? {
             id: layer.id,

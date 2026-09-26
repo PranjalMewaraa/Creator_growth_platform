@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { artStyle } from '@/lib/art';
-import { ImageOutput, OutputView, VideoOutput, type Rendition } from './output-view';
+import { ImageOutput, OutputView, Storyboard, VideoOutput, type Rendition } from './output-view';
 import { TemplatePicker, type TemplateCard } from './template-picker';
 import { PromptDisclosure } from './prompt-disclosure';
 
@@ -23,6 +23,7 @@ interface Output {
   kind: string;
   text: string;
   media: { url: string; width: number; height: number } | null;
+  storyboard: Array<{ index: number; url: string }> | null;
   rendition: Rendition | null;
 }
 
@@ -160,6 +161,9 @@ export function Studio({
     .sort((a, b) => Number(b.slug.startsWith('default-')) - Number(a.slug.startsWith('default-')));
 
   const [cost, setCost] = useState<{ credits: number; videoSeconds: number } | null>(null);
+  const [storyboardCost, setStoryboardCost] = useState<number | null>(null);
+  // The storyboard this reel would be committed from, once one has been drawn and looked at.
+  const [storyboardId, setStoryboardId] = useState<string | null>(null);
   const [prompt, setPrompt] = useState<CompiledPromptView | null>(null);
   const [promptFor, setPromptFor] = useState<string | null>(null);
   const [busy, setBusy] = useState<'compiling' | 'starting' | null>(null);
@@ -214,6 +218,27 @@ export function Studio({
     // requestKey captures every field of the input.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [base, requestKey]);
+
+  // What a storyboard of this many scenes costs, priced by the server like anything else.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (kind !== 'video' || !input.intentText) {
+        setStoryboardCost(null);
+        return;
+      }
+      void fetch(`${base}/generate/storyboard/estimate`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(input),
+      })
+        .then(async (r) => (r.ok ? ((await r.json()) as { estimate: { credits: number } }) : null))
+        .then((body) => setStoryboardCost(body?.estimate.credits ?? null))
+        .catch(() => setStoryboardCost(null));
+    }, 300);
+    return () => clearTimeout(timer);
+    // requestKey captures every field of the input.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [base, kind, requestKey]);
 
   const refreshJobs = useCallback(async () => {
     const r = await fetch(`${base}/jobs`).catch(() => null);
@@ -290,14 +315,20 @@ export function Studio({
     setPromptFor(requestKey);
   }
 
-  async function generate() {
+  async function generate(as: string = kind, extra: Record<string, unknown> = {}) {
     setBusy('starting');
     setError(null);
+    // A compiled prompt is only reusable by the generator it was compiled for; the storyboard
+    // and the reel share one, since both compile as video.
     const usePrompt = prompt && !stale ? prompt.id : undefined;
-    const r = await fetch(`${base}/generate/${kind}`, {
+    const r = await fetch(`${base}/generate/${as}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ ...input, ...(usePrompt ? { compiledPromptId: usePrompt } : {}) }),
+      body: JSON.stringify({
+        ...input,
+        ...extra,
+        ...(usePrompt ? { compiledPromptId: usePrompt } : {}),
+      }),
     }).catch(() => null);
     setBusy(null);
     const body = (await r?.json().catch(() => ({}))) as ApiBody & {
@@ -593,25 +624,42 @@ export function Studio({
           <div className="flex items-center justify-between gap-3 text-sm">
             <span className="text-muted">
               {input.intentText && cost !== null ? (
-                <>
-                  Costs{' '}
-                  <span className="font-semibold text-ink">
-                    {cost.videoSeconds > 0
-                      ? `${cost.videoSeconds}s of video`
-                      : credit(cost.credits)}
-                  </span>
-                </>
+                cost.videoSeconds > 0 ? (
+                  <>
+                    Costs{' '}
+                    <span className="font-semibold text-ink tabular-nums">
+                      {cost.videoSeconds}s of video
+                    </span>{' '}
+                    {/* Per scene, from the server's own estimate rather than a number
+                        repeated here: the generator decides what a scene costs. */}
+                    <span className="text-faint">
+                      ({sceneCount} x {Math.round(cost.videoSeconds / Math.max(sceneCount, 1))}s)
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    Costs <span className="font-semibold text-ink">{credit(cost.credits)}</span>
+                  </>
+                )
               ) : (
                 'Cost shows once you describe it'
               )}
             </span>
             <span className="text-muted">
-              Balance{' '}
-              <span className="tabular-nums text-ink">
-                {cost?.videoSeconds
-                  ? `${videoSeconds.toLocaleString('en-IN')}s`
-                  : credits.toLocaleString('en-IN')}
-              </span>
+              {cost?.videoSeconds ? (
+                <>
+                  Leaves{' '}
+                  <span className="tabular-nums text-ink">
+                    {Math.max(0, videoSeconds - cost.videoSeconds).toLocaleString('en-IN')}s
+                  </span>{' '}
+                  <span className="text-faint">of {videoSeconds.toLocaleString('en-IN')}s</span>
+                </>
+              ) : (
+                <>
+                  Balance{' '}
+                  <span className="tabular-nums text-ink">{credits.toLocaleString('en-IN')}</span>
+                </>
+              )}
             </span>
           </div>
           <div className="flex gap-2">
@@ -627,8 +675,35 @@ export function Studio({
                   ? 'Rewrite prompt'
                   : 'See the prompt'}
             </Button>
-            <Button onClick={() => void generate()} disabled={!canGo} className="flex-1">
-              {busy === 'starting' ? 'Starting…' : 'Generate'}
+            {kind === 'video' ? (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setStoryboardId(null);
+                  void generate('storyboard');
+                }}
+                disabled={!canGo}
+                className="flex-1"
+              >
+                {busy === 'starting'
+                  ? 'Starting…'
+                  : `Storyboard first${storyboardCost === null ? '' : ` · ${credit(storyboardCost)}`}`}
+              </Button>
+            ) : null}
+            <Button
+              onClick={() =>
+                void generate(kind, storyboardId ? { storyboardOutputId: storyboardId } : {})
+              }
+              disabled={!canGo || (kind === 'video' && videoSeconds < (cost?.videoSeconds ?? 0))}
+              className="flex-1"
+            >
+              {busy === 'starting'
+                ? 'Starting…'
+                : kind === 'video'
+                  ? storyboardId
+                    ? 'Film this storyboard'
+                    : 'Film it'
+                  : 'Generate'}
             </Button>
           </div>
           <p className="text-[11px] text-muted">
@@ -689,7 +764,18 @@ export function Studio({
               ) : null}
 
               {outputs.length > 0 ? (
-                outputs[0]?.kind === 'video' && outputs[0].media ? (
+                outputs[0]?.storyboard ? (
+                  <Storyboard
+                    frames={outputs[0].storyboard}
+                    committed={storyboardId === outputs[0].id}
+                    onCommit={() => {
+                      const id = outputs[0]?.id;
+                      if (!id) return;
+                      setStoryboardId(id);
+                      void generate('video', { storyboardOutputId: id });
+                    }}
+                  />
+                ) : outputs[0]?.kind === 'video' && outputs[0].media ? (
                   <VideoOutput {...outputs[0].media} />
                 ) : outputs[0]?.media ? (
                   <div className={cx('grid gap-3', outputs.length > 1 && 'sm:grid-cols-2')}>

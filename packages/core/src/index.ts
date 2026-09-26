@@ -36,6 +36,12 @@ export {
 export { generators, SECONDS_PER_SCENE, THUMBNAIL_VARIANTS } from './generators/definitions';
 export { createImageHandlers, type ImageHandlerDeps } from './handlers/image';
 export {
+  createStoryboardHandler,
+  STORYBOARD,
+  storyboardScenes,
+  type StoryboardHandlerDeps,
+} from './handlers/storyboard';
+export {
   createVideoHandlers,
   REGENERATE_SCENE,
   videoSecondsFor,
