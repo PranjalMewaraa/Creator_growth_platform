@@ -45,12 +45,15 @@ export async function ffmpeg(
   options: FfmpegOptions,
   step: string,
   args: string[],
+  /** Where to run, so a filter can name a file without a Windows path inside a filtergraph. */
+  cwd?: string,
 ): Promise<string> {
   try {
     const { stderr } = await run(options.bin, ['-hide_banner', '-nostdin', '-y', ...args], {
       timeout: options.timeoutMs ?? RENDER_TIMEOUT_MS,
       maxBuffer: 16 * 1024 * 1024,
       windowsHide: true,
+      ...(cwd ? { cwd } : {}),
     });
     return stderr;
   } catch (err) {

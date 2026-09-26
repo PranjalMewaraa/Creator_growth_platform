@@ -69,6 +69,16 @@ export {
 export { fitToFrame, INSTAGRAM_FRAME, INSTAGRAM_FRAMES, type InstagramFrame } from './media';
 export { ffmpeg, ffmpegAvailable, RenderFailed, type FfmpegOptions } from './render/ffmpeg';
 export { sampleFrames } from './render/frames';
+export { fontDir } from './render/fonts';
+export {
+  assColour,
+  assText,
+  buildAss,
+  captionsFromVoiceover,
+  DEFAULT_CAPTION_STYLE,
+  type CaptionSegment,
+  type CaptionStyle,
+} from './render/captions';
 export {
   buildReel,
   REEL_FRAMES,

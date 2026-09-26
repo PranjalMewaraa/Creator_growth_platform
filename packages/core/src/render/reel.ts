@@ -1,7 +1,8 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ffmpeg, type FfmpegOptions } from './ffmpeg';
+import { fontDir } from './fonts';
 
 /**
  * The render (plan section 4.6): scene clips normalised to one frame and frame rate,
@@ -48,6 +49,8 @@ export interface ReelRequest {
   voice?: { data: Uint8Array } | undefined;
   /** The brand kit's logo, cornered bottom right. */
   logo?: { data: Uint8Array; mimeType: string } | undefined;
+  /** Burned in captions as ASS, timed by the voice (invariant 13, WP25). */
+  captions?: string | undefined;
 }
 
 export interface Reel {
@@ -131,11 +134,24 @@ export async function buildReel(options: FfmpegOptions, request: ReelRequest): P
     filters.push(`${chain}concat=n=${sceneCount}:v=1:a=0[joined]`);
 
     let videoOut = '[joined]';
+    if (request.captions) {
+      // libass, with the fonts we pin rather than the fonts the machine happens to have. The
+      // file is named relative to the working directory, because a Windows path inside a
+      // filtergraph has to be escaped twice over and is not worth the risk.
+      await writeFile(join(dir, 'captions.ass'), request.captions, 'utf8');
+      // The fonts are copied in beside the file rather than named by absolute path: a colon
+      // separates filter options, so a Windows drive letter needs escaping, and the escaping
+      // that survives the shell, ffmpeg's parser and libass is not the same in all three. A
+      // relative name has none of that, and the copy is under a megabyte.
+      await cp(fontDir(), join(dir, 'fonts'), { recursive: true });
+      filters.push('[joined]subtitles=captions.ass:fontsdir=fonts[captioned]');
+      videoOut = '[captioned]';
+    }
     if (logoIndex !== undefined) {
       const logoHeight = Math.round(height * LOGO_HEIGHT);
       const margin = Math.round(width * LOGO_MARGIN);
       filters.push(`[${logoIndex}:v]scale=-1:${logoHeight}[logo]`);
-      filters.push(`[joined][logo]overlay=W-w-${margin}:H-h-${margin}[branded]`);
+      filters.push(`${videoOut}[logo]overlay=W-w-${margin}:H-h-${margin}[branded]`);
       videoOut = '[branded]';
     }
 
@@ -188,7 +204,7 @@ export async function buildReel(options: FfmpegOptions, request: ReelRequest): P
       output,
     );
 
-    const stderr = await ffmpeg(options, 'render the reel', args);
+    const stderr = await ffmpeg(options, 'render the reel', args, dir);
     const data = new Uint8Array(await readFile(output));
     return {
       data,

@@ -11,6 +11,7 @@ import type {
 import {
   catalog,
   compilerProfiles,
+  templateVersions,
   createScenes,
   findScene,
   listScenes,
@@ -23,7 +24,13 @@ import {
 } from '@cgp/db';
 import { findCompiledPrompt, planScenes, planVoiceover } from '@cgp/orchestration';
 import { SECONDS_PER_SCENE } from '../generators/definitions';
-import { buildReel, type ReelResolution, type ReelScene } from '../render/reel';
+import { buildReel, REEL_FRAMES, type ReelResolution, type ReelScene } from '../render/reel';
+import {
+  buildAss,
+  captionsFromVoiceover,
+  DEFAULT_CAPTION_STYLE,
+  type CaptionStyle,
+} from '../render/captions';
 import { ffmpegAvailable, type FfmpegOptions } from '../render/ffmpeg';
 import { sampleFrames } from '../render/frames';
 import type { GeneratorRegistry } from '../generators/registry';
@@ -253,9 +260,23 @@ export function createVideoHandlers(deps: VideoHandlerDeps): Record<string, JobH
       // planned (invariant 4), then spoken. A reel with no voice still renders.
       const spoken = await speak(deps, config, prompt.text, plan.scenes, rendered.length, log);
 
+      // Captions come from what the voice said and when it said it (invariant 13), styled by
+      // the template. No voice means no captions: transcribing the render is not an option.
+      const captions = spoken
+        ? buildAss(
+            captionsFromVoiceover(
+              spoken.lines,
+              spoken.startsSeconds,
+              Math.min(spoken.durationSeconds, rendered.length * SECONDS_PER_SCENE),
+            ),
+            REEL_FRAMES[RESOLUTION],
+            await captionStyle(deps.db, prompt.templateId, prompt.templateVersion),
+          )
+        : undefined;
+
       // The reel itself: scenes joined, voice over them, bed ducked under it, logo cornered
       // (plan section 4.6). A render that cannot run leaves the scenes, already paid for.
-      const reel = await renderReel(deps, job.workspaceId, rendered, spoken?.audio, log);
+      const reel = await renderReel(deps, job.workspaceId, rendered, spoken?.audio, captions, log);
       if (reel) {
         await ws.update(
           outputs,
@@ -345,6 +366,7 @@ async function renderReel(
   workspaceId: string,
   scenes: ReelScene[],
   voice: { data: Uint8Array } | undefined,
+  captions: string | undefined,
   log: Parameters<JobHandler>[1],
 ): Promise<{ key: string; view: Record<string, unknown> } | undefined> {
   if (scenes.length === 0) return undefined;
@@ -357,6 +379,7 @@ async function renderReel(
       scenes,
       resolution: RESOLUTION,
       voice,
+      captions,
       music: await deps.music?.(),
       logo: await deps.logo?.(workspaceId),
     });
@@ -390,7 +413,16 @@ async function speak(
   scenes: string[],
   delivered: number,
   log: Parameters<JobHandler>[1],
-): Promise<{ audio: { data: Uint8Array }; view: Record<string, unknown> } | undefined> {
+): Promise<
+  | {
+      audio: { data: Uint8Array };
+      lines: string[];
+      startsSeconds: number[];
+      durationSeconds: number;
+      view: Record<string, unknown>;
+    }
+  | undefined
+> {
   if (!deps.voice || delivered === 0) return undefined;
   const plan = await planVoiceover({
     prompt,
@@ -416,6 +448,9 @@ async function speak(
     );
     return {
       audio: { data: result.data },
+      lines: plan.lines,
+      startsSeconds: result.segmentStartsSeconds,
+      durationSeconds: result.durationSeconds,
       view: {
         lines: plan.lines,
         segmentStartsSeconds: result.segmentStartsSeconds,
@@ -428,6 +463,24 @@ async function speak(
     log.warn({ err }, 'voiceover could not be spoken; the reel stays silent');
     return undefined;
   }
+}
+
+/**
+ * How captions look, from the template that made this reel (WP25). A template says it in its
+ * video defaults; anything it leaves out keeps the default the spike tuned.
+ */
+async function captionStyle(
+  db: Database,
+  templateId: string,
+  version: number,
+): Promise<CaptionStyle> {
+  const [row] = await catalog(db).select(templateVersions, {
+    where: (t, op) => op.and(op.eq(t.templateId, templateId), op.eq(t.version, version)),
+    limit: 1,
+  });
+  const style = (row?.videoDefaults as { captionStyle?: Partial<CaptionStyle> } | null)
+    ?.captionStyle;
+  return { ...DEFAULT_CAPTION_STYLE, ...(style ?? {}) };
 }
 
 /** The seconds a reel of this many scenes asks for, which is what the hold is taken on. */

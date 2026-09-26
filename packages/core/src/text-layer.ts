@@ -1,6 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import { Resvg } from '@resvg/resvg-js';
 import {
   TARGET_PLATFORMS,
@@ -19,21 +18,10 @@ import sharp from 'sharp';
 import { z } from 'zod';
 import { BRAND_FONTS } from './brand-kit';
 import type { InputIssue } from './generators/registry';
+import { fontDir } from './render/fonts';
 
 // The text layer (D12, invariant 12): a spec of vector text blocks, measured and wrapped with
 // the same font files that rasterise it, composited over the picture the model drew.
-
-/**
- * Where the pinned fonts live. Resolved through the package rather than as a URL relative to
- * this file: a bundler rewrites `new URL('../fonts/', import.meta.url)` at build time and then
- * cannot find a directory, which breaks every route that imports this package. FONT_DIR
- * overrides it for a deployment that keeps the files somewhere else.
- */
-function fontDir(): string {
-  if (process.env.FONT_DIR) return process.env.FONT_DIR;
-  const require = createRequire(import.meta.url);
-  return join(dirname(require.resolve('@cgp/core/package.json')), 'fonts');
-}
 
 /** The pinned font set. Nothing outside it can be named by a spec. */
 const FONT_FILES: Record<string, { regular: string; bold: string }> = {
