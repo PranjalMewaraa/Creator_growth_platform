@@ -346,11 +346,13 @@ export async function listAccounts(db: Database, workspaceId: string) {
   const rows = await scoped(db, workspaceId).select(socialAccounts, {
     orderBy: (t, order) => order.asc(t.platform),
   });
-  return rows.map(({ id, platform, displayName, externalId, health, tokenExpiresAt }) => ({
+  return rows.map(({ id, platform, displayName, externalId, health, scopes, tokenExpiresAt }) => ({
     id,
     platform,
     displayName: displayName ?? externalId,
     health,
+    // What the person allowed, shown as the platform named it (S-19).
+    scopes,
     tokenExpiresAt: tokenExpiresAt?.toISOString() ?? null,
   }));
 }

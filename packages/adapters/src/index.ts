@@ -60,3 +60,11 @@ export { createInstagramPublisher } from './publishers/instagram';
 export { createLinkedInPublisher, LINKEDIN_VERSION, toLittleText } from './publishers/linkedin';
 export { createGcsStore } from './storage/gcs';
 export { createMemoryStore } from './storage/memory';
+export {
+  instagramOAuth,
+  linkedinOAuth,
+  OAUTH_PROVIDERS,
+  type ConnectedAccount,
+  type OAuthApp,
+  type OAuthProvider,
+} from './publishers/oauth';

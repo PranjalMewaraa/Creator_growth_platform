@@ -24,6 +24,15 @@ export const baseEnvSchema = z.object({
   GCS_BUCKET: z.string().min(1).optional(),
   /** Wraps the per token data keys (D11). 32 bytes, base64url. Needed to store or use tokens. */
   TOKEN_ENCRYPTION_KEY: z.string().min(1).optional(),
+  /**
+   * The apps a person connects their accounts to (WP28, S-03). Instagram's client id is the
+   * Instagram app's, which is not the Meta app id beside it. Without a pair, that platform's
+   * connect button says so rather than failing at the platform.
+   */
+  INSTAGRAM_CLIENT_ID: z.string().min(1).optional(),
+  INSTAGRAM_CLIENT_SECRET: z.string().min(1).optional(),
+  LINKEDIN_CLIENT_ID: z.string().min(1).optional(),
+  LINKEDIN_CLIENT_SECRET: z.string().min(1).optional(),
   /** The GCP project Vertex bills. Required when PROVIDERS=real. */
   GOOGLE_CLOUD_PROJECT: z.string().min(1).optional(),
   /**
