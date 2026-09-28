@@ -55,8 +55,7 @@ export default async function InsightsPage({
         {
           db: getDb(),
           publishers: providers.publishers,
-          decryptToken: (ciphertext) =>
-            decryptSecret(parseEncryptionKey(tokenKey), ciphertext),
+          decryptToken: (ciphertext) => decryptSecret(parseEncryptionKey(tokenKey), ciphertext),
           log: getLogger(),
         },
         workspaceId,

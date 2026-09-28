@@ -210,7 +210,11 @@ Weeks 1 to 3 are detailed. Weeks 4 to 8 are scoped and get re-planned in detail 
 
 ### Week 8: Demo assembly
 
-As `plan.md` section 11, plus Home (S-04), which depends on Calendar and Accounts and so cannot be filled earlier. No new capability.
+As `plan.md` section 11, plus Home (S-04), which depends on Calendar and Accounts and so cannot be filled earlier.
+
+Built 2026-09-28. Home counts the workspace's own week, in the workspace's own midnight rather than the server's, and an empty day links to the composer with that day already in it. Account health says how many days a token has left and flags one inside a fortnight, which is before a post fails on it rather than after. Insights was two stub methods returning nothing; it now asks the platforms and shows what they say. A metric nobody reported is a dash, never a zero, because "nobody engaged" and "the platform did not say" are different claims and only one is ours to make. A post ranks against the median of this workspace's own posts, and a workspace with one post gets no ranking, since one post is a number and not a baseline. The demo runbook is written (`docs/demo-runbook.md`), against what is built rather than what was planned: step 6 schedules an image because video publishing does not exist, step 7 needs real posts a week or two beforehand or it should be cut, and step 8 states the lift as the one judge signal it is.
+
+Outstanding, and none of it mine to finish: the three real posts Insights needs, the OAuth consent click and the redirect URIs in both dashboards, template curation, and three dry runs with the third driven by someone outside the team.
 
 ---
 
