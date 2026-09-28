@@ -1,33 +1,71 @@
+import type { TargetPlatform } from '@cgp/contracts';
 import { ArrowUpRightIcon, Card, CardBody, CardHeader, cx } from '@cgp/ui';
-import { listAccounts, profileHistory } from '@cgp/core';
+import { homeDigest, profileHistory, type HomeDay } from '@cgp/core';
 import Link from 'next/link';
 import { Screen } from '@/components/screen';
 import { getDb } from '@/server/runtime';
 import { requireWorkspace } from '@/server/session';
 
-/** The next seven days as the workspace sees them, starting today in its own timezone. */
-function nextSevenDays(timezone: string) {
-  const weekday = new Intl.DateTimeFormat('en-IN', { weekday: 'short', timeZone: timezone });
-  const day = new Intl.DateTimeFormat('en-IN', { day: 'numeric', timeZone: timezone });
-  const now = Date.now();
-  return Array.from({ length: 7 }, (_, offset) => {
-    const date = new Date(now + offset * 24 * 60 * 60 * 1000);
-    return { key: offset, weekday: weekday.format(date), day: day.format(date) };
-  });
-}
+const NAMES: Record<TargetPlatform, string> = { instagram: 'Instagram', linkedin: 'LinkedIn' };
 
-const PLATFORMS = [
-  { value: 'instagram', label: 'Instagram' },
-  { value: 'linkedin', label: 'LinkedIn' },
-] as const;
+/** A day in the strip: what is on it, or a way to put something on it. */
+function Day({ day, base, timezone }: { day: HomeDay; base: string; timezone: string }) {
+  const clock = (iso: string) =>
+    new Date(iso).toLocaleTimeString('en-IN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: timezone,
+    });
+  // An empty day is the primary action on this screen (S-04), so it is a link, not a gap.
+  // Today goes without a time: its midnight has gone, and the composer would refuse a slot in
+  // the past, so its own default of an hour from now is the useful answer.
+  const href =
+    day.posts.length > 0
+      ? `${base}/calendar`
+      : day.isToday
+        ? `${base}/compose`
+        : `${base}/compose?at=${encodeURIComponent(day.startsAt)}`;
+  return (
+    <li>
+      <Link
+        href={href}
+        className={cx(
+          'flex h-full flex-col items-center gap-1 rounded-xl py-3 transition hover:bg-black/40',
+          day.isToday ? 'bg-black/80' : 'bg-black/15',
+        )}
+        title={
+          day.posts.length === 0
+            ? 'Nothing planned. Write something for this day.'
+            : day.posts
+                .map((post) => `${clock(post.at)} ${post.text || 'No caption'}`)
+                .join(String.fromCharCode(10))
+        }
+      >
+        <span className="text-xs text-white/75">{day.weekday}</span>
+        <span className="text-lg font-semibold tabular-nums">{day.day}</span>
+        {day.posts.length === 0 ? (
+          <span className="mt-1 text-xs text-white/40" aria-label="Nothing planned">
+            +
+          </span>
+        ) : (
+          <span className="mt-1 flex gap-0.5" aria-label={`${day.posts.length} scheduled`}>
+            {day.posts.slice(0, 3).map((post) => (
+              <span key={post.id} className="size-1.5 rounded-full bg-white" />
+            ))}
+          </span>
+        )}
+      </Link>
+    </li>
+  );
+}
 
 export default async function HomePage({ params }: { params: Promise<{ workspaceId: string }> }) {
   const { workspaceId } = await params;
   const { workspace } = await requireWorkspace(workspaceId);
   const base = `/w/${workspace.id}`;
   const db = getDb();
-  const [accounts, [profile]] = await Promise.all([
-    listAccounts(db, workspaceId),
+  const [digest, [profile]] = await Promise.all([
+    homeDigest(db, workspaceId, workspace.timezone),
     profileHistory(db, workspaceId),
   ]);
 
@@ -77,9 +115,15 @@ export default async function HomePage({ params }: { params: Promise<{ workspace
           <div className="flex items-start justify-between gap-3">
             <div>
               <h2 className="text-sm font-medium text-white/85">Next seven days</h2>
-              <p className="mt-1 text-3xl font-semibold tracking-tight">Nothing scheduled</p>
+              <p className="mt-1 text-3xl font-semibold tracking-tight">
+                {digest.scheduled === 0
+                  ? 'Nothing scheduled'
+                  : `${digest.scheduled} post${digest.scheduled === 1 ? '' : 's'} scheduled`}
+              </p>
               <p className="mt-1 max-w-md text-sm text-white/80">
-                Planned posts and empty slots appear here once the calendar is in use.
+                {digest.emptyDays === 0
+                  ? 'Every day this week has something on it.'
+                  : `${digest.emptyDays} day${digest.emptyDays === 1 ? ' has' : 's have'} nothing on them. Pick one to fill it.`}
               </p>
             </div>
             <Link
@@ -91,18 +135,8 @@ export default async function HomePage({ params }: { params: Promise<{ workspace
             </Link>
           </div>
           <ol className="mt-6 grid grid-cols-7 gap-2">
-            {nextSevenDays(workspace.timezone).map(({ key, weekday, day }) => (
-              <li
-                key={key}
-                className={cx(
-                  'flex flex-col items-center gap-1 rounded-xl py-3',
-                  key === 0 ? 'bg-black/80' : 'bg-black/15',
-                )}
-              >
-                <span className="text-xs text-white/75">{weekday}</span>
-                <span className="text-lg font-semibold tabular-nums">{day}</span>
-                <span className="mt-1 h-1 w-6 rounded-full bg-white/25" aria-hidden />
-              </li>
+            {digest.days.map((day) => (
+              <Day key={day.startsAt} day={day} base={base} timezone={workspace.timezone} />
             ))}
           </ol>
         </section>
@@ -120,33 +154,44 @@ export default async function HomePage({ params }: { params: Promise<{ workspace
           />
           <CardBody>
             <ul className="flex flex-col gap-2">
-              {PLATFORMS.map(({ value, label }) => {
-                const account = accounts.find((a) => a.platform === value);
-                return (
-                  <li
-                    key={value}
-                    className="flex items-center justify-between rounded-xl border border-line bg-raised px-4 py-3"
-                  >
-                    <span className="min-w-0">
-                      <span className="block text-sm text-ink">{label}</span>
-                      {account ? (
-                        <span className="block truncate text-xs text-muted">
-                          {account.displayName}
-                        </span>
-                      ) : null}
+              {digest.accounts.map((account) => (
+                <li
+                  key={account.platform}
+                  className="flex items-center justify-between rounded-xl border border-line bg-raised px-4 py-3"
+                >
+                  <span className="min-w-0">
+                    <span className="block text-sm text-ink">{NAMES[account.platform]}</span>
+                    <span className="block truncate text-xs text-muted">
+                      {account.connected
+                        ? account.expiresInDays === null
+                          ? account.displayName
+                          : account.expiresInDays < 0
+                            ? `${account.displayName} · token expired`
+                            : `${account.displayName} · ${account.expiresInDays} days left`
+                        : 'Connect it before scheduling to it'}
                     </span>
-                    {account ? (
-                      <span className="rounded-full border border-good/40 px-2.5 py-0.5 text-xs text-good">
-                        Connected
-                      </span>
-                    ) : (
-                      <span className="rounded-full border border-line px-2.5 py-0.5 text-xs text-muted">
-                        Not connected
-                      </span>
-                    )}
-                  </li>
-                );
-              })}
+                  </span>
+                  {!account.connected ? (
+                    <Link
+                      href={`${base}/accounts`}
+                      className="rounded-full border border-line px-2.5 py-0.5 text-xs text-muted hover:text-ink"
+                    >
+                      Not connected
+                    </Link>
+                  ) : account.needsAttention ? (
+                    <Link
+                      href={`${base}/accounts`}
+                      className="rounded-full border border-bad/40 px-2.5 py-0.5 text-xs text-bad"
+                    >
+                      Needs attention
+                    </Link>
+                  ) : (
+                    <span className="rounded-full border border-good/40 px-2.5 py-0.5 text-xs text-good">
+                      Connected
+                    </span>
+                  )}
+                </li>
+              ))}
             </ul>
           </CardBody>
         </Card>

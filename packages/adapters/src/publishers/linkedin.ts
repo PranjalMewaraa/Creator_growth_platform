@@ -165,8 +165,37 @@ export function createLinkedInPublisher(options: LinkedInPublisherOptions = {}):
       return { platformPostId: urn, permalink: `https://www.linkedin.com/feed/update/${urn}/` };
     },
 
-    metrics() {
-      return Promise.resolve({ fetchedAt: new Date().toISOString() });
+    /**
+     * What LinkedIn will tell a member about their own post (S-21, week 8): reactions and
+     * comments, through socialActions. Impressions need organisation level access, which a
+     * member posting as themselves does not have, so they are simply not reported — an
+     * absent number rather than an invented one.
+     */
+    async metrics(account, platformPostId) {
+      const fetchedAt = new Date().toISOString();
+      if (platformPostId === 'unknown') return { fetchedAt };
+      try {
+        const response = await call(
+          account.accessToken,
+          'GET',
+          `/v2/socialActions/${encodeURIComponent(platformPostId)}`,
+          { rest: false },
+        );
+        const body = (await response.json().catch(() => ({}))) as {
+          likesSummary?: { totalLikes?: number };
+          commentsSummary?: { totalFirstLevelComments?: number };
+        };
+        const likes = body.likesSummary?.totalLikes;
+        const comments = body.commentsSummary?.totalFirstLevelComments;
+        return {
+          fetchedAt,
+          ...(typeof likes === 'number' ? { likes } : {}),
+          ...(typeof comments === 'number' ? { comments } : {}),
+        };
+      } catch (err) {
+        options.log?.warn({ err, platformPostId }, 'linkedin reported no insights');
+        return { fetchedAt };
+      }
     },
   };
 }

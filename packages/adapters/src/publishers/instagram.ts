@@ -7,6 +7,13 @@ import { normalizeError } from '../errors';
 
 const API = 'https://graph.instagram.com';
 
+/** Only the numbers the platform actually gave. An absent metric stays absent, never zero. */
+function defined(values: Record<string, number | undefined>): Record<string, number> {
+  return Object.fromEntries(
+    Object.entries(values).filter((entry): entry is [string, number] => entry[1] !== undefined),
+  );
+}
+
 interface GraphError {
   message?: string;
   error_user_msg?: string;
@@ -135,9 +142,40 @@ export function createInstagramPublisher(options: InstagramPublisherOptions = {}
       return { platformPostId: published.id, ...(permalink ? { permalink } : {}) };
     },
 
-    metrics() {
-      // Insights come in week 7; until then nothing is reported rather than anything invented.
-      return Promise.resolve({ fetchedAt: new Date().toISOString() });
+    /**
+     * What the platform will say about a post (S-21, week 8). Fetched when Insights opens
+     * rather than polled, because a demo workspace has a handful of posts and a poller is a
+     * thing that breaks quietly.
+     *
+     * A metric the account is not entitled to comes back as an error for that metric alone,
+     * so they are asked for together and whatever arrives is kept. Nothing is estimated: a
+     * number that is not reported is absent, not zero.
+     */
+    async metrics(account, platformPostId) {
+      const fetchedAt = new Date().toISOString();
+      try {
+        const insights = await graph<{
+          data?: Array<{ name?: string; values?: Array<{ value?: number }> }>;
+        }>(account.accessToken, `/${platformPostId}/insights`, {
+          params: { metric: 'reach,likes,comments,saved,shares,views' },
+        });
+        const value = (name: string) =>
+          insights.data?.find((row) => row.name === name)?.values?.[0]?.value;
+        return {
+          fetchedAt,
+          ...defined({
+            reach: value('reach'),
+            views: value('views'),
+            likes: value('likes'),
+            comments: value('comments'),
+            saves: value('saved'),
+            shares: value('shares'),
+          }),
+        };
+      } catch (err) {
+        options.log?.warn({ err, platformPostId }, 'instagram reported no insights');
+        return { fetchedAt };
+      }
     },
   };
 }

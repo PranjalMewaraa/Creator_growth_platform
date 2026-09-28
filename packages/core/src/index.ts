@@ -14,6 +14,22 @@ export { dispatchDue, startDispatcher, DISPATCH_EVERY_MS, type DispatchDeps } fr
 export { backoffMs, nextAttemptAt, MAX_PUBLISH_ATTEMPTS } from './retry';
 export { attachOutputToPost, type AttachDeps, type AttachResult } from './compose-from-output';
 export {
+  insights,
+  engagementOf,
+  median,
+  type InsightPost,
+  type InsightsDeps,
+  type InsightsView,
+} from './insights';
+export {
+  homeDigest,
+  startOfDayIn,
+  EXPIRY_WARNING_DAYS,
+  type HomeAccount,
+  type HomeDay,
+  type HomeDigest,
+} from './home';
+export {
   beginConnect,
   completeConnect,
   readState,
