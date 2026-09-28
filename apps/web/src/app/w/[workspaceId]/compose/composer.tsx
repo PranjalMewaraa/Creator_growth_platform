@@ -110,6 +110,12 @@ function localInputValue(at: Date) {
   return shifted.toISOString().slice(0, 16);
 }
 
+/** The Studio output this page was opened with, if any (WP33). */
+function outputFromUrl(): string | null {
+  if (typeof window === 'undefined') return null;
+  return new URLSearchParams(window.location.search).get('output');
+}
+
 /**
  * The slot the calendar sent, if this page was opened from one. Read from the address rather
  * than through a router hook because the composer is client only: the URL is already here.
@@ -171,10 +177,17 @@ export function Composer({
   const [savedAt, setSavedAt] = useState<string | null>(initial?.savedAt ?? null);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  // A picture the Studio made, already stored with its Instagram frames (WP33). It stands in
+  // for an uploaded file: there is nothing left to upload when the post is sent.
+  const [fromStudio, setFromStudio] = useState<{
+    key: string;
+    url: string;
+    outputId: string;
+  } | null>(null);
   const [dragging, setDragging] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [tab, setTab] = useState<TargetPlatform | null>(null);
-  const [busy, setBusy] = useState<'uploading' | 'posting' | null>(null);
+  const [busy, setBusy] = useState<'uploading' | 'posting' | 'attaching' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [publicationId, setPublicationId] = useState<string | null>(null);
   const [targets, setTargets] = useState<TargetView[]>([]);
@@ -189,7 +202,8 @@ export function Composer({
   const base = `/api/w/${workspaceId}`;
   const selected = accounts.filter((a) => chosen.includes(a.id));
   const platforms = [...new Set(selected.map((a) => a.platform))];
-  const imageMissing = platforms.includes('instagram') && !file;
+  const hasImage = file !== null || fromStudio !== null;
+  const imageMissing = platforms.includes('instagram') && !hasImage;
   const over = platforms.filter((p) => text.length > LIMITS[p]);
   // A time that has already gone by is not a schedule. The server checks this too; here it
   // only keeps the button from sending something it knows will come back refused.
@@ -198,7 +212,7 @@ export function Composer({
   const canPost =
     busy === null &&
     chosen.length > 0 &&
-    (text.trim().length > 0 || file !== null) &&
+    (text.trim().length > 0 || hasImage) &&
     !imageMissing &&
     over.length === 0 &&
     (when === '' || whenValid);
@@ -227,6 +241,47 @@ export function Composer({
     },
     [],
   );
+
+  // Something handed over from the Studio (WP33): the server copies it into the workspace's
+  // uploads with its Instagram frames, and hands back the key and the caption.
+  useEffect(() => {
+    const outputId = outputFromUrl();
+    if (!outputId) return;
+    let stopped = false;
+    const run = async () => {
+      setBusy('attaching');
+      const response = await fetch(`${base}/outputs/${outputId}/attach`, { method: 'POST' }).catch(
+        () => null,
+      );
+      if (stopped) return;
+      const body = (await response?.json().catch(() => null)) as
+        | (ApiError & {
+            upload?: { key: string; url: string; instagramUrl: string };
+            text?: string;
+            sourceOutputId?: string;
+          })
+        | null;
+      setBusy(null);
+      if (!response?.ok || !body?.sourceOutputId) {
+        setError(describe(body ?? {}, 'That could not be brought into a post'));
+        return;
+      }
+      if (body.upload) {
+        setFromStudio({
+          key: body.upload.key,
+          url: body.upload.url,
+          outputId: body.sourceOutputId,
+        });
+        setPreview(body.upload.url);
+      }
+      // The caption the Studio wrote, unless something is already being written here.
+      if (body.text) setText((current) => (current.trim() ? current : (body.text ?? '')));
+    };
+    void run();
+    return () => {
+      stopped = true;
+    };
+  }, [base]);
 
   // Poll the publication until no target is still in flight.
   useEffect(() => {
@@ -311,7 +366,7 @@ export function Composer({
   async function post() {
     setError(null);
     try {
-      let mediaKey: string | undefined;
+      let mediaKey: string | undefined = fromStudio?.key;
       if (file) {
         setBusy('uploading');
         const form = new FormData();
@@ -333,6 +388,7 @@ export function Composer({
           text,
           accountIds: chosen,
           ...(mediaKey ? { mediaKey, instagramFrame: frame } : {}),
+          ...(fromStudio ? { sourceOutputId: fromStudio.outputId } : {}),
           ...(whenValid && whenAt ? { scheduledAt: whenAt.toISOString() } : {}),
         }),
       });
@@ -365,6 +421,7 @@ export function Composer({
     setTargets([]);
     setWhen('');
     setScheduledAt(null);
+    setFromStudio(null);
   }
 
   if (accounts.length === 0) {
@@ -606,7 +663,12 @@ export function Composer({
                   className="sr-only"
                   id="post-media"
                 />
-                {file && preview ? (
+                {busy === 'attaching' ? (
+                  <div className="flex items-center gap-3 rounded-xl border border-line bg-raised p-2.5">
+                    <span className="size-16 shrink-0 animate-pulse rounded-lg bg-surface" />
+                    <p className="text-sm text-muted">Bringing the picture in from the Studio…</p>
+                  </div>
+                ) : (file || fromStudio) && preview ? (
                   <div className="flex items-center gap-3 rounded-xl border border-line bg-raised p-2.5">
                     {/* A local object URL: next/image cannot optimise it, and need not. */}
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -616,9 +678,13 @@ export function Composer({
                       className="h-16 w-16 shrink-0 rounded-lg object-cover"
                     />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm text-ink">{file.name}</p>
+                      <p className="truncate text-sm text-ink">
+                        {file ? file.name : 'From the Studio'}
+                      </p>
                       <p className="text-xs text-muted">
-                        {(file.size / 1024 / 1024).toFixed(1)} MB
+                        {file
+                          ? `${(file.size / 1024 / 1024).toFixed(1)} MB`
+                          : 'Cut to each platform, ready to post'}
                       </p>
                     </div>
                     <label
@@ -629,7 +695,10 @@ export function Composer({
                     </label>
                     <button
                       type="button"
-                      onClick={() => chooseFile(null)}
+                      onClick={() => {
+                        setFromStudio(null);
+                        chooseFile(null);
+                      }}
                       className="rounded-lg px-2.5 py-1.5 text-sm text-muted hover:bg-surface hover:text-bad"
                     >
                       Remove
@@ -658,7 +727,7 @@ export function Composer({
                   </label>
                 )}
 
-                {file && platforms.includes('instagram') ? (
+                {hasImage && platforms.includes('instagram') ? (
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-xs text-muted">Instagram frame</span>
                     <div className="flex rounded-lg border border-line bg-raised p-0.5">
@@ -772,7 +841,7 @@ export function Composer({
         </div>
 
         {activeTab === 'instagram' ? (
-          file ? (
+          hasImage ? (
             <Badge tone="info">
               Fitted to {frame === 'portrait' ? '4:5' : '1:1'} with bars in your brand colour.
               Nothing is cropped.
@@ -782,7 +851,7 @@ export function Composer({
           )
         ) : activeTab === 'linkedin' ? (
           <Badge tone="info">
-            {file
+            {hasImage
               ? 'The image goes out as uploaded, at its own shape.'
               : 'A text post. Adding an image is optional.'}
           </Badge>

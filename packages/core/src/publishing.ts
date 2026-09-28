@@ -135,6 +135,8 @@ export interface PublishRequest {
   timezone: string;
   /** When to post. Absent means now (WP31). */
   scheduledAt?: Date;
+  /** The Studio output this post came from, kept as lineage (WP33). */
+  sourceOutputId?: string;
   correlationId?: string;
 }
 
@@ -256,6 +258,7 @@ export async function startPublication(
     workspaceId: request.workspaceId,
     timezone: request.timezone,
     ...(scheduledAt ? { scheduledAt } : {}),
+    ...(request.sourceOutputId ? { sourceOutputId: request.sourceOutputId } : {}),
     body: { ...content },
     targets: accounts.map((account) => ({
       socialAccountId: account.id,

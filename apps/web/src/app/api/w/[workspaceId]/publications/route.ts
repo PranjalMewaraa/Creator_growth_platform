@@ -14,6 +14,7 @@ interface Body {
   instagramFrame?: unknown;
   accountIds?: unknown;
   scheduledAt?: unknown;
+  sourceOutputId?: unknown;
 }
 
 /**
@@ -35,7 +36,8 @@ export const POST = withRequestContext(async (request: Request, { params }: Cont
     (body.instagramFrame !== undefined &&
       body.instagramFrame !== 'portrait' &&
       body.instagramFrame !== 'square') ||
-    (body.scheduledAt !== undefined && typeof body.scheduledAt !== 'string')
+    (body.scheduledAt !== undefined && typeof body.scheduledAt !== 'string') ||
+    (body.sourceOutputId !== undefined && typeof body.sourceOutputId !== 'string')
   ) {
     return apiError(422, 'invalid_input', {
       issues: [{ path: '', message: 'Expected { text, mediaKey?, accountIds, scheduledAt? }' }],
@@ -62,6 +64,7 @@ export const POST = withRequestContext(async (request: Request, { params }: Cont
       accountIds: body.accountIds,
       timezone: workspace?.timezone ?? 'Asia/Kolkata',
       ...(scheduledAt ? { scheduledAt } : {}),
+      ...(body.sourceOutputId ? { sourceOutputId: body.sourceOutputId } : {}),
       correlationId: currentCorrelationId(),
     },
   );

@@ -46,6 +46,8 @@ export interface NewPublication {
   timezone: string;
   /** When it should go out. Now, for a post now (WP31). */
   scheduledAt?: Date;
+  /** The output it was made from, when it came from the Studio (WP33). */
+  sourceOutputId?: string;
   /** The shared source, as the user wrote it. */
   body: Record<string, unknown>;
   /** One per account, each with its own body: the per platform variant (A7). */
@@ -95,6 +97,7 @@ export async function createPublication(
         workspaceId: request.workspaceId,
         scheduledAt,
         timezone: request.timezone,
+        sourceOutputId: request.sourceOutputId,
         body: request.body,
       })
       .returning();

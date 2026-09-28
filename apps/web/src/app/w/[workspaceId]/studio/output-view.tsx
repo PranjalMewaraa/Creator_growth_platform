@@ -8,6 +8,7 @@ import {
   type TextLayerSpec,
 } from '@cgp/contracts';
 import { Button, cx } from '@cgp/ui';
+import Link from 'next/link';
 import { useState, type ReactNode } from 'react';
 import { TextLayerEditor } from './text-layer-editor';
 
@@ -198,9 +199,17 @@ export function VideoOutput({
         <span className="tabular-nums">
           {width > 0 ? `${width} x ${height}` : 'Reel'} · no voiceover or captions yet
         </span>
-        <a href={url} target="_blank" rel="noreferrer" className="hover:text-ink">
-          Open
-        </a>
+        <span className="flex items-center gap-3">
+          {/* No "Use in a post" here: the Instagram and LinkedIn adapters post images, so a
+              reel cannot be published from the product yet (WP29, WP30). Saying so is better
+              than a button that refuses. */}
+          <span title="The publishers post images; video publishing is not built yet">
+            Download to post it
+          </span>
+          <a href={url} target="_blank" rel="noreferrer" className="hover:text-ink">
+            Open
+          </a>
+        </span>
       </figcaption>
     </figure>
   );
@@ -279,6 +288,14 @@ export function ImageOutput({
           <a href={shown} target="_blank" rel="noreferrer" className="hover:text-ink">
             Open
           </a>
+          {/* The way out of the Studio (WP33): the picture is copied into a post with its
+              platform frames, so nothing has to be downloaded and uploaded again. */}
+          <Link
+            href={`/w/${workspaceId}/compose?output=${outputId}`}
+            className="font-medium text-accent hover:underline"
+          >
+            Use in a post
+          </Link>
         </span>
       </figcaption>
     </figure>
