@@ -1,8 +1,15 @@
 import type { Logger } from '@cgp/config';
 import type { ModerationAdapter, ObjectStore } from '@cgp/contracts';
-import { outputs, renditionsFor, scoped, type Database } from '@cgp/db';
+import {
+  findRendition,
+  outputs,
+  renditionsFor,
+  saveRendition,
+  scoped,
+  type Database,
+} from '@cgp/db';
 
-import { storeUpload, type UploadResult } from './publishing';
+import { instagramKey, storeUpload, type UploadResult } from './publishing';
 
 /**
  * Taking something the Studio made into a post (S-13, WP33). Until this existed, a generated
@@ -15,6 +22,34 @@ import { storeUpload, type UploadResult } from './publishing';
  * one set of rules decides what is postable, not two that can drift apart.
  */
 
+/**
+ * Instagram is the only platform whose post needs a cut of its own, so a post copy is filed
+ * under it; LinkedIn takes the original that sits beside it.
+ */
+const POST_PLATFORM = 'instagram' as const;
+
+/** What a cached post copy was made from. A different source means a different copy. */
+interface PostRenditionSpec {
+  sourceKey: string;
+}
+
+/** The upload shape, rebuilt from a cached key: the frames are siblings of it by name. */
+function uploadFromKey(store: ObjectStore, key: string): Extract<UploadResult, { ok: true }> {
+  const url = store.publicUrl(key);
+  return {
+    ok: true,
+    key,
+    url,
+    mimeType: key.endsWith('.png') ? 'image/png' : 'image/jpeg',
+    bytes: 0,
+    instagramUrl: store.publicUrl(instagramKey(key)),
+    instagramUrls: {
+      portrait: store.publicUrl(instagramKey(key, 'portrait')),
+      square: store.publicUrl(instagramKey(key, 'square')),
+    },
+  };
+}
+
 export type AttachResult =
   | {
       ok: true;
@@ -24,6 +59,8 @@ export type AttachResult =
       text: string;
       /** For the publication's lineage: which output this post came from. */
       sourceOutputId: string;
+      /** Whether this came from the cache rather than being cut again (WP32). */
+      cached: boolean;
     }
   | { ok: false; reason: 'not_found' }
   /** A reel. The publishers post images; video publishing is not built (see WP29, WP30). */
@@ -55,7 +92,7 @@ export async function attachOutputToPost(
 
   // Words alone: nothing to attach, but the caption comes across.
   if (output.kind === 'hook' || output.kind === 'caption') {
-    return { ok: true, upload: null, text, sourceOutputId: output.id };
+    return { ok: true, upload: null, text, sourceOutputId: output.id, cached: false };
   }
   if (output.kind === 'video') return { ok: false, reason: 'not_postable', kind: output.kind };
 
@@ -66,6 +103,24 @@ export async function attachOutputToPost(
   const [layer] = await renditionsFor(deps.db, workspaceId, [output.id]);
   const key = layer ? layer.storageKey : output.storageKey;
   if (!key) return { ok: false, reason: 'invalid_input', message: 'That output has no picture' };
+
+  // Cached from last time (WP32). The same picture cut to the same frames is the same file,
+  // so a second look at a post reuses it rather than paying for the cut, the storage and the
+  // safety check again. The source key is the whole of what the copy depends on: draw a new
+  // text layer and the key changes with it, which is what makes this safe to trust.
+  // Filed under Instagram because Instagram is the only platform that needs a cut: LinkedIn
+  // posts the picture as uploaded, and takes the same original this copy is built around.
+  const cached = await findRendition(deps.db, workspaceId, output.id, POST_PLATFORM, 'post');
+  if (cached && (cached.spec as PostRenditionSpec).sourceKey === key) {
+    deps.log.info({ outputId: output.id }, 'post copy reused from the rendition cache');
+    return {
+      ok: true,
+      upload: uploadFromKey(deps.store, cached.storageKey),
+      text,
+      sourceOutputId: output.id,
+      cached: true,
+    };
+  }
 
   let data: Uint8Array;
   try {
@@ -90,5 +145,14 @@ export async function attachOutputToPost(
             message: upload.issues[0]?.message ?? 'That picture could not be used',
           };
   }
-  return { ok: true, upload, text, sourceOutputId: output.id };
+  // Derived once, cached (plan section 3). Keyed on the source it was cut from, so a new text
+  // layer over the same output makes the cache miss instead of serving the old picture.
+  await saveRendition(deps.db, workspaceId, {
+    outputId: output.id,
+    platform: POST_PLATFORM,
+    kind: 'post',
+    spec: { sourceKey: key } satisfies PostRenditionSpec,
+    storageKey: upload.key,
+  });
+  return { ok: true, upload, text, sourceOutputId: output.id, cached: false };
 }

@@ -132,11 +132,18 @@ export const renditions = pgTable(
       .notNull()
       .references(() => outputs.id),
     platform: platformEnum('platform').notNull(),
+    /**
+     * What was derived (WP32). `layer` is the picture with its text composited over it, which
+     * is what the Studio shows. `post` is the post ready copy, cut to the platform's frames and
+     * already checked, which is what the composer attaches. One output can have both, so the
+     * kind is part of what makes a rendition unique.
+     */
+    kind: text('kind').notNull().default('layer'),
     spec: jsonb('spec').notNull(),
     storageKey: text('storage_key').notNull(),
     createdAt: createdAt(),
   },
-  (t) => [uniqueIndex('renditions_once_per_platform').on(t.outputId, t.platform)],
+  (t) => [uniqueIndex('renditions_once_per_platform').on(t.outputId, t.platform, t.kind)],
 );
 
 /**

@@ -6,20 +6,32 @@ import type { TargetPlatform } from '@cgp/contracts';
 export type RenditionRow = typeof renditions.$inferSelect;
 
 /**
- * A rendition is derived, not authored: one per output per platform, replaced whenever the
- * spec that made it changes. The unique index on (output_id, platform) is what makes this an
- * upsert rather than a pile of near identical pictures.
+ * What was derived. `layer` is the picture with its text composited over it; `post` is the
+ * post ready copy, cut to the platform's frames and already checked (WP32).
+ */
+export type RenditionKind = 'layer' | 'post';
+
+/**
+ * A rendition is derived, not authored: one per output per platform per kind, replaced
+ * whenever the spec that made it changes. The unique index is what makes this an upsert
+ * rather than a pile of near identical pictures.
  */
 export async function saveRendition(
   db: Database,
   workspaceId: string,
-  fields: { outputId: string; platform: TargetPlatform; spec: unknown; storageKey: string },
+  fields: {
+    outputId: string;
+    platform: TargetPlatform;
+    spec: unknown;
+    storageKey: string;
+    kind?: RenditionKind;
+  },
 ): Promise<RenditionRow> {
   const [row] = await unwrap(db)
     .insert(renditions)
-    .values({ ...fields, workspaceId })
+    .values({ ...fields, kind: fields.kind ?? 'layer', workspaceId })
     .onConflictDoUpdate({
-      target: [renditions.outputId, renditions.platform],
+      target: [renditions.outputId, renditions.platform, renditions.kind],
       set: { spec: fields.spec, storageKey: fields.storageKey },
     })
     .returning();
@@ -27,17 +39,21 @@ export async function saveRendition(
   return row;
 }
 
-/** Every rendition of the given outputs, for showing what has already been composited. */
+/**
+ * Every rendition of the given outputs, for showing what has already been composited. Layers
+ * only by default: a post ready copy is a cache, not something the Studio should draw.
+ */
 export async function renditionsFor(
   db: Database,
   workspaceId: string,
   outputIds: string[],
+  kind: RenditionKind = 'layer',
 ): Promise<RenditionRow[]> {
   if (outputIds.length === 0) return [];
   const rows = await unwrap(db)
     .select()
     .from(renditions)
-    .where(eq(renditions.workspaceId, workspaceId));
+    .where(and(eq(renditions.workspaceId, workspaceId), eq(renditions.kind, kind)));
   return rows.filter((row) => outputIds.includes(row.outputId));
 }
 
@@ -47,6 +63,7 @@ export async function findRendition(
   workspaceId: string,
   outputId: string,
   platform: TargetPlatform,
+  kind: RenditionKind = 'layer',
 ): Promise<RenditionRow | undefined> {
   const [row] = await unwrap(db)
     .select()
@@ -56,6 +73,7 @@ export async function findRendition(
         eq(renditions.workspaceId, workspaceId),
         eq(renditions.outputId, outputId),
         eq(renditions.platform, platform),
+        eq(renditions.kind, kind),
       ),
     );
   return row;

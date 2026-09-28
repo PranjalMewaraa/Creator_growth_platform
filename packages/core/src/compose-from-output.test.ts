@@ -1,7 +1,14 @@
 import { createFakeModeration, createImageAdapters, createMemoryStore } from '@cgp/adapters';
 import { createLogger } from '@cgp/config';
 import type { ModerationAdapter } from '@cgp/contracts';
-import { outputs, publications, scoped, upsertSocialAccount, type Database } from '@cgp/db';
+import {
+  outputs,
+  publications,
+  saveRendition,
+  scoped,
+  upsertSocialAccount,
+  type Database,
+} from '@cgp/db';
 import {
   addTestProfile,
   createTestDatabase,
@@ -170,5 +177,55 @@ describe('taking a Studio output into a post (WP33)', () => {
     if (!result.ok) throw new Error(result.reason);
     const [publication] = await scoped(db, workspaceId).select(publications);
     expect(publication?.sourceOutputId).toBe(output.id);
+  });
+
+  it('cuts the picture once and reuses it, rather than paying twice (WP32)', async () => {
+    const { workspaceId, output } = await workspaceWithImage();
+    let checks = 0;
+    const counting: ModerationAdapter = {
+      key: 'counting',
+      checkText: () => Promise.resolve({ allowed: true, flagged: [] }),
+      checkImage: () => {
+        checks += 1;
+        return Promise.resolve({ allowed: true, flagged: [] });
+      },
+    };
+
+    const first = await attachOutputToPost(deps(counting), workspaceId, output.id);
+    const second = await attachOutputToPost(deps(counting), workspaceId, output.id);
+
+    if (!first.ok || !second.ok) throw new Error('attach failed');
+    expect(first.cached).toBe(false);
+    expect(second.cached).toBe(true);
+    // The same file, so the same post: no second cut, no second stored copy, and no second
+    // safety check, which is the one that costs money.
+    expect(second.upload?.key).toBe(first.upload?.key);
+    expect(second.upload?.instagramUrl).toBe(first.upload?.instagramUrl);
+    expect(checks).toBe(1);
+  });
+
+  it('cuts again when the picture underneath has changed', async () => {
+    const { workspaceId, output } = await workspaceWithImage();
+    const first = await attachOutputToPost(deps(), workspaceId, output.id);
+    if (!first.ok) throw new Error(first.reason);
+
+    // A text layer drawn since: a different source, so the cached copy is the wrong picture.
+    await store.put(
+      `${workspaceId}/renditions/${output.id}.instagram.jpg`,
+      await store.get(output.storageKey),
+      'image/jpeg',
+    );
+    await saveRendition(db, workspaceId, {
+      outputId: output.id,
+      platform: 'instagram',
+      spec: { drawn: true },
+      storageKey: `${workspaceId}/renditions/${output.id}.instagram.jpg`,
+    });
+
+    const second = await attachOutputToPost(deps(), workspaceId, output.id);
+
+    if (!second.ok) throw new Error(second.reason);
+    expect(second.cached).toBe(false);
+    expect(second.upload?.key).not.toBe(first.upload?.key);
   });
 });
