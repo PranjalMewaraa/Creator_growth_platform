@@ -9,6 +9,7 @@
     "accounts:import": "tsx scripts/import-accounts.ts",
     "previews": "tsx scripts/template-previews.ts",
     "seed:history": "tsx scripts/seed-history.ts",
+    "seed:library": "tsx scripts/seed-library.ts",
     "music:add": "tsx scripts/music-add.ts",
     "eval": "tsx scripts/eval.ts",
     "eval:score": "tsx scripts/eval-score.ts",
