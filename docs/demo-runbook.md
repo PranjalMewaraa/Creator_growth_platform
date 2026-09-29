@@ -149,7 +149,12 @@ says nothing about whatever someone shouts out.
 
 Plan section 15 wants 2–5 workspaces. Demo Studio is populated; the rest is outstanding:
 
-- [ ] Three real posts published 1–2 weeks ahead, so step 7 exists at all
-- [ ] 4–6 weeks of calendar history in the main workspace
-- [ ] One workspace deliberately near-empty, to show onboarding without resetting anything
-- [ ] Credit balances at plausible plan levels
+- [ ] Three real posts published 1–2 weeks ahead, so step 7 exists at all — **the only one of
+      these that cannot be scripted, and the only one with a deadline**
+- [ ] A library of prior outputs, so Studio opens populated. Generating these means real
+      provider calls: a few runs through Studio with PROVIDERS=real is the honest way
+- [x] 4–6 weeks of calendar history — `pnpm --filter @cgp/worker seed:history <workspace id>`
+      (24 posts over six weeks are in Demo Studio; `--clear` removes them, and they never
+      appear in Insights because no platform was ever asked about them)
+- [x] One workspace deliberately near-empty — New Creator, seeded from the start
+- [x] Credit balances at plausible plan levels — granted by the seed, 2000 credits and 120 video seconds

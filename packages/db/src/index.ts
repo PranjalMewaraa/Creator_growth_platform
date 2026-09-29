@@ -76,6 +76,13 @@ export {
 } from './schema';
 export { COMPILER_PROFILE_VERSION, COMPILER_PROFILES } from './seed-catalog';
 export {
+  clearHistory,
+  seedHistory,
+  SEED_POST_PREFIX,
+  type SeededHistory,
+  type SeedHistoryOptions,
+} from './seed-history';
+export {
   claimPostTarget,
   createPublication,
   findPostTarget,

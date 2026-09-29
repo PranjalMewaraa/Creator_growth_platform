@@ -1,6 +1,6 @@
 import type { Logger } from '@cgp/config';
 import type { PostContent, PostMetrics, Publisher, TargetPlatform } from '@cgp/contracts';
-import { recentPostTargets, type Database } from '@cgp/db';
+import { recentPostTargets, SEED_POST_PREFIX, type Database } from '@cgp/db';
 
 /**
  * Insights (S-21, week 8): what the platforms say about what went out, ranked against this
@@ -77,7 +77,15 @@ export async function insights(
 ): Promise<InsightsView> {
   const recent = await recentPostTargets(deps.db, workspaceId, { limit: 200 });
   const published = recent
-    .filter(({ target }) => target.status === 'published' && target.platformPostId)
+    .filter(
+      ({ target }) =>
+        target.status === 'published' &&
+        target.platformPostId &&
+        // Seeded calendar history never reached a platform, so no platform can report on it.
+        // Listing it with empty metrics would suggest one was asked and said nothing, which
+        // is the closest this screen could get to fabricating a number (plan section 15).
+        !target.platformPostId.startsWith(SEED_POST_PREFIX),
+    )
     .slice(0, limit);
 
   // In parallel: a handful of posts, and each platform answers on its own schedule.

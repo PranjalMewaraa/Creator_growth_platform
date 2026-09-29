@@ -4,6 +4,7 @@ import type { PostMetrics, Publisher, TargetPlatform } from '@cgp/contracts';
 import { createPublication, markPublished, upsertSocialAccount, type Database } from '@cgp/db';
 import { createTestDatabase, createTestWorkspace } from '@cgp/db/testing';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { seedHistory } from '@cgp/db';
 import { engagementOf, insights, median } from './insights';
 
 const log = createLogger({ service: 'test', level: 'silent' });
@@ -62,6 +63,11 @@ async function workspaceWithPosts(posts: Array<{ text: string; postId: string }>
     await markPublished(db, created.targets[0]?.id ?? '', postId, `https://li/p/${postId}`);
   }
   return workspaceId;
+}
+
+/** Six weeks of seeded history beside the real posts. */
+async function workspaceHistory(workspaceId: string) {
+  await seedHistory(db, workspaceId, { weeks: 2, perWeek: 2 });
 }
 
 describe('engagement', () => {
@@ -168,5 +174,18 @@ describe('insights (S-21)', () => {
     const { publishers } = reporting({});
 
     expect((await insights(deps(publishers), mine)).posts).toEqual([]);
+  });
+
+  it('leaves seeded calendar history alone, because no platform was ever asked', async () => {
+    const workspaceId = await workspaceWithPosts([{ text: 'Real', postId: 'p1' }]);
+    // History written by seed:history for the Calendar to scroll through. Showing it here
+    // with empty metrics would imply a platform was asked and stayed silent.
+    await workspaceHistory(workspaceId);
+    const { publishers, asked } = reporting({ p1: { fetchedAt: 'x', likes: 2 } });
+
+    const view = await insights(deps(publishers), workspaceId);
+
+    expect(view.posts.map((post) => post.text)).toEqual(['Real']);
+    expect(asked).toEqual(['p1']);
   });
 });
