@@ -96,7 +96,7 @@ export function createStoryboardHandler(deps: StoryboardHandlerDeps): Record<str
 
       // One still per scene, drawn one at a time: the image quota is metered by the minute and
       // a burst of three loses the set rather than one frame.
-      const frames: Array<{ index: number; prompt: string; url: string }> = [];
+      const frames: Array<{ index: number; prompt: string; url: string; key: string }> = [];
       let usage: TokenUsage = { inputTokens: 0, outputTokens: 0 };
       let blocked = false;
       for (const [index, scenePrompt] of plan.scenes.entries()) {
@@ -127,7 +127,9 @@ export function createStoryboardHandler(deps: StoryboardHandlerDeps): Record<str
           image.data,
           image.mimeType,
         );
-        frames.push({ index, prompt: scenePrompt, url: stored.url });
+        // The key as well as the url: filming this frame later needs the bytes back, and
+        // picking a key out of a public url means knowing how one store spells them (WP33).
+        frames.push({ index, prompt: scenePrompt, url: stored.url, key: stored.key });
       }
 
       if (frames.length === 0) {
@@ -164,6 +166,36 @@ export function createStoryboardHandler(deps: StoryboardHandlerDeps): Record<str
       };
     },
   };
+}
+
+export interface StoryboardFrame {
+  index: number;
+  prompt: string;
+  /** Where the still is, so the render can film the picture rather than the words (WP38). */
+  key: string;
+}
+
+/**
+ * The frames a storyboard drew, for a render that animates them. Frames drawn before WP38
+ * carry no key and are left out: those reels film from the scene prompts, as they always did.
+ */
+export async function storyboardFrames(
+  db: Database,
+  workspaceId: string,
+  outputId: string,
+): Promise<StoryboardFrame[]> {
+  const [output] = await scoped(db, workspaceId).select(outputs, {
+    where: (t, op) => op.eq(t.id, outputId),
+    limit: 1,
+  });
+  const frames = (output?.metadata as { storyboard?: unknown } | undefined)?.storyboard;
+  if (!Array.isArray(frames)) return [];
+  return frames.flatMap((frame) => {
+    const { index, prompt, key } = (frame ?? {}) as Record<string, unknown>;
+    return typeof index === 'number' && typeof key === 'string' && key.length > 0
+      ? [{ index, prompt: typeof prompt === 'string' ? prompt : '', key }]
+      : [];
+  });
 }
 
 /** The scene prompts a storyboard approved, for the render that commits to them. */

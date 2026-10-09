@@ -1,6 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { createFakeModeration, createFakeVideo, createMemoryStore } from '@cgp/adapters';
+import {
+  createFakeModeration,
+  createFakeVideo,
+  createImageAdapters,
+  createMemoryStore,
+} from '@cgp/adapters';
 import { createLogger } from '@cgp/config';
 import { AdapterError, type ModerationAdapter, type VideoAdapter } from '@cgp/contracts';
 import { listScenes, outputs, scoped, type Database } from '@cgp/db';
@@ -16,6 +21,7 @@ import { findJob, startGeneration } from '../generate';
 import { generators } from '../generators/definitions';
 import { processJob } from '../process';
 import type { Queues } from '../queues';
+import { createStoryboardHandler } from './storyboard';
 import { createVideoHandlers, REGENERATE_SCENE } from './video';
 
 const log = createLogger({ service: 'test', level: 'silent' });
@@ -330,4 +336,159 @@ describe('the second provider', () => {
     );
     expect(result).toBe('refunded');
   }, 300_000);
+});
+
+describe('filming the frame that was approved (WP38)', () => {
+  /** A video adapter that remembers whether it was given a still to animate. */
+  function watchingAdapter() {
+    const asks: Array<{ hasStartImage: boolean; mimeType?: string }> = [];
+    const inner = createFakeVideo('veo-3.1-lite');
+    const adapter: VideoAdapter = {
+      key: inner.key,
+      submit: (request) => {
+        asks.push({
+          hasStartImage: Boolean(request.startImage),
+          ...(request.startImage ? { mimeType: request.startImage.mimeType } : {}),
+        });
+        return inner.submit(request);
+      },
+      poll: (id) => inner.poll(id),
+    };
+    return { adapter, asks };
+  }
+
+  /**
+   * A real storyboard: drawn by its own handler, so the frames and their keys are whatever
+   * that handler actually writes rather than whatever this test imagines it writes.
+   *
+   * `withKeys` false is a storyboard drawn before WP38, which has no key to fetch. `inStore`
+   * false points the keys at objects that are not there, which is what a cleared bucket
+   * looks like.
+   */
+  async function storyboardFor(
+    workspaceId: string,
+    frames: number,
+    { withKeys = true, inStore = true }: { withKeys?: boolean; inStore?: boolean } = {},
+  ) {
+    const started = await startGeneration(
+      {
+        db,
+        queues: recordingQueues(),
+        log,
+        registry: generators,
+        compile: { rewriters: [] },
+        moderation: createFakeModeration(),
+      },
+      {
+        workspaceId,
+        generatorKey: 'storyboard',
+        input: { ...intent, targetPlatform: 'instagram', sceneCount: frames },
+      },
+    );
+    if (!started.ok) throw new Error(started.reason);
+    const handlers = createStoryboardHandler({
+      db,
+      registry: generators,
+      adapters: createImageAdapters('fake'),
+      planner: undefined,
+      moderation: createFakeModeration(),
+      store,
+      costInr: () => 0,
+      providerLabel: 'fake',
+    });
+    const drawn = await processJob(
+      { db, handlers, log },
+      {
+        jobId: started.job.id,
+        correlationId: 'c',
+      },
+    );
+    if (drawn !== 'settled') throw new Error(`storyboard ${drawn}`);
+
+    const [output] = await scoped(db, workspaceId).select(outputs, {
+      where: (t, op) => op.eq(t.jobId, started.job.id),
+      limit: 1,
+    });
+    if (!output) throw new Error('no storyboard output');
+    if (withKeys && inStore) return output;
+
+    const metadata = output.metadata as { storyboard: Array<Record<string, unknown>> };
+    await scoped(db, workspaceId).update(
+      outputs,
+      {
+        metadata: {
+          ...metadata,
+          storyboard: metadata.storyboard.map((frame) => {
+            if (!withKeys) {
+              return Object.fromEntries(Object.entries(frame).filter(([name]) => name !== 'key'));
+            }
+            return { ...frame, key: `${String(frame.key)}.gone` };
+          }),
+        },
+      },
+      (t, op) => op.eq(t.id, output.id),
+    );
+    return output;
+  }
+
+  /** A reel committed from a storyboard, filmed by an adapter we can watch. */
+  async function film(frames: number, options?: { withKeys?: boolean; inStore?: boolean }) {
+    const workspaceId = await createTestWorkspace(db, { credits: 200, videoSeconds: 120 });
+    await addTestProfile(db, workspaceId);
+    const storyboard = await storyboardFor(workspaceId, frames, options);
+    const started = await startGeneration(
+      {
+        db,
+        queues: recordingQueues(),
+        log,
+        registry: generators,
+        compile: { rewriters: [] },
+        moderation: createFakeModeration(),
+      },
+      {
+        workspaceId,
+        generatorKey: 'video',
+        input: {
+          ...intent,
+          targetPlatform: 'instagram',
+          sceneCount: frames,
+          storyboardOutputId: storyboard.id,
+        },
+      },
+    );
+    if (!started.ok) throw new Error(started.reason);
+    const { adapter, asks } = watchingAdapter();
+    const result = await processJob(
+      { db, handlers: handlersWith({ 'veo-3.1-lite': adapter }), log },
+      { jobId: started.job.id, correlationId: 'c' },
+    );
+    return { asks, result };
+  }
+
+  it('animates the approved still instead of imagining the scene again', async () => {
+    const { asks } = await film(2);
+
+    expect(asks).toHaveLength(2);
+    expect(asks.every((ask) => ask.hasStartImage)).toBe(true);
+    // Sent as the type it was stored as, not as whatever the caller assumed.
+    expect(asks[0]?.mimeType).toMatch(/^image\/(png|jpeg)$/);
+    // Two scenes, each drawn then filmed: slower than the suite's default patience.
+  }, 60_000);
+
+  it('films from the words when a storyboard was drawn before this existed', async () => {
+    // No key on the frame, so there is nothing to fetch and nothing to animate.
+    const { asks } = await film(1, { withKeys: false });
+
+    expect(asks).toHaveLength(1);
+    expect(asks[0]?.hasStartImage).toBe(false);
+  }, 60_000);
+
+  it('films from the words when the still has gone, rather than failing the reel', async () => {
+    // The key is on the frame but the object is not in the store, which is what a cleared
+    // bucket looks like. A missing picture costs the animation, not the reel.
+    const { asks, result } = await film(1, { inStore: false });
+
+    expect(asks[0]?.hasStartImage).toBe(false);
+    expect(result).toBe('settled');
+  }, 60_000);
 });

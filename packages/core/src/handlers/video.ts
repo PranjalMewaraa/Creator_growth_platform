@@ -1,6 +1,7 @@
 import type {
   CompilerProfileConfig,
   GeneratedClip,
+  MediaBytes,
   ModerationAdapter,
   ObjectStore,
   TextAdapter,
@@ -37,7 +38,7 @@ import { ffmpegAvailable, type FfmpegOptions } from '../render/ffmpeg';
 import { sampleFrames } from '../render/frames';
 import type { GeneratorRegistry } from '../generators/registry';
 import { postCheckOutput } from '../moderation';
-import { storyboardScenes } from './storyboard';
+import { storyboardFrames, storyboardScenes } from './storyboard';
 import { JobBlocked, type JobHandler } from '../process';
 
 // The video render (WP22): a compiled prompt becomes up to three scenes, each an eight second
@@ -97,22 +98,45 @@ interface VideoJobInput {
 /** One tier for both the provider and the render, so they cannot drift apart. */
 const RESOLUTION = '720p' as const satisfies ReelResolution;
 
+/**
+ * The approved still, if it can still be read. A missing frame is not a reason to fail the
+ * reel: the scene is filmed from its words instead, which is what every reel did before this.
+ */
+async function readFrame(
+  deps: VideoHandlerDeps,
+  key: string,
+  log: Parameters<JobHandler>[1],
+): Promise<MediaBytes | undefined> {
+  try {
+    const data = await deps.store.get(key);
+    return { data, mimeType: key.endsWith('.png') ? 'image/png' : 'image/jpeg' };
+  } catch (err) {
+    log.warn({ err, key }, 'approved frame could not be read; filming from the words instead');
+    return undefined;
+  }
+}
+
 /** Submits one scene and waits for it, or gives the reason it will never arrive. */
 async function renderScene(
   deps: VideoHandlerDeps,
   adapter: VideoAdapter,
   prompt: string,
   log: Parameters<JobHandler>[1],
+  startImage?: MediaBytes,
 ): Promise<{ ok: true; clip: GeneratedClip } | { ok: false; code: string; blocked: boolean }> {
   const ask = {
     aspectRatio: '9:16' as const,
     durationSeconds: SECONDS_PER_SCENE,
     resolution: RESOLUTION,
   };
+  // Only a model that says it takes one is given one (WP36, WP38).
+  const animate = startImage && deps.capabilityOf?.(adapter.key)?.acceptsStartImage !== false;
   // Asked of the model before it is asked of the provider (WP36). A clip the model cannot
   // film is refused here, where it costs nothing, rather than after the seconds are held.
   const capability = deps.capabilityOf?.(adapter.key);
-  const issues = capability ? checkVideo(capability, ask) : [];
+  const issues = capability
+    ? checkVideo(capability, { ...ask, startImage: Boolean(startImage) })
+    : [];
   if (issues.length > 0) {
     const [first] = issues;
     log.error({ adapter: adapter.key, issues }, 'the model cannot film this');
@@ -123,6 +147,7 @@ async function renderScene(
     prompt,
     negativePrompt: NEGATIVE_PROMPT,
     ...ask,
+    ...(animate && startImage ? { startImage } : {}),
   });
 
   const every = deps.pollEveryMs ?? POLL_EVERY_MS;
@@ -220,6 +245,12 @@ export function createVideoHandlers(deps: VideoHandlerDeps): Record<string, JobH
         typeof input.storyboardOutputId === 'string'
           ? await storyboardScenes(deps.db, job.workspaceId, input.storyboardOutputId)
           : undefined;
+      // The stills themselves, so the reel animates the pictures the creator looked at and
+      // approved rather than imagining each scene again from the same words (WP38).
+      const frames =
+        typeof input.storyboardOutputId === 'string'
+          ? await storyboardFrames(deps.db, job.workspaceId, input.storyboardOutputId)
+          : [];
       const plan = approved
         ? { scenes: approved.slice(0, sceneCount), fallbackUsed: false }
         : await planScenes({
@@ -261,8 +292,12 @@ export function createVideoHandlers(deps: VideoHandlerDeps): Record<string, JobH
       let delivered = 0;
       let blocked = false;
       const rendered: ReelScene[] = [];
-      for (const scene of scenes) {
-        const result = await renderScene(deps, adapter, scene.prompt, log);
+      for (const [index, scene] of scenes.entries()) {
+        // The approved still for this scene, when there is one. A storyboard drawn before
+        // WP38 has no key to fetch, and those reels film from the words as they always did.
+        const frame = frames.find((f) => f.index === index);
+        const startImage = frame ? await readFrame(deps, frame.key, log) : undefined;
+        const result = await renderScene(deps, adapter, scene.prompt, log, startImage);
         if (!result.ok) {
           blocked ||= result.blocked;
           continue;

@@ -91,13 +91,30 @@ export function createVeoVideo(options: VeoOptions): VideoAdapter {
     return normalizeError('veo', err, options.log);
   }
 
+  /** Node's Buffer, kept to this one line so the rest stays runtime agnostic. */
+  const base64 = (data: Uint8Array) => Buffer.from(data).toString('base64');
+
   return {
     key: options.key,
 
     async submit(request) {
       try {
         const operation = await post<Operation>('predictLongRunning', {
-          instances: [{ prompt: request.prompt }],
+          instances: [
+            {
+              prompt: request.prompt,
+              // Veo animates from a still when it is given one (WP38): the image rides in
+              // the instance beside the prompt, base64 encoded, with its own mime type.
+              ...(request.startImage
+                ? {
+                    image: {
+                      bytesBase64Encoded: base64(request.startImage.data),
+                      mimeType: request.startImage.mimeType,
+                    },
+                  }
+                : {}),
+            },
+          ],
           parameters: {
             aspectRatio: request.aspectRatio,
             durationSeconds: request.durationSeconds,

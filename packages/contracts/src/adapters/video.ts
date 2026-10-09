@@ -8,6 +8,13 @@ export interface VideoRequest {
   durationSeconds: number;
   resolution: '720p' | '1080p';
   seed?: number;
+  /**
+   * The frame the clip begins on (WP38). With one, the model animates a picture that already
+   * exists rather than imagining the scene again from the words; the storyboard the creator
+   * approved becomes the thing that is filmed. Only models whose capability says
+   * `acceptsStartImage` are given one.
+   */
+  startImage?: MediaBytes;
 }
 
 export type GeneratedClip = MediaBytes & { durationSeconds: number; width: number; height: number };
