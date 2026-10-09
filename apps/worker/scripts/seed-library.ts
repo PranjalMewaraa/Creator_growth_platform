@@ -32,18 +32,66 @@ const log = createLogger({ service: 'seed-library', level: env.LOG_LEVEL });
  * the Library's newest-first list ends up looking deliberate.
  */
 const WORK: Array<{ generatorKey: string; intentText: string; targetPlatform: string }> = [
-  { generatorKey: 'script', intentText: 'why our cold brew steeps for eighteen hours', targetPlatform: 'instagram' },
-  { generatorKey: 'caption_set', intentText: 'the new bottle design, finally in', targetPlatform: 'instagram' },
-  { generatorKey: 'hook_title_set', intentText: 'what most people get wrong about iced coffee', targetPlatform: 'instagram' },
-  { generatorKey: 'script', intentText: 'a morning delivery run across Jaipur', targetPlatform: 'instagram' },
-  { generatorKey: 'image', intentText: 'a bottle of cold brew on a steel counter at dawn', targetPlatform: 'instagram' },
-  { generatorKey: 'caption_set', intentText: 'thanking the first hundred customers', targetPlatform: 'linkedin' },
-  { generatorKey: 'script', intentText: 'how we choose which roastery to work with', targetPlatform: 'linkedin' },
-  { generatorKey: 'hook_title_set', intentText: 'the one mistake that ruins a batch', targetPlatform: 'instagram' },
-  { generatorKey: 'caption_set', intentText: 'weekend market stall, where to find us', targetPlatform: 'instagram' },
-  { generatorKey: 'image', intentText: 'hands pouring cold brew over ice, close and unhurried', targetPlatform: 'instagram' },
-  { generatorKey: 'script', intentText: 'what eighteen months of running this taught me', targetPlatform: 'linkedin' },
-  { generatorKey: 'thumbnail_set', intentText: 'the cold brew method, explained', targetPlatform: 'instagram' },
+  {
+    generatorKey: 'script',
+    intentText: 'why our cold brew steeps for eighteen hours',
+    targetPlatform: 'instagram',
+  },
+  {
+    generatorKey: 'caption_set',
+    intentText: 'the new bottle design, finally in',
+    targetPlatform: 'instagram',
+  },
+  {
+    generatorKey: 'hook_title_set',
+    intentText: 'what most people get wrong about iced coffee',
+    targetPlatform: 'instagram',
+  },
+  {
+    generatorKey: 'script',
+    intentText: 'a morning delivery run across Jaipur',
+    targetPlatform: 'instagram',
+  },
+  {
+    generatorKey: 'image',
+    intentText: 'a bottle of cold brew on a steel counter at dawn',
+    targetPlatform: 'instagram',
+  },
+  {
+    generatorKey: 'caption_set',
+    intentText: 'thanking the first hundred customers',
+    targetPlatform: 'linkedin',
+  },
+  {
+    generatorKey: 'script',
+    intentText: 'how we choose which roastery to work with',
+    targetPlatform: 'linkedin',
+  },
+  {
+    generatorKey: 'hook_title_set',
+    intentText: 'the one mistake that ruins a batch',
+    targetPlatform: 'instagram',
+  },
+  {
+    generatorKey: 'caption_set',
+    intentText: 'weekend market stall, where to find us',
+    targetPlatform: 'instagram',
+  },
+  {
+    generatorKey: 'image',
+    intentText: 'hands pouring cold brew over ice, close and unhurried',
+    targetPlatform: 'instagram',
+  },
+  {
+    generatorKey: 'script',
+    intentText: 'what eighteen months of running this taught me',
+    targetPlatform: 'linkedin',
+  },
+  {
+    generatorKey: 'thumbnail_set',
+    intentText: 'the cold brew method, explained',
+    targetPlatform: 'instagram',
+  },
 ];
 
 /** Plan section 7, so the estimate is the same number the Studio shows before submitting. */
@@ -59,7 +107,10 @@ const args = process.argv.slice(2);
 const [workspaceId] = args.filter((arg) => !arg.startsWith('--'));
 if (!workspaceId) throw new Error('Usage: seed:library <workspace id> [--dry-run] [--only=...]');
 const dryRun = args.includes('--dry-run');
-const only = args.find((arg) => arg.startsWith('--only='))?.split('=')[1]?.split(',');
+const only = args
+  .find((arg) => arg.startsWith('--only='))
+  ?.split('=')[1]
+  ?.split(',');
 const work = only ? WORK.filter((item) => only.includes(item.generatorKey)) : WORK;
 
 const credits = work.reduce((sum, item) => sum + (CREDITS[item.generatorKey] ?? 0), 0);
@@ -153,9 +204,6 @@ try {
   }
 } finally {
   const workspace = await scoped(db, workspaceId).workspace();
-  log.info(
-    { made, failed, creditsLeft: workspace?.creditBalance },
-    'library done',
-  );
+  log.info({ made, failed, creditsLeft: workspace?.creditBalance }, 'library done');
   await db.close();
 }

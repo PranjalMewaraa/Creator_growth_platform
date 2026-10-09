@@ -208,6 +208,25 @@ Weeks 1 to 3 are detailed. Weeks 4 to 8 are scoped and get re-planned in detail 
 | WP34 | B | Calendar week view (S-07) with status chips and render state. Built 2026-09-26: the grid holds the workspace's own posts now, fetched a week at a time, because which week it is depends on the viewer's clock and the server cannot know it. A card carries one chip per target rather than one word for the post, since status lives on the target: a post that reached LinkedIn and failed on Instagram has to be able to say so. An empty slot is a link to the composer with that time already filled in, which is the primary way to start a post from here (S-07). The grid runs 08:00 to 20:00 and stretches to reach a post outside that, stopping at the ends of the day. A week with something still moving is re-asked every twenty seconds; a settled week is not polled at all. Render state is wired to the job behind the post's media and reads null for everything today, because nothing yet hands a Studio output to the composer; that is the WP33 handoff, not this. The sidebar's dead controls went with it: a cadence picker that persisted nothing, two toggles that did nothing and a mocked agent whose caption said it arrived with scheduling |
 | WP35 | B | Sync centre (S-20), platform errors verbatim. Built 2026-09-26: every attempt to put a post on a platform, in three groups that answer different questions. Needs you first, because nothing moves those without a decision, and each says what the decision is; in flight second; then where the recent attempts ended. The platform's words are passed through exactly as they arrived, line breaks and error codes and all, because a rewritten error is a worse error: at eleven at night the only useful thing on the screen is the sentence a search or a support thread will match. A retrying target says which attempt it is on and when the next one is due, read from the job rather than the target, since the target's count only moves once a claim succeeds. Polled every five seconds while something is in flight and every thirty when nothing is. Two things real data caught: published posts read "Attempt 0 of 5", because the job counts the times it was sent back rather than the times it ran, and a failed target claimed it was trying again, because a queued job can outlive the target that gave up. The second is pinned with a test: the screen must not tell someone their post is coming back when it is not |
 
+## 5b. Demo 2
+
+Demo 1 was given on the build tagged `demo-1` (2026-10-09). Everything below is the second
+version, and nothing in it was needed to show the first.
+
+The three items come from reading `Open-Generative-AI` (MIT, a studio UI over the MuAPI
+aggregator). Its architecture is not worth copying — no job engine, no ledger, no moderation,
+no lineage, and a vendor's response shapes running straight through the UI. What it has that
+we do not is vocabulary: the accumulated knowledge of what these models accept and what words
+they answer to. That is what these three take, and nothing else. Its catalogue stays where it
+is, because adopting an aggregator would put a vendor's shapes past the adapter boundary
+(invariant 3) and undo D18's choice of Vertex.
+
+| WP | Owner | Scope |
+|---|---|---|
+| WP36 | A | Declarative model capabilities. What each model accepts, as data rather than as conditions scattered through handlers and validators: aspect ratios, resolutions, durations, frames, whether it takes an image to start from. The engine refuses what a model cannot do before spending on it, and the Studio stops offering it. This retires a class of bug we have already paid for three times, the output type ambiguity of WP26 and WP27, and moves "Instagram posts need a JPEG" out of a string inside a validator |
+| WP37 | B | A pinned cinematic vocabulary: camera, lens, focal length and aperture, each a controlled choice mapping to the phrase a model answers to, composed deterministically by the engine rather than invented by the rewrite pass (invariant 4). The reference's own builder bolts "8K, award-winning, ultra-detailed" onto everything; that is 2023 filler and is deliberately left behind, since the evaluation set says our compiled prompt already wins while being the shorter of the two |
+| WP38 | A + B | Image to video: film the storyboard still the creator approved, rather than planning the scene again in words. The storyboard already draws one frame per scene and then throws it away. Veo takes an image to start from, so an approved frame becomes the clip, which is cheaper to iterate and far more controllable than text to video. The reference calls these `animate_image` and `keyframes`; the second, a start and an end frame, is the one worth having after the first |
+
 ### Week 8: Demo assembly
 
 As `plan.md` section 11, plus Home (S-04), which depends on Calendar and Accounts and so cannot be filled earlier.

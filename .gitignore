@@ -19,3 +19,6 @@ evals/
 
 # Local binaries, fetched per machine.
 tools/
+
+# Reference projects read for ideas, each with a git history of its own.
+ref/
