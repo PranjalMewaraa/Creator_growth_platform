@@ -15,7 +15,7 @@ import { compilerProfiles, templates, templateVersions } from './schema';
 //   v4  video profiles say how a prompt is broken into scenes
 //   v5  scenes and images are written as full shot specifications, not one line summaries
 //   v6  video profiles say what is spoken over each scene
-export const COMPILER_PROFILE_VERSION = 6;
+export const COMPILER_PROFILE_VERSION = 7;
 
 const REWRITE_SYSTEM = [
   'You sharpen creative briefs for a content generator.',
@@ -46,6 +46,9 @@ const IMAGE_REQUIREMENTS = [
   { key: 'contentPolicy', line: '{{contentPolicy}}' },
   { key: 'noTextInImage', line: 'No text, letters, numbers, logos or watermarks anywhere.' },
   { key: 'aspectRatio', line: 'Compose for a {{aspectRatio}} frame.' },
+  // The look (WP37), composed by the engine from the camera, lens, focal length and aperture
+  // that won their precedence. Absent when nobody chose one, since the line drops when empty.
+  { key: 'look', line: '{{look}}' },
   { key: 'brandColours', line: 'Lean on the brand colours {{brandColours}}.' },
   { key: 'tone', line: 'Mood: {{tone}}.' },
 ];
@@ -192,6 +195,8 @@ export const COMPILER_PROFILES: Record<OutputType, CompilerProfileConfig> = {
       { key: 'contentPolicy', line: '{{contentPolicy}}' },
       { key: 'noTextInImage', line: 'No on screen text in the footage; captions are added later.' },
       { key: 'aspectRatio', line: 'Frame for {{aspectRatio}}.' },
+      // The same look across every scene, so a reel does not change camera between them.
+      { key: 'look', line: '{{look}} The same look in every scene.' },
       { key: 'sceneCount', line: '{{sceneCount}} scenes of 8 seconds each.' },
       {
         key: 'voiceover',

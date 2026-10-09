@@ -1,6 +1,14 @@
 'use client';
 
-import type { CompiledPromptView, JobStatus, JobView, TargetPlatform } from '@cgp/contracts';
+import {
+  LOOK_KEYS,
+  LOOK_VOCABULARY,
+  type CompiledPromptView,
+  type JobStatus,
+  type JobView,
+  type LookKey,
+  type TargetPlatform,
+} from '@cgp/contracts';
 import { Button, cx } from '@cgp/ui';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -35,6 +43,16 @@ interface Kind {
   outputType: string;
   soon?: boolean;
 }
+
+const LOOK_LABELS: Record<LookKey, string> = {
+  camera: 'Camera',
+  lens: 'Lens',
+  focalLength: 'Focal',
+  aperture: 'Aperture',
+};
+
+/** The kinds that make a picture or film one, and so take a look (WP37). */
+const VISUAL = new Set(['image', 'thumbnail_set', 'video']);
 
 const KINDS: Kind[] = [
   { key: 'script', label: 'Script', hint: 'The words to say on camera', outputType: 'script' },
@@ -153,6 +171,8 @@ export function Studio({
   const [count, setCount] = useState(1);
   const [sceneCount, setSceneCount] = useState(3);
   const [tone, setTone] = useState('');
+  // The look (WP37): the parts a creator picked, each outranking the template's (FR-PO-06).
+  const [look, setLook] = useState<Partial<Record<LookKey, string>>>({});
   const [templateId, setTemplateId] = useState<string | null>(null);
   // The templates for what is being made, plain one first, since that is the default.
   const outputType = KINDS.find((k) => k.key === kind)?.outputType;
@@ -182,6 +202,7 @@ export function Studio({
     ...(tone.trim() ? { tone: tone.trim() } : {}),
     ...(kind === 'script' && length ? { durationSeconds: length } : {}),
     ...(kind === 'image' ? { count } : {}),
+    ...(VISUAL.has(kind) ? look : {}),
     ...(kind === 'video' ? { sceneCount } : {}),
     ...(templateId ? { templateId } : {}),
     ...(kind === 'caption_set' && captionFor.length ? { platforms: captionFor } : {}),
@@ -519,6 +540,45 @@ export function Studio({
                   ))}
                 </div>
                 <span className="text-[11px] text-muted">Each one costs its own credits.</span>
+              </div>
+            ) : null}
+
+            {VISUAL.has(kind) ? (
+              <div className="flex flex-col gap-2">
+                <span className="text-xs font-medium uppercase tracking-wide text-muted">Look</span>
+                {LOOK_KEYS.map((key) => (
+                  <div key={key} className="flex flex-wrap items-center gap-1.5">
+                    <span className="w-16 shrink-0 text-[11px] text-faint">{LOOK_LABELS[key]}</span>
+                    {LOOK_VOCABULARY[key].map((option) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        title={option.phrase}
+                        aria-pressed={look[key] === option.id}
+                        onClick={() =>
+                          // Picking the chosen one again clears it, so a creator can take a
+                          // part back out rather than being stuck with a look once touched.
+                          setLook((current) => ({
+                            ...current,
+                            [key]: current[key] === option.id ? undefined : option.id,
+                          }))
+                        }
+                        className={cx(
+                          'rounded-full border px-3 py-1.5 text-xs transition',
+                          look[key] === option.id
+                            ? 'border-accent bg-accent/10 text-ink'
+                            : 'border-line bg-raised text-muted hover:text-ink',
+                        )}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                ))}
+                <span className="text-[11px] text-muted">
+                  Written into the prompt as the engine composes it. Leave it alone and the template
+                  decides.
+                </span>
               </div>
             ) : null}
 

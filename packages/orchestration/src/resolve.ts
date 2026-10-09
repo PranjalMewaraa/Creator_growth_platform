@@ -1,4 +1,6 @@
 import {
+  composeLook,
+  LOOK_KEYS,
   PRECEDENCE,
   type Directive,
   type ResolvedSetting,
@@ -41,6 +43,10 @@ const WORDS_PER_SECOND = 2.5;
 
 /** Settings computed from others. They take the source of the setting they came from. */
 export function deriveSettings(settings: ResolvedSetting[]): ResolvedSetting[] {
+  return deriveLook(deriveWordBudget(settings));
+}
+
+function deriveWordBudget(settings: ResolvedSetting[]): ResolvedSetting[] {
   const duration = settings.find((s) => s.key === 'durationSeconds');
   if (!duration || typeof duration.value !== 'number') return settings;
   return [
@@ -52,4 +58,38 @@ export function deriveSettings(settings: ResolvedSetting[]): ResolvedSetting[] {
       overridden: [],
     },
   ];
+}
+
+/**
+ * The look (WP37), composed from whichever of camera, lens, focal length and aperture won
+ * their own precedence. Derived rather than asked for directly, so a template can set a
+ * house look and a creator can override one part of it without restating the rest, and the
+ * disclosure shows each part's source as it shows every other setting's.
+ */
+function deriveLook(settings: ResolvedSetting[]): ResolvedSetting[] {
+  const parts = LOOK_KEYS.map((key) => settings.find((s) => s.key === key)).filter(
+    (setting): setting is ResolvedSetting => setting !== undefined,
+  );
+  if (parts.length === 0) return settings;
+
+  const look = composeLook(
+    Object.fromEntries(
+      parts.map((setting) => [setting.key, typeof setting.value === 'string' ? setting.value : '']),
+    ),
+  );
+  if (!look) return settings;
+  return [
+    ...settings.filter((s) => s.key !== 'look'),
+    // The source of the part that was most specific about it: a look a creator asked for
+    // reads as theirs, one a template supplied reads as the template's.
+    { key: 'look', value: look, source: strongest(parts).source, overridden: [] },
+  ];
+}
+
+function strongest(settings: ResolvedSetting[]): ResolvedSetting {
+  const [first] = [...settings].sort(
+    (a, b) => (RANK.get(a.source) ?? 99) - (RANK.get(b.source) ?? 99),
+  );
+  if (!first) throw new Error('No setting to take a source from');
+  return first;
 }

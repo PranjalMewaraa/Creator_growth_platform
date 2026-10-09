@@ -1,5 +1,6 @@
 export * from './adapters';
 export * from './capabilities';
+export * from './look';
 export * from './credits';
 export * from './errors';
 export * from './generator';

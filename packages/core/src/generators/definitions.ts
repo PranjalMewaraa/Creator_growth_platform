@@ -1,4 +1,4 @@
-import { TARGET_PLATFORMS } from '@cgp/contracts';
+import { isLookOption, type LookKey, TARGET_PLATFORMS } from '@cgp/contracts';
 import { z } from 'zod';
 import { createGeneratorRegistry, rateFor, register } from './registry';
 
@@ -16,6 +16,25 @@ const base = {
   /** An explicit tone, which outranks the template's and the profile's (FR-PO-06). */
   tone: z.string().trim().min(1).max(80).optional(),
 };
+
+/**
+ * The look (WP37), for the generators that make a picture or film one. Each part is a choice
+ * from the pinned vocabulary, refused if it is not one this build knows, so an unknown id
+ * cannot reach a prompt. Each outranks the template's and the profile's, like tone.
+ */
+const look = {
+  camera: lookOption('camera'),
+  lens: lookOption('lens'),
+  focalLength: lookOption('focalLength'),
+  aperture: lookOption('aperture'),
+};
+
+function lookOption(key: LookKey) {
+  return z
+    .string()
+    .refine((id) => isLookOption(key, id), { message: `Not a ${key} this build knows` })
+    .optional();
+}
 
 // Instructions the user did not give stay absent rather than defaulted here, so the template
 // and profile defaults can apply; only quantities that set the price take a default.
@@ -84,7 +103,7 @@ const image = register({
   key: 'image',
   outputType: 'image',
   jobClass: 'inference',
-  inputSchema: z.object({ ...base, count: z.int().min(1).max(4).default(1) }),
+  inputSchema: z.object({ ...base, ...look, count: z.int().min(1).max(4).default(1) }),
   compilerProfile: 'image',
   providerAdapter: IMAGE_ADAPTER,
   estimate: (input, rates) => {
@@ -105,7 +124,7 @@ const thumbnailSet = register({
   key: 'thumbnail_set',
   outputType: 'thumbnail',
   jobClass: 'inference',
-  inputSchema: z.object(base),
+  inputSchema: z.object({ ...base, ...look }),
   compilerProfile: 'thumbnail',
   providerAdapter: IMAGE_ADAPTER,
   estimate: (_input, rates) => {
@@ -129,6 +148,7 @@ const storyboard = register({
   jobClass: 'inference',
   inputSchema: z.object({
     ...base,
+    ...look,
     sceneCount: z.int().min(1).max(3).default(3),
   }),
   compilerProfile: 'video',
@@ -150,6 +170,7 @@ const video = register({
   jobClass: 'render',
   inputSchema: z.object({
     ...base,
+    ...look,
     sceneCount: z.int().min(1).max(3).default(3),
     voiceover: z.boolean().default(true),
     /** The storyboard this reel was committed from, so it films what was approved. */

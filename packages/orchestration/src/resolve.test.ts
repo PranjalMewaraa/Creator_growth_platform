@@ -59,3 +59,59 @@ describe('precedence', () => {
     });
   });
 });
+
+describe('the look, derived from its parts (WP37)', () => {
+  const directive = (key: string, value: string, source: Directive['source']): Directive => ({
+    key,
+    value,
+    source,
+  });
+
+  it('composes one line from whichever parts won', () => {
+    const settings = deriveSettings(
+      resolveSettings([
+        directive('camera', 'film-16mm', 'template'),
+        directive('lens', 'vintage-prime', 'template'),
+        directive('aperture', 'f1.4', 'user'),
+      ]),
+    );
+
+    expect(settingValue(settings, 'look')).toBe(
+      'Shot on a classic 16mm film camera, with a vintage prime lens, wide open, the background falling away.',
+    );
+  });
+
+  it('lets a creator change one part without restating the rest', () => {
+    const settings = deriveSettings(
+      resolveSettings([
+        directive('camera', 'film-16mm', 'template'),
+        directive('camera', 'phone', 'user'),
+        directive('lens', 'macro', 'template'),
+      ]),
+    );
+
+    // The template's house look, with the one part the creator overrode.
+    expect(settingValue(settings, 'look')).toBe(
+      'Shot on a modern phone camera, handheld, with a macro lens.',
+    );
+    // And the disclosure can still show what the override beat.
+    expect(settings.find((s) => s.key === 'camera')?.overridden).toEqual([
+      { source: 'template', value: 'film-16mm' },
+    ]);
+  });
+
+  it('takes the source of the most specific part, so the line reads as whose it is', () => {
+    const settings = deriveSettings(
+      resolveSettings([
+        directive('camera', 'film-16mm', 'template'),
+        directive('aperture', 'f11', 'user'),
+      ]),
+    );
+    expect(settings.find((s) => s.key === 'look')?.source).toBe('user');
+  });
+
+  it('adds nothing when nobody chose a look', () => {
+    const settings = deriveSettings(resolveSettings([directive('tone', 'warm', 'profile')]));
+    expect(settingValue(settings, 'look')).toBeUndefined();
+  });
+});
