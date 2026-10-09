@@ -143,6 +143,10 @@ async function renderScene(
     return { ok: false, code: first?.message ?? 'UNSUPPORTED', blocked: false };
   }
 
+  log.info(
+    { adapter: adapter.key, animating: Boolean(animate && startImage) },
+    animate && startImage ? 'filming the approved frame' : 'filming from the words',
+  );
   const { operationId } = await adapter.submit({
     prompt,
     negativePrompt: NEGATIVE_PROMPT,
