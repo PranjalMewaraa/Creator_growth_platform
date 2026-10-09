@@ -97,6 +97,7 @@ const handlers = {
     moderation: providers.moderation,
     store: providers.store,
     costInr: providers.videoCostInr,
+    capabilityOf: providers.videoCapability,
     providerLabel: providers.mode === 'real' ? 'vertex' : 'fake',
     ffmpeg: { bin: resolveToolPath(env.FFMPEG_PATH) },
     voice: providers.voice['neural2-en-in'],

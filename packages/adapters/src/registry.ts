@@ -9,6 +9,7 @@ import type {
   TargetPlatform,
   TextAdapter,
   TokenUsage,
+  VideoCapability,
 } from '@cgp/contracts';
 import {
   createFakeImage,
@@ -193,6 +194,8 @@ export interface Providers {
   videoCostInr: (adapterKey: string, resolution: '720p' | '1080p', seconds: number) => number;
   /** Realised cost of a voiceover in rupees, by the characters sent; zero for fakes. */
   voiceCostInr: (adapterKey: string, characters: number) => number;
+  /** What a video model will film (WP36). Undefined for a key this build does not know. */
+  videoCapability: (adapterKey: string) => VideoCapability | undefined;
 }
 
 /** Everything a process needs to call providers, chosen by PROVIDERS. */
@@ -260,6 +263,9 @@ export function createProviders(env: {
       env.PROVIDERS === 'real' && isVideoModelKey(key) ? videoCostInr(key, resolution, seconds) : 0,
     voiceCostInr: (key, characters) =>
       env.PROVIDERS === 'real' && isVoiceModelKey(key) ? voiceCostInr(key, characters) : 0,
+    // The capability is the model's, whether the call is real or faked: a fake that accepted
+    // what the real model refuses would hide the refusal until it cost money.
+    videoCapability: (key) => (isVideoModelKey(key) ? VIDEO_MODELS[key].capability : undefined),
   };
 }
 

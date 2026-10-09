@@ -1,5 +1,5 @@
 import { INR_PER_USD } from '@cgp/config';
-import type { TokenUsage } from '@cgp/contracts';
+import type { ImageCapability, TokenUsage, VideoCapability, VoiceCapability } from '@cgp/contracts';
 
 // Model ids live here and nowhere else. Changing one needs a pricing check first (plan
 // section 17): the rate card is keyed on these, and a new id can mean a new price.
@@ -44,6 +44,8 @@ export type TextModelKey = keyof typeof TEXT_MODELS;
 export interface ImageModel {
   model: string;
   location: string;
+  /** What it will draw (WP36), so a request it cannot serve is refused before it is paid for. */
+  capability: ImageCapability;
   /**
    * USD per million tokens. An image is billed as output tokens, not per picture: a 4:5
    * 928x1152 costs 1120 of them, measured 2026-09-24.
@@ -60,6 +62,13 @@ export const IMAGE_MODELS = {
     model: 'gemini-3.1-flash-lite-image',
     location: 'global',
     usdPerMillion: { input: 0.25, output: 30 },
+    capability: {
+      // Measured against the model, not taken from a docs page: these are the ratios it
+      // answered to on 2026-09-24, in the sizes the platforms want.
+      aspectRatios: ['1:1', '4:5', '9:16', '16:9'],
+      maxPerRequest: 4,
+      outputMimeTypes: ['image/png', 'image/jpeg'],
+    },
   },
 } as const satisfies Record<string, ImageModel>;
 
@@ -75,6 +84,8 @@ export interface VideoModel {
   location: string;
   /** USD per second of delivered video, by resolution (plan section 6). */
   usdPerSecond: Record<'720p' | '1080p', number>;
+  /** What it will film (WP36). */
+  capability: VideoCapability;
 }
 
 export const VIDEO_MODELS = {
@@ -86,6 +97,15 @@ export const VIDEO_MODELS = {
     model: 'veo-3.1-lite-generate-001',
     location: 'us-central1',
     usdPerSecond: { '720p': 0.03, '1080p': 0.05 },
+    capability: {
+      aspectRatios: ['16:9', '9:16'],
+      resolutions: ['720p', '1080p'],
+      // Eight seconds, and only eight: the lite tier films one length (WP21).
+      durationSeconds: { min: 8, max: 8, step: 8 },
+      // It takes a still to start from, which is what WP38 films a storyboard frame with.
+      acceptsStartImage: true,
+      generatesAudio: false,
+    },
   },
 } as const satisfies Record<string, VideoModel>;
 
@@ -108,6 +128,8 @@ export function isVideoModelKey(key: string): key is VideoModelKey {
 }
 
 export interface VoiceModel {
+  /** What it will speak, and whether it says where the words fell (WP36). */
+  capability?: VoiceCapability;
   /** A voice id as Google names it. */
   name: string;
   language: string;
@@ -124,6 +146,9 @@ export const VOICE_MODELS = {
     name: 'en-IN-Neural2-A',
     language: 'en-IN',
     usdPerMillionChars: 16,
+    // The reason this voice was chosen over a better sounding one, written down where the
+    // choice is made rather than only in a comment.
+    capability: { timepoints: true, languages: ['en-IN'] },
   },
 } as const satisfies Record<string, VoiceModel>;
 

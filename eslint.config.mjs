@@ -35,6 +35,8 @@ const WEB_FILES = ['apps/web/**/*.{js,jsx,mjs,ts,tsx}'];
 export default defineConfig(
   globalIgnores([
     '**/node_modules/**',
+    // Reference projects, read for ideas and linted by whoever wrote them.
+    'ref/**',
     '**/.next/**',
     '**/.turbo/**',
     '**/dist/**',

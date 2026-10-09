@@ -5,9 +5,11 @@ import type {
   ObjectStore,
   TextAdapter,
   VideoAdapter,
+  VideoCapability,
   VideoRequest,
   VoiceAdapter,
 } from '@cgp/contracts';
+import { checkVideo } from '@cgp/contracts';
 import {
   catalog,
   compilerProfiles,
@@ -66,6 +68,8 @@ export interface VideoHandlerDeps {
   moderation: ModerationAdapter;
   store: ObjectStore;
   costInr: (adapterKey: string, resolution: VideoRequest['resolution'], seconds: number) => number;
+  /** What the chosen model will film, so an impossible clip is refused before it is paid for. */
+  capabilityOf?: (adapterKey: string) => VideoCapability | undefined;
   providerLabel: string;
   /** The renderer, which joins the scenes into one reel (plan section 4.6). */
   ffmpeg: FfmpegOptions;
@@ -100,12 +104,25 @@ async function renderScene(
   prompt: string,
   log: Parameters<JobHandler>[1],
 ): Promise<{ ok: true; clip: GeneratedClip } | { ok: false; code: string; blocked: boolean }> {
+  const ask = {
+    aspectRatio: '9:16' as const,
+    durationSeconds: SECONDS_PER_SCENE,
+    resolution: RESOLUTION,
+  };
+  // Asked of the model before it is asked of the provider (WP36). A clip the model cannot
+  // film is refused here, where it costs nothing, rather than after the seconds are held.
+  const capability = deps.capabilityOf?.(adapter.key);
+  const issues = capability ? checkVideo(capability, ask) : [];
+  if (issues.length > 0) {
+    const [first] = issues;
+    log.error({ adapter: adapter.key, issues }, 'the model cannot film this');
+    return { ok: false, code: first?.message ?? 'UNSUPPORTED', blocked: false };
+  }
+
   const { operationId } = await adapter.submit({
     prompt,
     negativePrompt: NEGATIVE_PROMPT,
-    aspectRatio: '9:16',
-    durationSeconds: SECONDS_PER_SCENE,
-    resolution: RESOLUTION,
+    ...ask,
   });
 
   const every = deps.pollEveryMs ?? POLL_EVERY_MS;

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Logger } from '@cgp/config';
 import {
+  checkPostMedia,
   PLATFORM_TEXT_LIMITS,
   type ModerationAdapter,
   type ModerationCategory,
@@ -222,9 +223,17 @@ export async function startPublication(
     if (text.length > limit) {
       issues.push({ path: 'text', message: `${name(platform)} allows ${limit} characters` });
     }
-    if (platform === 'instagram' && !media) {
-      issues.push({ path: 'media', message: 'Instagram posts need an image' });
-    }
+    // What this platform takes is declared beside the platform now, not decided here (WP36).
+    // Checked as the platform will receive it, not as it was uploaded: Instagram is sent the
+    // 4:5 JPEG copy, so a PNG upload is a JPEG by the time it goes out.
+    issues.push(
+      ...checkPostMedia(platform, {
+        ...(media
+          ? { kind: media.kind, mimeType: platform === 'instagram' ? 'image/jpeg' : media.mimeType }
+          : {}),
+        hasText: text.length > 0,
+      }),
+    );
   }
   if (issues.length > 0) return { ok: false, reason: 'invalid_input', issues };
 
