@@ -142,36 +142,83 @@ function Block({
  * provider time and a clip about twenty one, so this is the cheap place to find out the reel
  * is wrong.
  */
+/** Every scene is this long (plan section 4.6), which is what makes the price countable. */
+const SECONDS_PER_SCENE = 8;
+
 export function Storyboard({
   frames,
   committed,
+  videoSeconds,
   onCommit,
 }: {
-  frames: Array<{ index: number; url: string }>;
+  frames: Array<{ index: number; url: string; prompt: string }>;
   committed: boolean;
+  /**
+   * What filming these would spend, so the decision carries its price (WP46). Absent when a
+   * past storyboard is reopened and no estimate has been fetched, which is why the fallback
+   * below counts it instead: a scene is eight seconds, and the price must not disappear just
+   * because the page was arrived at a different way.
+   */
+  videoSeconds?: number;
   onCommit: () => void;
 }) {
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-xs text-muted">
-        {frames.length} {frames.length === 1 ? 'scene' : 'scenes'}, as they would be shot. Filming
-        costs video seconds; this did not.
+      <p className="text-body text-muted">
+        The shots, in order, as they would be filmed. Drawing them cost a few credits; filming them
+        spends video seconds, so this is the cheap place to find out a reel is wrong.
       </p>
-      <div className="grid grid-cols-3 gap-2">
+
+      {/*
+        A filmstrip rather than a grid (WP46): a reel is a sequence, and three pictures in a
+        row read as one after another where a grid reads as three alternatives. It scrolls
+        rather than shrinking, so a fourth scene would not make the first three unreadable.
+      */}
+      <ol className="-mx-1 flex snap-x gap-3 overflow-x-auto px-1 pb-2">
         {frames.map((frame) => (
-          <figure key={frame.index} className="overflow-hidden rounded-lg border border-line">
-            {/* A still from our bucket: next/image would need the host configured. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={frame.url} alt="" className="aspect-[9/16] w-full bg-black object-cover" />
-            <figcaption className="px-2 py-1 text-[11px] text-faint">
-              Scene {frame.index + 1}
-            </figcaption>
-          </figure>
+          <li key={frame.index} className="w-40 shrink-0 snap-start">
+            <figure className="flex flex-col gap-2">
+              <span className="relative block overflow-hidden rounded-xl border border-line">
+                {/* A still from our bucket: next/image would need the host configured. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={frame.url}
+                  alt={`Scene ${frame.index + 1}`}
+                  className="aspect-[9/16] w-full bg-black object-cover"
+                />
+                <span className="absolute left-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-caption text-white backdrop-blur">
+                  {frame.index + 1}
+                </span>
+              </span>
+              {/* What this shot is of. Clamped to three lines, with the whole of it on hover:
+                  the scene text is a paragraph and the strip is not the place to read it all. */}
+              <figcaption
+                title={frame.prompt}
+                className="line-clamp-3 text-caption leading-5 text-muted"
+              >
+                {frame.prompt || `Scene ${frame.index + 1}`}
+              </figcaption>
+            </figure>
+          </li>
         ))}
+      </ol>
+
+      {/*
+        The film bar: the decision and its price in one place, so nobody commits to video
+        seconds without seeing how many.
+      */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-raised px-4 py-3">
+        <span className="text-body text-muted">
+          {frames.length} {frames.length === 1 ? 'scene' : 'scenes'}
+          {' · '}
+          <span className="font-semibold tabular-nums text-ink">
+            {videoSeconds ?? frames.length * SECONDS_PER_SCENE}s of video
+          </span>
+        </span>
+        <Button onClick={onCommit} disabled={committed}>
+          {committed ? 'Filming…' : `Film ${frames.length === 1 ? 'this scene' : 'these scenes'}`}
+        </Button>
       </div>
-      <Button onClick={onCommit} disabled={committed}>
-        {committed ? 'Filming…' : 'Film these scenes'}
-      </Button>
     </div>
   );
 }

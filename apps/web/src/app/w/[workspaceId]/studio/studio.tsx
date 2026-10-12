@@ -33,7 +33,7 @@ interface Output {
   kind: string;
   text: string;
   media: { url: string; width: number; height: number } | null;
-  storyboard: Array<{ index: number; url: string }> | null;
+  storyboard: Array<{ index: number; url: string; prompt: string }> | null;
   rendition: Rendition | null;
 }
 
@@ -870,6 +870,9 @@ export function Studio({
                 outputs[0]?.storyboard ? (
                   <Storyboard
                     frames={outputs[0].storyboard}
+                    // What filming it would spend, from the same estimate the submit bar
+                    // uses: the price belongs next to the decision (WP46).
+                    {...(cost?.videoSeconds ? { videoSeconds: cost.videoSeconds } : {})}
                     committed={storyboardId === outputs[0].id}
                     onCommit={() => {
                       const id = outputs[0]?.id;
