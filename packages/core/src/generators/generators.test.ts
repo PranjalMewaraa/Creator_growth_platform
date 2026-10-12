@@ -8,6 +8,19 @@ import { z } from 'zod';
 
 const intent = { intentText: 'Launch day for our new cold brew' };
 
+/**
+ * What a generator needs beyond the intent before it can be priced. The corrections (WP50)
+ * take the thing they are correcting, because a redraw with no frame and a refilm with no
+ * scene are not requests anyone can put a number on.
+ */
+const ALSO: Record<string, Record<string, unknown>> = {
+  redraw_frame: {
+    storyboardOutputId: '00000000-0000-4000-8000-000000000001',
+    frameIndex: 0,
+  },
+  regenerate_scene: { sceneId: '00000000-0000-4000-8000-000000000002' },
+};
+
 describe('generator registry', () => {
   it('covers every output type', () => {
     expect(new Set(generators.list().map((g) => g.outputType))).toEqual(new Set(OUTPUT_TYPES));
@@ -15,7 +28,10 @@ describe('generator registry', () => {
 
   it('prices every generator from the seeded rates', () => {
     for (const generator of generators.list()) {
-      const prepared = generator.prepare(intent, METERING_RATES_V1);
+      const prepared = generator.prepare(
+        { ...intent, ...(ALSO[generator.key] ?? {}) },
+        METERING_RATES_V1,
+      );
       expect(prepared.ok, generator.key).toBe(true);
     }
   });

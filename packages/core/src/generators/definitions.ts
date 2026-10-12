@@ -164,6 +164,55 @@ const storyboard = register({
   },
 });
 
+/**
+ * One frame of a storyboard, drawn again (WP50). Its own generator because it is its own
+ * price: a redraw costs one picture, not three, and the submit bar should say so.
+ *
+ * It takes the storyboard it is correcting rather than a fresh request, because the scene it
+ * is redrawing was planned with the other two and re-planning would quietly move them.
+ */
+const redrawFrame = register({
+  key: 'redraw_frame',
+  // A storyboard is compiled as a video, and a frame of one is compiled the same way.
+  outputType: 'video',
+  jobClass: 'inference',
+  inputSchema: z.object({
+    ...base,
+    ...look,
+    /** The storyboard output being corrected. The frames come from it, not from a new plan. */
+    storyboardOutputId: z.uuid(),
+    frameIndex: z.int().min(0).max(2),
+    /** What is wrong with it, in the user's words. Appended to the scene, never replacing it. */
+    note: z.string().trim().min(1).max(200).optional(),
+  }),
+  compilerProfile: 'video',
+  providerAdapter: IMAGE_ADAPTER,
+  estimate: (_input, rates) => {
+    const credits = rateFor(rates, 'image_standard');
+    return { credits, breakdown: [{ label: 'Redraw one frame', credits }] };
+  },
+});
+
+/**
+ * One scene of a finished reel, filmed again (WP22, wired in WP50). The handler has existed
+ * since the scene table did; what it never had was a way in, because nothing can be submitted
+ * without a generator to price it. This is that entry: a scene costs what a scene costs.
+ */
+const regenerateScene = register({
+  key: 'regenerate_scene',
+  outputType: 'video',
+  jobClass: 'render',
+  inputSchema: z.object({
+    ...base,
+    ...look,
+    /** The scene being filmed again. Its prompt is the one it was filmed from. */
+    sceneId: z.uuid(),
+  }),
+  compilerProfile: 'video',
+  providerAdapter: 'veo-3.1-lite',
+  estimate: () => ({ credits: 0, videoSeconds: SECONDS_PER_SCENE, breakdown: [] }),
+});
+
 const video = register({
   key: 'video',
   outputType: 'video',
@@ -194,5 +243,7 @@ export const generators = createGeneratorRegistry([
   image,
   thumbnailSet,
   storyboard,
+  redrawFrame,
+  regenerateScene,
   video,
 ]);

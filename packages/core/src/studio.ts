@@ -1,5 +1,13 @@
 import type { JobView, ObjectStore, OutputType, TextLayerSpec } from '@cgp/contracts';
-import { jobs, outputs, PUBLISH_TARGET, renditionsFor, scoped, type Database } from '@cgp/db';
+import {
+  jobs,
+  listScenes,
+  outputs,
+  PUBLISH_TARGET,
+  renditionsFor,
+  scoped,
+  type Database,
+} from '@cgp/db';
 import { toJobView } from './generate';
 
 // What the Studio needs beyond starting a job: the recent jobs to come back to, and a finished
@@ -56,6 +64,17 @@ export interface StudioOutput {
    * the filmstrip can say what the frame is meant to be rather than only numbering it (WP46).
    */
   storyboard: Array<{ index: number; url: string; prompt: string }> | null;
+  /**
+   * The scenes a reel was filmed from (WP22), so one of them can be filmed again without the
+   * other two (WP50). Null for everything that is not a finished reel.
+   */
+  scenes: Array<{
+    id: string;
+    index: number;
+    clipUrl: string | null;
+    prompt: string;
+    regeneratedCount: number;
+  }> | null;
   compiledPromptId: string;
   createdAt: string;
 }
@@ -111,6 +130,11 @@ export async function jobOutputs(
     workspaceId,
     rows.map((row) => row.id),
   );
+  // A reel's scenes, so the Studio can offer to film one again. Asked for only when there is
+  // a reel to ask about: every other output type has none, and a query per output would be
+  // three round trips to learn that.
+  const reel = rows.find((row) => row.kind === 'video' && media(row.metadata) !== null);
+  const scenes = reel ? await listScenes(db, workspaceId, reel.id) : [];
   return rows.map((row) => {
     const layer = layers.find((rendition) => rendition.outputId === row.id);
     return {
@@ -119,6 +143,16 @@ export async function jobOutputs(
       text: text((row.metadata as { text?: unknown }).text),
       media: media(row.metadata),
       storyboard: storyboard(row.metadata),
+      scenes:
+        row.id === reel?.id && scenes.length > 0
+          ? scenes.map((scene) => ({
+              id: scene.id,
+              index: scene.index,
+              clipUrl: scene.clipUrl,
+              prompt: scene.prompt,
+              regeneratedCount: scene.regeneratedCount,
+            }))
+          : null,
       rendition: layer
         ? {
             id: layer.id,

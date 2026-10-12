@@ -31,7 +31,7 @@ export const STORYBOARD = 'storyboard';
  * world, not the framing: each scene is its own shot, and copying the first one's composition
  * would make a storyboard of three near identical pictures.
  */
-function sameWorldAs(scenePrompt: string): string {
+export function sameWorldAs(scenePrompt: string): string {
   return [
     scenePrompt,
     '',
@@ -42,7 +42,7 @@ function sameWorldAs(scenePrompt: string): string {
 }
 
 /** Vertical, like the reel it previews. */
-const ASPECT_RATIO = '9:16' as const;
+export const ASPECT_RATIO = '9:16' as const;
 
 export interface StoryboardHandlerDeps {
   db: Database;

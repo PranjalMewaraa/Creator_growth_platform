@@ -16,7 +16,15 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { artStyle } from '@/lib/art';
 import { WorkLedger } from './work-ledger';
-import { ImageOutput, OutputView, Storyboard, VideoOutput, type Rendition } from './output-view';
+import {
+  ImageOutput,
+  OutputView,
+  SECONDS_PER_SCENE,
+  Storyboard,
+  VideoOutput,
+  type ReelScene,
+  type Rendition,
+} from './output-view';
 import { TemplatePicker, type TemplateCard } from './template-picker';
 import { PromptDisclosure } from './prompt-disclosure';
 
@@ -34,7 +42,10 @@ interface Output {
   text: string;
   media: { url: string; width: number; height: number } | null;
   storyboard: Array<{ index: number; url: string; prompt: string }> | null;
+  scenes: ReelScene[] | null;
   rendition: Rendition | null;
+  /** The prompt this was made from, so a redraw can reuse it rather than compile a new one. */
+  compiledPromptId: string;
 }
 
 interface Kind {
@@ -193,6 +204,11 @@ export function Studio({
   const [storyboardCost, setStoryboardCost] = useState<number | null>(null);
   // The storyboard this reel would be committed from, once one has been drawn and looked at.
   const [storyboardId, setStoryboardId] = useState<string | null>(null);
+  // What one frame costs to draw again, and which one is being drawn (WP50).
+  const [redrawCredits, setRedrawCredits] = useState<number | null>(null);
+  const [redrawing, setRedrawing] = useState<number | null>(null);
+  // The scene being filmed again, and what one costs in the currency it is paid in (WP50).
+  const [refilming, setRefilming] = useState<string | null>(null);
   const [prompt, setPrompt] = useState<CompiledPromptView | null>(null);
   const [promptFor, setPromptFor] = useState<string | null>(null);
   const [busy, setBusy] = useState<'compiling' | 'starting' | null>(null);
@@ -272,6 +288,29 @@ export function Studio({
     // requestKey captures every field of the input.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [base, kind, requestKey]);
+
+  // What one frame costs to draw again, priced by the server against the rates in force. It
+  // depends on the storyboard on screen, so it is fetched when one appears rather than typed.
+  const shownStoryboardId = outputs[0]?.storyboard ? outputs[0].id : null;
+  useEffect(() => {
+    const ask = async () => {
+      if (!shownStoryboardId) return setRedrawCredits(null);
+      const r = await fetch(`${base}/generate/redraw_frame/estimate`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          // The price of a picture does not depend on the words, and the storyboard already
+          // holds the scene this would redraw; the schema wants an intent, so it gets one.
+          intentText: 'redraw',
+          storyboardOutputId: shownStoryboardId,
+          frameIndex: 0,
+        }),
+      }).catch(() => null);
+      const body = r?.ok ? ((await r.json()) as { estimate: { credits: number } }) : null;
+      setRedrawCredits(body?.estimate.credits ?? null);
+    };
+    void ask();
+  }, [base, shownStoryboardId]);
 
   const refreshJobs = useCallback(async () => {
     const r = await fetch(`${base}/jobs`).catch(() => null);
@@ -370,8 +409,10 @@ export function Studio({
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         ...input,
-        ...extra,
         ...(usePrompt ? { compiledPromptId: usePrompt } : {}),
+        // Last, so a caller that knows which prompt this belongs to outranks the open one: a
+        // redraw reuses the storyboard's prompt rather than compiling a new one (WP50).
+        ...extra,
       }),
     }).catch(() => null);
     setBusy(null);
@@ -883,9 +924,40 @@ export function Studio({
                       setStoryboardId(id);
                       void generate('video', { storyboardOutputId: id });
                     }}
+                    redrawCredits={redrawCredits}
+                    redrawing={redrawing}
+                    onRedraw={(index, note) => {
+                      const output = outputs[0];
+                      if (!output) return;
+                      setRedrawing(index);
+                      // The storyboard's own prompt, not a fresh one: re-compiling would plan
+                      // the scenes again and quietly move the two frames nobody asked about.
+                      void generate('redraw_frame', {
+                        intentText: shownIntent || input.intentText || 'Redraw',
+                        storyboardOutputId: output.id,
+                        frameIndex: index,
+                        compiledPromptId: output.compiledPromptId,
+                        ...(note ? { note } : {}),
+                      }).finally(() => setRedrawing(null));
+                    }}
                   />
                 ) : outputs[0]?.kind === 'video' && outputs[0].media ? (
-                  <VideoOutput {...outputs[0].media} />
+                  <VideoOutput
+                    {...outputs[0].media}
+                    scenes={outputs[0].scenes ?? []}
+                    refilmSeconds={SECONDS_PER_SCENE}
+                    refilming={refilming}
+                    onRefilm={(sceneId) => {
+                      const output = outputs[0];
+                      if (!output) return;
+                      setRefilming(sceneId);
+                      void generate('regenerate_scene', {
+                        intentText: shownIntent || input.intentText || 'Film this scene again',
+                        sceneId,
+                        compiledPromptId: output.compiledPromptId,
+                      }).finally(() => setRefilming(null));
+                    }}
+                  />
                 ) : outputs[0]?.media ? (
                   <div className={cx('grid gap-3', outputs.length > 1 && 'sm:grid-cols-2')}>
                     {outputs.map((output) =>

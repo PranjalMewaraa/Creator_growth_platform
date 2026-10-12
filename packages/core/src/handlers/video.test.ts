@@ -7,7 +7,12 @@ import {
   createMemoryStore,
 } from '@cgp/adapters';
 import { createLogger } from '@cgp/config';
-import { AdapterError, type ModerationAdapter, type VideoAdapter } from '@cgp/contracts';
+import {
+  AdapterError,
+  type ModerationAdapter,
+  type QueuedJobData,
+  type VideoAdapter,
+} from '@cgp/contracts';
 import { listScenes, outputs, scoped, type Database } from '@cgp/db';
 import {
   addTestProfile,
@@ -306,6 +311,44 @@ describe('regenerating one scene', () => {
     // The other scenes are untouched, clip and count.
     expect(after[0]?.clipUrl).toBe(before[0]?.clipUrl);
     expect(after[2]?.regeneratedCount).toBe(0);
+  }, 300_000);
+
+  it('can be asked for, which it could not before (WP50)', async () => {
+    const { workspaceId, started } = await startVideo();
+    const handlers = fakeHandlers();
+    await processJob({ db, handlers, log }, { jobId: started.job.id, correlationId: 'c' });
+    const [output] = await scoped(db, workspaceId).select(outputs);
+    const [scene] = await listScenes(db, workspaceId, output?.id ?? '');
+    if (!scene) throw new Error('no scene');
+
+    // The handler has existed since WP22 with nothing able to submit to it: a job needs a
+    // generator to price it, and there was none. Now there is, and it holds one scene.
+    const asked = await startGeneration(
+      {
+        db,
+        queues: recordingQueues(),
+        log,
+        registry: generators,
+        compile: { rewriters: [] },
+        moderation: createFakeModeration(),
+      },
+      {
+        workspaceId,
+        generatorKey: REGENERATE_SCENE,
+        input: { ...intent, targetPlatform: 'instagram', sceneId: scene.id },
+      },
+    );
+    if (!asked.ok) throw new Error(asked.reason);
+    expect(asked.job.held).toEqual({ credits: 0, videoSeconds: 8 });
+    expect(asked.job.jobClass).toBe('render');
+
+    const outcome = await processJob({ db, handlers, log }, {
+      jobId: asked.job.id,
+      correlationId: 'c',
+    } satisfies QueuedJobData);
+    expect(outcome).toBe('settled');
+    const after = await listScenes(db, workspaceId, output?.id ?? '');
+    expect(after[0]?.regeneratedCount).toBe(1);
   }, 300_000);
 
   it('fails without a scene, rather than guessing which one', async () => {

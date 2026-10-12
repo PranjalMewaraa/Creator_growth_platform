@@ -85,6 +85,11 @@ export {
   type StoryboardHandlerDeps,
 } from './handlers/storyboard';
 export {
+  createRedrawFrameHandler,
+  REDRAW_FRAME,
+  type RedrawFrameHandlerDeps,
+} from './handlers/redraw';
+export {
   createVideoHandlers,
   REGENERATE_SCENE,
   videoSecondsFor,

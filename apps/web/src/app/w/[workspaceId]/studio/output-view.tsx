@@ -143,13 +143,16 @@ function Block({
  * is wrong.
  */
 /** Every scene is this long (plan section 4.6), which is what makes the price countable. */
-const SECONDS_PER_SCENE = 8;
+export const SECONDS_PER_SCENE = 8;
 
 export function Storyboard({
   frames,
   committed,
   videoSeconds,
   onCommit,
+  onRedraw,
+  redrawCredits,
+  redrawing,
 }: {
   frames: Array<{ index: number; url: string; prompt: string }>;
   committed: boolean;
@@ -161,7 +164,17 @@ export function Storyboard({
    */
   videoSeconds?: number;
   onCommit: () => void;
+  /** Draws one frame again, optionally told what is wrong with it (WP50). */
+  onRedraw: (index: number, note: string) => void;
+  /** What one costs, from the server, so the correction carries its price like everything. */
+  redrawCredits: number | null;
+  /** The frame being redrawn now, so the strip says which one is working. */
+  redrawing: number | null;
 }) {
+  // One at a time: a note belongs to a frame, and two open boxes would not say which.
+  const [noting, setNoting] = useState<number | null>(null);
+  const [note, setNote] = useState('');
+
   return (
     <div className="flex flex-col gap-3">
       <p className="text-body text-muted">
@@ -198,6 +211,65 @@ export function Storyboard({
               >
                 {frame.prompt || `Scene ${frame.index + 1}`}
               </figcaption>
+
+              {/*
+                One frame can be wrong without the storyboard being wrong (WP50). Redrawing it
+                costs a picture and keeps the other two exactly as they are, which is the whole
+                reason the storyboard is drawn before anything is filmed.
+              */}
+              {noting === frame.index ? (
+                <div className="flex flex-col gap-1.5">
+                  <input
+                    autoFocus
+                    value={note}
+                    onChange={(event) => setNote(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Escape') setNoting(null);
+                      if (event.key === 'Enter') {
+                        onRedraw(frame.index, note.trim());
+                        setNoting(null);
+                      }
+                    }}
+                    maxLength={200}
+                    aria-label={`What is wrong with scene ${frame.index + 1}`}
+                    placeholder="What is wrong with it?"
+                    className="h-9 w-full rounded-lg border border-line bg-raised px-2.5 text-caption text-ink outline-none transition placeholder:text-faint focus:border-accent/70"
+                  />
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onRedraw(frame.index, note.trim());
+                        setNoting(null);
+                      }}
+                      className="tap-target h-9 flex-1 cursor-pointer rounded-lg bg-accent px-2 text-caption font-medium text-accent-ink transition duration-base ease-standard hover:opacity-90"
+                    >
+                      Draw it again
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNoting(null)}
+                      className="tap-target h-9 cursor-pointer rounded-lg px-2 text-caption text-muted transition duration-base ease-standard hover:text-ink"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  disabled={redrawing !== null || committed}
+                  onClick={() => {
+                    setNote('');
+                    setNoting(frame.index);
+                  }}
+                  className="tap-target h-9 cursor-pointer rounded-lg border border-line text-caption text-muted transition duration-base ease-standard hover:border-faint hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {redrawing === frame.index
+                    ? 'Drawing…'
+                    : `Redraw${redrawCredits === null ? '' : ` · ${redrawCredits}`}`}
+                </button>
+              )}
             </figure>
           </li>
         ))}
@@ -224,41 +296,107 @@ export function Storyboard({
 }
 
 /** A finished reel: watchable in place, at the shape it was rendered. */
+export interface ReelScene {
+  id: string;
+  index: number;
+  clipUrl: string | null;
+  prompt: string;
+  regeneratedCount: number;
+}
+
 export function VideoOutput({
   url,
   width,
   height,
+  scenes = [],
+  onRefilm,
+  refilmSeconds,
+  refilming,
 }: {
   url: string;
   width: number;
   height: number;
+  /** The shots the reel was cut from, so one can be filmed again (WP50). */
+  scenes?: ReelScene[];
+  onRefilm?: (sceneId: string) => void;
+  /** What one scene spends, in video seconds, because that is what it is paid in. */
+  refilmSeconds?: number | null;
+  refilming?: string | null;
 }) {
   return (
-    <figure className="overflow-hidden rounded-xl border border-line bg-raised">
-      <video
-        src={url}
-        controls
-        playsInline
-        preload="metadata"
-        className="mx-auto max-h-[70vh] w-full bg-black object-contain"
-      />
-      <figcaption className="flex items-center justify-between px-3 py-2 text-[11px] text-muted">
-        <span className="tabular-nums">
-          {width > 0 ? `${width} x ${height}` : 'Reel'} · no voiceover or captions yet
-        </span>
-        <span className="flex items-center gap-3">
-          {/* No "Use in a post" here: the Instagram and LinkedIn adapters post images, so a
+    <div className="flex flex-col gap-3">
+      <figure className="overflow-hidden rounded-xl border border-line bg-raised">
+        <video
+          src={url}
+          controls
+          playsInline
+          preload="metadata"
+          className="mx-auto max-h-[70vh] w-full bg-black object-contain"
+        />
+        <figcaption className="flex items-center justify-between px-3 py-2 text-[11px] text-muted">
+          <span className="tabular-nums">
+            {width > 0 ? `${width} x ${height}` : 'Reel'} · no voiceover or captions yet
+          </span>
+          <span className="flex items-center gap-3">
+            {/* No "Use in a post" here: the Instagram and LinkedIn adapters post images, so a
               reel cannot be published from the product yet (WP29, WP30). Saying so is better
               than a button that refuses. */}
-          <span title="The publishers post images; video publishing is not built yet">
-            Download to post it
+            <span title="The publishers post images; video publishing is not built yet">
+              Download to post it
+            </span>
+            <a href={url} target="_blank" rel="noreferrer" className="hover:text-ink">
+              Open
+            </a>
           </span>
-          <a href={url} target="_blank" rel="noreferrer" className="hover:text-ink">
-            Open
-          </a>
-        </span>
-      </figcaption>
-    </figure>
+        </figcaption>
+      </figure>
+
+      {/*
+        One shot of three can be the wrong shot (WP50). Filming it again spends one scene's
+        seconds rather than the reel's, and the clip is replaced in place, so the reel keeps
+        its order and the other two are not paid for twice.
+      */}
+      {scenes.length > 0 && onRefilm ? (
+        <section className="flex flex-col gap-2 rounded-xl border border-line bg-surface p-4">
+          <header className="flex items-baseline justify-between gap-3">
+            <h3 className="text-label font-medium uppercase tracking-wide text-muted">Scenes</h3>
+            <span className="text-caption text-faint">
+              {refilmSeconds ? `${refilmSeconds}s to film one again` : 'One at a time'}
+            </span>
+          </header>
+          <ol className="flex flex-col gap-2">
+            {scenes.map((scene) => (
+              <li key={scene.id} className="flex items-start gap-3">
+                <span className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-full border border-line text-caption tabular-nums text-muted">
+                  {scene.index + 1}
+                </span>
+                <p
+                  title={scene.prompt}
+                  className="line-clamp-2 min-w-0 flex-1 text-caption leading-5 text-muted"
+                >
+                  {scene.prompt}
+                  {scene.regeneratedCount > 0 ? (
+                    <span className="text-faint">
+                      {' · '}
+                      filmed again {scene.regeneratedCount}{' '}
+                      {scene.regeneratedCount === 1 ? 'time' : 'times'}
+                    </span>
+                  ) : null}
+                </p>
+                <button
+                  type="button"
+                  disabled={refilming !== null && refilming !== undefined}
+                  onClick={() => onRefilm(scene.id)}
+                  className="tap-target h-9 shrink-0 cursor-pointer rounded-lg border border-line px-2.5 text-caption text-muted transition duration-base ease-standard hover:border-faint hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {refilming === scene.id ? 'Filming…' : 'Film again'}
+                </button>
+              </li>
+            ))}
+          </ol>
+        </section>
+      ) : null}
+    </div>
   );
 }
 
