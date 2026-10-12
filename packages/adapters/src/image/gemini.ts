@@ -64,7 +64,14 @@ export function createGeminiImage(options: GeminiImageOptions): ImageAdapter {
     location: options.location,
   });
 
-  async function one(request: ImageRequest): Promise<[GeneratedImage, GenerateContentResponse]> {
+  /** What the model is told the second time, when the first answer had no picture in it. */
+  const NUDGE = 'Return the image itself. Do not describe it or explain; produce the picture.';
+
+  async function one(
+    request: ImageRequest,
+    attempt = 0,
+  ): Promise<[GeneratedImage, GenerateContentResponse]> {
+    const prompt = attempt === 0 ? request.prompt : `${request.prompt}\n\n${NUDGE}`;
     // Pictures first, then the words: the model reads the parts in order, and a reference
     // offered after the instruction is a weaker anchor than one offered before it (WP39).
     const contents = request.references?.length
@@ -78,11 +85,11 @@ export function createGeminiImage(options: GeminiImageOptions): ImageAdapter {
                   mimeType: reference.mimeType,
                 },
               })),
-              { text: request.prompt },
+              { text: prompt },
             ],
           },
         ]
-      : request.prompt;
+      : prompt;
 
     const response = await ai.models.generateContent({
       model: options.model,
@@ -100,6 +107,13 @@ export function createGeminiImage(options: GeminiImageOptions): ImageAdapter {
     if (!inline?.data) {
       const reason = response.promptFeedback?.blockReason ?? candidate?.finishReason ?? 'no image';
       if (SAFETY.has(reason)) throw blocked(options.model, reason);
+      // Not refused, just answered in words. The model does this now and then on a long shot
+      // specification, and a storyboard that silently lost its second frame was the result.
+      // One more try, told plainly, before giving up on the frame (WP51).
+      if (attempt === 0) {
+        options.log?.info({ model: options.model, reason }, 'no image in the answer; asking again');
+        return one(request, 1);
+      }
       throw new AdapterError({
         code: 'NO_IMAGE',
         message: `${options.model} returned no image (${reason})`,

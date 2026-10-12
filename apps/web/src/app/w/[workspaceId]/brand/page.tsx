@@ -17,6 +17,8 @@ function when(iso: string, timezone: string) {
   }).format(new Date(iso));
 }
 
+export const metadata = { title: 'Brand' };
+
 export default async function BrandPage({
   params,
   searchParams,

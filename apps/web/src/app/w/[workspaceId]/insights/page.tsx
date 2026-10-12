@@ -39,6 +39,8 @@ function Metric({ label, value }: { label: string; value: number | undefined }) 
  * when this page opens, and nothing is estimated. A post ranks against this workspace's own
  * median rather than against anyone else's account.
  */
+export const metadata = { title: 'Insights' };
+
 export default async function InsightsPage({
   params,
 }: {

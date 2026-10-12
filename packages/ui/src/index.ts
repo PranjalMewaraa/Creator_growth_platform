@@ -27,6 +27,7 @@ export {
   MailIcon,
   PaletteIcon,
   PlusIcon,
+  SmileIcon,
   SparklesIcon,
   SyncIcon,
 } from './icons';

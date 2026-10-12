@@ -8,6 +8,12 @@ export interface TextRequest {
   /** 'json' asks for a single JSON object, as the compile rewrite pass does. */
   format?: 'text' | 'json';
   /**
+   * The shape that object must have, as JSON Schema, for providers that can be held to one
+   * (WP51). Advisory: the caller still parses and checks, because a provider that ignores
+   * it answers as it always did. Only meaningful with `format: 'json'`.
+   */
+  schema?: Record<string, unknown>;
+  /**
    * 'minimal' asks a reasoning model to think as little as it can, for latency bound calls
    * such as the compile rewrite pass. Providers without a reasoning setting ignore it.
    */

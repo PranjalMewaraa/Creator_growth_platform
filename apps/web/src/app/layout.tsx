@@ -11,7 +11,8 @@ const poppins = Poppins({
 });
 
 export const metadata: Metadata = {
-  title: 'Creator Growth Platform',
+  // Each page names itself; this is the suffix, so ten open tabs can be told apart (WP51).
+  title: { default: 'Creator Growth Platform', template: '%s · Creator Growth Platform' },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

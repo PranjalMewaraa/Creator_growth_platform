@@ -71,6 +71,18 @@ export async function planScenes(request: ScenePlanRequest): Promise<ScenePlan> 
       system: config.system,
       maxOutputTokens: config.maxOutputTokens,
       format: 'json',
+      schema: {
+        type: 'object',
+        properties: {
+          scenes: {
+            type: 'array',
+            items: { type: 'string' },
+            minItems: request.sceneCount,
+            maxItems: request.sceneCount,
+          },
+        },
+        required: ['scenes'],
+      },
       signal: controller.signal,
     });
     const scenes = parseScenes(result.text, request.sceneCount);

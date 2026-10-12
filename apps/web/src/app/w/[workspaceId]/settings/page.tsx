@@ -2,6 +2,8 @@ import { Card, CardBody, CardHeader } from '@cgp/ui';
 import { Screen } from '@/components/screen';
 import { requireWorkspace } from '@/server/session';
 
+export const metadata = { title: 'Settings' };
+
 export default async function SettingsPage({
   params,
 }: {

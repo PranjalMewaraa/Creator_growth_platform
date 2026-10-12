@@ -4,6 +4,8 @@ import { requireWorkspace } from '@/server/session';
 import { OnboardingFlow } from './onboarding-flow';
 
 /** FR-ON: one question per screen. Re-running it starts from the current profile. */
+export const metadata = { title: 'About your content' };
+
 export default async function OnboardingPage({
   params,
 }: {

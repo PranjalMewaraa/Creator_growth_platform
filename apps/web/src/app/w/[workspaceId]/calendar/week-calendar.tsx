@@ -372,7 +372,16 @@ export function WeekCalendar({
                           )}
                           style={{ top: (h - startHour) * HOUR_PX + 14, height: HOUR_PX - 4 }}
                         >
-                          <span className="text-xl text-transparent transition group-hover:text-accent">
+                          {/* Faint always, bright on hover or focus: a slot nobody can see is
+                              not an affordance, it is a secret (WP51). */}
+                          <span
+                            className={cx(
+                              'text-xl transition duration-base ease-standard',
+                              at > now
+                                ? 'text-faint/40 group-hover:text-accent group-focus-visible:text-accent'
+                                : 'text-transparent',
+                            )}
+                          >
                             +
                           </span>
                         </Link>

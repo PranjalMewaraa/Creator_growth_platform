@@ -2,7 +2,11 @@ import 'server-only';
 import { authDatabaseAdapter } from '@cgp/db';
 import { betterAuth } from 'better-auth';
 import { magicLink } from 'better-auth/plugins';
+import { getMailer, magicLinkEmail } from './mailer';
 import { getDb, getEnv, getLogger } from './runtime';
+
+/** How long a sign in link lives. The email and the sign in form both say this number. */
+const MAGIC_LINK_MINUTES = 5;
 
 function buildAuth() {
   const env = getEnv();
@@ -15,16 +19,26 @@ function buildAuth() {
     emailAndPassword: { enabled: false },
     plugins: [
       magicLink({
-        // A11: only addresses the seed created can sign in. An unknown email is refused
-        // rather than turned into a new account.
-        disableSignUp: true,
-        sendMagicLink: ({ email, url }) => {
-          if (!env.RESEND_API_KEY) {
-            // No sender configured yet: the link goes to the server log so local sign in works.
-            getLogger().info({ email, url }, 'magic link (no email sender configured)');
-            return;
+        // Anyone with an inbox can sign up (A12, WP51): an unknown address becomes an
+        // account, and the root page sends a user with no workspace to create one. A11's
+        // restriction to seeded addresses was for a demo nobody outside the team could reach;
+        // with mail actually delivered, it was the only thing standing between a visitor and
+        // the first run flow built for them.
+        disableSignUp: false,
+        expiresIn: MAGIC_LINK_MINUTES * 60,
+        sendMagicLink: async ({ email, url }) => {
+          const mailer = getMailer();
+          try {
+            await mailer.send({
+              to: email,
+              ...magicLinkEmail({ url, minutes: MAGIC_LINK_MINUTES }),
+            });
+          } catch (err) {
+            // A link that cannot be sent is a sign in that cannot happen; say so where it can
+            // be seen, and fail the request so the form says so too.
+            getLogger().error({ err, email, transport: mailer.transport }, 'magic link not sent');
+            throw err;
           }
-          throw new Error('Email delivery is not implemented yet; unset RESEND_API_KEY');
         },
       }),
     ],

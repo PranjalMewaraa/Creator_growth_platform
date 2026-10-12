@@ -10,6 +10,8 @@ function hashtag(pillar: string) {
   return words.length ? `#${words.map((w) => w[0]?.toUpperCase() + w.slice(1)).join('')}` : null;
 }
 
+export const metadata = { title: 'Create post' };
+
 export default async function ComposePage({
   params,
 }: {

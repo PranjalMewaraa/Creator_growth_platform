@@ -1,7 +1,7 @@
 'use client';
 
 import { PLATFORM_TEXT_LIMITS, type PostTargetStatus, type TargetPlatform } from '@cgp/contracts';
-import { Badge, Button, cx, SegmentedControl, Tabs } from '@cgp/ui';
+import { Badge, Button, cx, SegmentedControl, SmileIcon, Tabs, useToast } from '@cgp/ui';
 import Link from 'next/link';
 import {
   useEffect,
@@ -189,6 +189,7 @@ export function Composer({
   const [tab, setTab] = useState<TargetPlatform | null>(null);
   const [busy, setBusy] = useState<'uploading' | 'posting' | 'attaching' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const toast = useToast();
   const [publicationId, setPublicationId] = useState<string | null>(null);
   const [targets, setTargets] = useState<TargetView[]>([]);
   // A datetime-local value, in the viewer's own clock. Empty means post now. An empty slot on
@@ -360,7 +361,10 @@ export function Composer({
 
   function saveNow() {
     const draft = { text, chosen, frame, savedAt: new Date().toISOString() };
-    if (writeDraft(workspaceId, draft)) setSavedAt(draft.savedAt);
+    if (writeDraft(workspaceId, draft)) {
+      setSavedAt(draft.savedAt);
+      toast({ tone: 'neutral', message: 'Draft saved on this device.' });
+    }
   }
 
   async function post() {
@@ -405,6 +409,19 @@ export function Composer({
       setTargets([]);
       setScheduledAt(body.scheduledAt ?? null);
       setPublicationId(body.publicationId);
+      // The outcome, said once, where the eye already is (WP51). The status below keeps
+      // following it; this is the moment it changed.
+      toast({
+        tone: 'good',
+        message: body.scheduledAt
+          ? `Scheduled for ${new Date(body.scheduledAt).toLocaleString('en-IN', {
+              day: 'numeric',
+              month: 'short',
+              hour: '2-digit',
+              minute: '2-digit',
+            })}.`
+          : 'Handed to the worker. The sync centre shows what the platform says.',
+      });
     } catch {
       setError('Something went wrong on the way. Check your connection and try again.');
     } finally {
@@ -573,7 +590,7 @@ export function Composer({
                       aria-expanded={emojiOpen}
                       className="tap-target flex h-8 cursor-pointer items-center gap-1.5 rounded-lg px-2 text-sm text-muted transition hover:bg-surface hover:text-ink"
                     >
-                      <span aria-hidden>😊</span> Emoji
+                      <SmileIcon width={16} height={16} aria-hidden /> Emoji
                     </button>
                     <button
                       type="button"
@@ -588,11 +605,12 @@ export function Composer({
                           <button
                             key={emoji}
                             type="button"
+                            aria-label={`Insert ${emoji}`}
                             onClick={() => {
                               insert(emoji);
                               setEmojiOpen(false);
                             }}
-                            className="flex h-8 items-center justify-center rounded-lg text-lg hover:bg-surface"
+                            className="tap-target flex h-8 cursor-pointer items-center justify-center rounded-lg text-lg hover:bg-surface"
                           >
                             {emoji}
                           </button>

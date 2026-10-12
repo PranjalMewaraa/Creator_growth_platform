@@ -59,6 +59,12 @@ export function createGeminiText(options: GeminiTextOptions): TextAdapter {
       ...(request.system ? { systemInstruction: request.system } : {}),
       ...(request.temperature === undefined ? {} : { temperature: request.temperature }),
       ...(request.format === 'json' ? { responseMimeType: 'application/json' } : {}),
+      // Held to the shape, not just to JSON: a planner that asked for three scenes and got
+      // prose inside an object fell back to the dull plan. Constrained decoding cannot return
+      // a key the schema does not name (WP51).
+      ...(request.format === 'json' && request.schema
+        ? { responseJsonSchema: request.schema }
+        : {}),
       ...(request.reasoning === 'minimal'
         ? { thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL } }
         : {}),

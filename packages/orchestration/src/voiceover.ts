@@ -64,6 +64,18 @@ export async function planVoiceover(request: VoiceoverRequest): Promise<Voiceove
       system: config.system,
       maxOutputTokens: config.maxOutputTokens,
       format: 'json',
+      schema: {
+        type: 'object',
+        properties: {
+          lines: {
+            type: 'array',
+            items: { type: 'string' },
+            minItems: request.scenes.length,
+            maxItems: request.scenes.length,
+          },
+        },
+        required: ['lines'],
+      },
       signal: controller.signal,
     });
     const lines = parseLines(result.text, request.scenes.length);

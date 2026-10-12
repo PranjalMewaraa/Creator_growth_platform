@@ -5,6 +5,8 @@ import { getDb } from '@/server/runtime';
 import { requireWorkspace } from '@/server/session';
 import { Studio } from './studio';
 
+export const metadata = { title: 'Studio' };
+
 export default async function StudioPage({
   params,
   searchParams,

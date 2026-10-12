@@ -9,9 +9,14 @@ const webEnvSchema = baseEnvSchema.extend({
   /** Signs session cookies and magic link tokens. Generate per environment. */
   AUTH_SECRET: z.string().min(32),
   APP_URL: z.url().default('http://localhost:3000'),
-  /** Without a sender, magic links are written to the server log (development only). */
+  /**
+   * How mail leaves (WP51): Resend when it has a key, any SMTP relay when it has a URL, the
+   * server log when it has neither. EMAIL_FROM is what the message says it is from; Resend
+   * can do without it in testing, an SMTP relay cannot.
+   */
   EMAIL_FROM: z.string().optional(),
   RESEND_API_KEY: z.string().optional(),
+  SMTP_URL: z.string().url().optional(),
 });
 
 export type WebEnv = z.infer<typeof webEnvSchema>;

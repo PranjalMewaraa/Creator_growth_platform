@@ -23,9 +23,9 @@ export function SignInForm() {
       error
         ? {
             status: 'error',
-            // Access is limited to accounts the team has set up (A11), so an unknown
-            // address is a refusal rather than a new account.
-            message: 'We could not send a link to that address. Check it with your team.',
+            // Anyone can sign up (A12), so a failure here is the mail not going, not the
+            // address being unknown.
+            message: 'We could not send the link just now. Check the address and try again.',
           }
         : { status: 'sent', email },
     );
@@ -40,7 +40,7 @@ export function SignInForm() {
         <p className="mt-4 font-medium text-ink">Check your email</p>
         <p className="mt-1 text-sm text-muted">
           We sent a link to <span className="text-ink">{state.email}</span>. It works once and
-          expires in five minutes.
+          expires in five minutes. If it has not arrived in a minute, check your spam folder.
         </p>
         <Button variant="quiet" className="-ml-3 mt-3" onClick={() => setState({ status: 'idle' })}>
           Use a different email
@@ -72,7 +72,7 @@ export function SignInForm() {
         {state.status === 'sending' ? 'Sending link' : 'Send sign in link'}
       </Button>
       <p className="mt-2 text-center text-xs text-faint">
-        Access is limited to accounts your team has set up.
+        New here? The same link creates your account.
       </p>
     </form>
   );

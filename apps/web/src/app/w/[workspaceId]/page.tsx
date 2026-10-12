@@ -72,6 +72,8 @@ function Day({ day, base, timezone }: { day: HomeDay; base: string; timezone: st
   );
 }
 
+export const metadata = { title: 'Home' };
+
 export default async function HomePage({ params }: { params: Promise<{ workspaceId: string }> }) {
   const { workspaceId } = await params;
   const { workspace } = await requireWorkspace(workspaceId);

@@ -6,6 +6,8 @@ import { SyncCentre } from './sync-centre';
  * what it shows changes while it is open: a target claimed, a retry coming back, a platform
  * answering at last.
  */
+export const metadata = { title: 'Sync centre' };
+
 export default async function SyncPage({ params }: { params: Promise<{ workspaceId: string }> }) {
   const { workspaceId } = await params;
   await requireWorkspace(workspaceId);

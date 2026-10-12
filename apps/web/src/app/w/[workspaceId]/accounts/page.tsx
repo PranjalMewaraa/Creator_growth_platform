@@ -13,17 +13,17 @@ const NAMES: Record<TargetPlatform, string> = { instagram: 'Instagram', linkedin
  * honestly"). A creator finding out at publish time that their reel cannot go out is a worse
  * experience than reading it here.
  */
-const LIMITS: Record<TargetPlatform, string[]> = {
-  instagram: [
-    'Posts a single JPEG image with a caption.',
-    'Reels and carousels are not published from here yet.',
-    'Needs a Business or Creator account linked to a Facebook Page.',
-  ],
-  linkedin: [
-    'Posts text, with or without one image.',
-    'Posts as you, not as a company page.',
-    'Video is not published from here yet.',
-  ],
+const LIMITS: Record<TargetPlatform, { can: string; cannot: string; needs: string }> = {
+  instagram: {
+    can: 'Post a single JPEG image with a caption.',
+    cannot: 'Publish reels or carousels from here yet.',
+    needs: 'A Business or Creator account linked to a Facebook Page.',
+  },
+  linkedin: {
+    can: 'Post text, with or without one image.',
+    cannot: 'Publish video from here yet, or post as a company page.',
+    needs: 'A personal LinkedIn account; it posts as you.',
+  },
 };
 
 /** What the round trip left in the address bar, in words. */
@@ -53,6 +53,8 @@ function expiry(iso: string | null): string {
     ? `Expired on ${when}. Reconnect before publishing.`
     : `Expires ${when}, in ${days} day${days === 1 ? '' : 's'}.`;
 }
+
+export const metadata = { title: 'Accounts' };
 
 export default async function AccountsPage({
   params,
@@ -139,13 +141,15 @@ export default async function AccountsPage({
                 </p>
               ) : null}
 
-              <ul className="flex flex-col gap-1">
-                {LIMITS[platform].map((limit) => (
-                  <li key={limit} className="text-xs leading-5 text-muted">
-                    · {limit}
-                  </li>
-                ))}
-              </ul>
+              {/* A list of what it can and cannot do, named as such, not bullets (WP51). */}
+              <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs leading-5">
+                <dt className="text-faint">Can</dt>
+                <dd className="text-muted">{LIMITS[platform].can}</dd>
+                <dt className="text-faint">Cannot</dt>
+                <dd className="text-muted">{LIMITS[platform].cannot}</dd>
+                <dt className="text-faint">Needs</dt>
+                <dd className="text-muted">{LIMITS[platform].needs}</dd>
+              </dl>
             </li>
           ))}
         </ul>
