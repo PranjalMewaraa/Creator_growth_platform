@@ -1,7 +1,7 @@
 'use client';
 
 import type { CompiledPromptView, PrecedenceSource, SettingValue } from '@cgp/contracts';
-import { Button, cx } from '@cgp/ui';
+import { Button, cx, Badge } from '@cgp/ui';
 import { useState } from 'react';
 
 // The PROMPT disclosure (plan section 13): the engine's compiled prompt, collapsed by default,
@@ -105,25 +105,15 @@ export function PromptDisclosure({
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+        className="flex w-full cursor-pointer items-center justify-between gap-3 px-4 py-3 text-left"
       >
         <span className="flex flex-wrap items-center gap-2">
-          <span className="ai-text text-sm font-semibold">✳ Prompt</span>
-          <span className="rounded-full border border-line px-2 py-0.5 text-[11px] text-muted">
-            {prompt.fallbackUsed ? 'Standard brief' : 'Rewritten by the engine'}
-          </span>
-          {prompt.userEdited ? (
-            <span className="rounded-full border border-accent/50 px-2 py-0.5 text-[11px] text-accent">
-              Edited by you
-            </span>
-          ) : null}
-          {stale ? (
-            <span className="rounded-full border border-hot/50 px-2 py-0.5 text-[11px] text-hot">
-              Out of date: you changed the request
-            </span>
-          ) : null}
+          <span className="ai-text text-subtitle font-semibold">Compiled prompt</span>
+          <Badge>{prompt.fallbackUsed ? 'Standard brief' : 'Rewritten by the engine'}</Badge>
+          {prompt.userEdited ? <Badge tone="accent">Edited by you</Badge> : null}
+          {stale ? <Badge tone="warn">Out of date: you changed the request</Badge> : null}
         </span>
-        <span className="text-xs text-muted">{open ? 'Hide' : 'Show'}</span>
+        <span className="text-label text-muted">{open ? 'Hide' : 'Show'}</span>
       </button>
 
       {open ? (

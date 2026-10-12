@@ -10,7 +10,7 @@ import {
   type LookKey,
   type TargetPlatform,
 } from '@cgp/contracts';
-import { Button, cx } from '@cgp/ui';
+import { Button, Chip, cx, SegmentedControl } from '@cgp/ui';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -402,7 +402,10 @@ export function Studio({
   const credit = (n: number) => `${n} ${n === 1 ? 'credit' : 'credits'}`;
 
   return (
-    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,44fr)_minmax(0,56fr)]">
+    // Three panes where there is room (WP45): what you are asking for, what the engine made of
+    // it, and what came back. Below that the prompt falls under the controls, as it did when
+    // it was a footnote to them.
+    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,44fr)_minmax(0,56fr)] xl:grid-cols-[minmax(0,30fr)_minmax(0,32fr)_minmax(0,38fr)]">
       {/* Left: the request. */}
       <section className="flex flex-col rounded-2xl border border-line bg-surface">
         <header className="px-6 pt-5">
@@ -573,11 +576,10 @@ export function Studio({
                   <div key={key} className="flex flex-wrap items-center gap-1.5">
                     <span className="w-16 shrink-0 text-[11px] text-faint">{LOOK_LABELS[key]}</span>
                     {LOOK_VOCABULARY[key].map((option) => (
-                      <button
+                      <Chip
                         key={option.id}
-                        type="button"
                         title={option.phrase}
-                        aria-pressed={look[key] === option.id}
+                        selected={look[key] === option.id}
                         onClick={() =>
                           // Picking the chosen one again clears it, so a creator can take a
                           // part back out rather than being stuck with a look once touched.
@@ -586,15 +588,9 @@ export function Studio({
                             [key]: current[key] === option.id ? undefined : option.id,
                           }))
                         }
-                        className={cx(
-                          'rounded-full border px-3 py-1.5 text-xs transition',
-                          look[key] === option.id
-                            ? 'border-accent bg-accent/10 text-ink'
-                            : 'border-line bg-raised text-muted hover:text-ink',
-                        )}
                       >
                         {option.label}
-                      </button>
+                      </Chip>
                     ))}
                   </div>
                 ))}
@@ -610,24 +606,13 @@ export function Studio({
                 <span className="text-xs font-medium uppercase tracking-wide text-muted">
                   Scenes
                 </span>
-                <div className="flex flex-wrap gap-1.5">
-                  {[1, 2, 3].map((n) => (
-                    <button
-                      key={n}
-                      type="button"
-                      aria-pressed={sceneCount === n}
-                      onClick={() => setSceneCount(n)}
-                      className={cx(
-                        'rounded-full border px-3 py-1.5 text-sm transition',
-                        sceneCount === n
-                          ? 'border-accent bg-accent/10 text-ink'
-                          : 'border-line bg-raised text-muted hover:text-ink',
-                      )}
-                    >
-                      {n}
-                    </button>
-                  ))}
-                </div>
+                <SegmentedControl
+                  name="scene-count"
+                  label="Scenes"
+                  value={sceneCount}
+                  onChange={setSceneCount}
+                  options={[1, 2, 3].map((n) => ({ value: n, label: String(n) }))}
+                />
                 <span className="text-[11px] text-muted">
                   Eight seconds each, so {sceneCount * 8}s in all.
                   {sceneCount > IMAGES_PER_MINUTE
@@ -691,17 +676,20 @@ export function Studio({
             />
           </div>
 
+          {/* On a narrow screen the prompt stays here, under the controls it was made from. */}
           {prompt ? (
-            <PromptDisclosure
-              key={prompt.id}
-              workspaceId={workspaceId}
-              prompt={prompt}
-              stale={stale}
-              onEdited={(edited) => {
-                setPrompt(edited);
-                setPromptFor(requestKey);
-              }}
-            />
+            <div className="xl:hidden">
+              <PromptDisclosure
+                key={prompt.id}
+                workspaceId={workspaceId}
+                prompt={prompt}
+                stale={stale}
+                onEdited={(edited) => {
+                  setPrompt(edited);
+                  setPromptFor(requestKey);
+                }}
+              />
+            </div>
           ) : null}
         </div>
 
@@ -800,6 +788,35 @@ export function Studio({
       </section>
 
       {/* Right: the output, then what was made before. */}
+      {/*
+        The engine's own pane (WP45). It is the product and step 2 of the demo, and it used to
+        be a strip at the bottom of the controls. Collapsed by default still, because plan
+        section 13 says so: the room is for when it is open, not an argument for opening it.
+      */}
+      <section className="hidden flex-col gap-3 xl:flex xl:sticky xl:top-20">
+        {prompt ? (
+          <PromptDisclosure
+            key={prompt.id}
+            workspaceId={workspaceId}
+            prompt={prompt}
+            stale={stale}
+            onEdited={(edited) => {
+              setPrompt(edited);
+              setPromptFor(requestKey);
+            }}
+          />
+        ) : (
+          <div className="flex flex-col gap-2 rounded-2xl border border-dashed border-line p-5">
+            <p className="text-subtitle font-medium text-ink">The prompt appears here</p>
+            <p className="text-body text-muted">
+              Say what you want in plain words, then see the prompt the engine writes from it: your
+              profile, your brand kit and the platform&rsquo;s own limits, assembled. You can read
+              it, and change it, before anything is spent.
+            </p>
+          </div>
+        )}
+      </section>
+
       <aside className="flex flex-col gap-4 lg:sticky lg:top-20">
         <section className="flex min-h-[360px] flex-col gap-4 rounded-2xl border border-line bg-surface p-5">
           {job ? (
