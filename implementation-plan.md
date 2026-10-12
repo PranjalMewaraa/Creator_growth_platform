@@ -233,6 +233,33 @@ is, because adopting an aggregator would put a vendor's shapes past the adapter 
 
 | WP41 | A | **Built 2026-10-12.** Pace the Veo submissions, and take the voice off the critical path. The quota is one long running predict a minute, per project, per base model: `LongRunningPredictRequestsPerMinutePerProjectPerBaseModel`, read from the quota API, not eligible for an increase. Scenes therefore cannot be filmed in parallel, and a three scene reel is a three minute operation whatever the code does — which is worth knowing as a number rather than discovering in a room. Sequential rendering happened to respect the limit because a clip takes about as long as the window; that was luck, and the pacer makes it a guarantee. The voiceover is now written and spoken while the first clip films, since it depends on the planned scenes and not on the footage; when fewer scenes arrive than were planned it is written again for the ones that did, which costs under a rupee against a wait that costs attention. Measured: the voice is ready a second into the run rather than three minutes in, but end to end came back 234s against 227s before — the saving is about ten seconds and Veo's own variance between runs is larger than that. The structural win is real; the clock one is not |
 
+### UI overhaul (demo 2)
+
+Planned 2026-10-12 in `docs/ui-overhaul.md`, which carries the reasoning, the screen by screen
+treatment, the flows and the definition of done. The short version: the token set, the dark
+palette and the amber accent stay, because the identity is not the problem. The problem is that
+seven primitives serve nine screens, so every screen invents its own tabs, chips, dialogs and
+badges, and that inconsistency is what reads as unfinished. The second problem is that three
+operations take between eighty seconds and four minutes and none of them is narrated.
+
+A design system generator was consulted and its product pattern rejected: it proposed a creator
+pink primary on a paper background with a newsletter landing structure, which is the wrong
+product — this is an authenticated workspace, not a marketing page. Its dark mode contrast,
+motion and accessibility rules are taken.
+
+| WP | Owner | Scope |
+|---|---|---|
+| WP42 | B | Foundations: a named type scale, spacing and radius sets, three elevations, motion tokens behind a reduced motion guard, a z-index scale and one focus ring |
+| WP43 | B | The fifteen primitives that are missing and currently reinvented inline: dialog, sheet, tabs, toast, tooltip, badge, chip, skeleton, progress, dropdown, toggle, segmented control, avatar, scroll area, field states |
+| WP44 | A + B | The work ledger. Three operations are measured in minutes and the screen says nothing for all of them. The worker already logs every stage and the job stream already pushes deltas; extending that to stage events turns four minutes of blank screen into narrated work, with frames appearing as they are drawn and the quota wait explained rather than hidden |
+| WP45 | B | Studio as a three pane workbench, and the compiled prompt disclosure given the room it deserves: it is the product, and it is step 2 of the demo |
+| WP46 | B | Storyboard as a filmstrip with per frame regeneration and a persistent film bar carrying the cost |
+| WP47 | B | Home, Calendar, Composer, Sync centre and Insights adopt the library |
+| WP48 | B | First run: one question per screen, each answer visibly configuring something |
+| WP49 | B | Accessibility and responsive pass at four widths, and a keyboard walk of every flow |
+
+Two weeks. WP42 to WP44 are the ones that change how it feels; if only three are built, those.
+
 ### Week 8: Demo assembly
 
 As `plan.md` section 11, plus Home (S-04), which depends on Calendar and Accounts and so cannot be filled earlier.
