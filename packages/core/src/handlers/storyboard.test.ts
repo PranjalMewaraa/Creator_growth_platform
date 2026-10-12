@@ -148,4 +148,128 @@ describe('the storyboard', () => {
     expect(result).toBe('refunded');
     expect((await scoped(db, workspaceId).workspace())?.creditBalance).toBe(100);
   });
+
+  it('shows every later frame the first one, so the scenes share a world (WP39)', async () => {
+    const seen: Array<{ references: number; prompt: string }> = [];
+    const drawing: ImageAdapter = {
+      key: 'gemini-flash-lite-image',
+      generate: (request) => {
+        seen.push({ references: request.references?.length ?? 0, prompt: request.prompt });
+        return Promise.resolve({
+          images: [{ data: new Uint8Array([1, 2, 3]), mimeType: 'image/png', width: 1, height: 1 }],
+          usage: { inputTokens: 0, outputTokens: 0 },
+        });
+      },
+    };
+    const workspaceId = await createTestWorkspace(db, { credits: 200 });
+    await addTestProfile(db, workspaceId);
+    const started = await startGeneration(
+      {
+        db,
+        queues,
+        log,
+        registry: generators,
+        compile: { rewriters: [] },
+        moderation: createFakeModeration(),
+      },
+      {
+        workspaceId,
+        generatorKey: 'storyboard',
+        input: {
+          intentText: 'A morning in the roastery',
+          targetPlatform: 'instagram',
+          sceneCount: 3,
+        },
+      },
+    );
+    if (!started.ok) throw new Error(started.reason);
+
+    await processJob(
+      {
+        db,
+        handlers: createStoryboardHandler({
+          db,
+          registry: generators,
+          adapters: { 'gemini-flash-lite-image': drawing },
+          planner: undefined,
+          moderation: createFakeModeration(),
+          store,
+          costInr: () => 0,
+          providerLabel: 'fake',
+          capabilityOf: () => ({
+            aspectRatios: ['9:16'],
+            maxPerRequest: 4,
+            outputMimeTypes: ['image/png'],
+            acceptsReferenceImages: true,
+            maxReferenceImages: 3,
+          }),
+        }),
+        log,
+      },
+      { jobId: started.job.id, correlationId: 'c' },
+    );
+
+    expect(seen).toHaveLength(3);
+    // The first has nothing to be consistent with; the rest all look at it, not at the one
+    // before them, so the look cannot drift a step at a time.
+    expect(seen.map((call) => call.references)).toEqual([0, 1, 1]);
+    expect(seen[0]?.prompt).not.toContain('Continuity');
+    expect(seen[1]?.prompt).toContain('Continuity');
+    // Each scene is still framed as itself, not as a copy of the first.
+    expect(seen[1]?.prompt).toContain('not as the attached one is framed');
+  });
+
+  it('offers no references to a model that does not read them', async () => {
+    const seen: number[] = [];
+    const blind: ImageAdapter = {
+      key: 'gemini-flash-lite-image',
+      generate: (request) => {
+        seen.push(request.references?.length ?? 0);
+        return Promise.resolve({
+          images: [{ data: new Uint8Array([1]), mimeType: 'image/png', width: 1, height: 1 }],
+          usage: { inputTokens: 0, outputTokens: 0 },
+        });
+      },
+    };
+    const workspaceId = await createTestWorkspace(db, { credits: 200 });
+    await addTestProfile(db, workspaceId);
+    const started = await startGeneration(
+      {
+        db,
+        queues,
+        log,
+        registry: generators,
+        compile: { rewriters: [] },
+        moderation: createFakeModeration(),
+      },
+      {
+        workspaceId,
+        generatorKey: 'storyboard',
+        input: { intentText: 'A roastery', targetPlatform: 'instagram', sceneCount: 2 },
+      },
+    );
+    if (!started.ok) throw new Error(started.reason);
+
+    await processJob(
+      {
+        db,
+        handlers: createStoryboardHandler({
+          db,
+          registry: generators,
+          adapters: { 'gemini-flash-lite-image': blind },
+          planner: undefined,
+          moderation: createFakeModeration(),
+          store,
+          costInr: () => 0,
+          providerLabel: 'fake',
+          // No capability at all, which is what an unknown model key looks like.
+          capabilityOf: () => undefined,
+        }),
+        log,
+      },
+      { jobId: started.job.id, correlationId: 'c' },
+    );
+
+    expect(seen).toEqual([0, 0]);
+  });
 });

@@ -2,6 +2,8 @@ import type {
   CompilerProfileConfig,
   ImageAdapter,
   ModerationAdapter,
+  ImageCapability,
+  MediaBytes,
   ObjectStore,
   TextAdapter,
   TokenUsage,
@@ -23,6 +25,21 @@ import { JobBlocked, type JobHandler } from '../process';
 
 export const STORYBOARD = 'storyboard';
 
+/**
+ * What the model is told when it is also shown the first frame. The instruction is about the
+ * world, not the framing: each scene is its own shot, and copying the first one's composition
+ * would make a storyboard of three near identical pictures.
+ */
+function sameWorldAs(scenePrompt: string): string {
+  return [
+    scenePrompt,
+    '',
+    'Continuity: the attached picture is an earlier scene from this same piece. Keep the same',
+    'place, the same people and their clothing, the same objects and the same light and colour',
+    'as that picture. Frame this scene as described above, not as the attached one is framed.',
+  ].join(String.fromCharCode(10));
+}
+
 /** Vertical, like the reel it previews. */
 const ASPECT_RATIO = '9:16' as const;
 
@@ -36,6 +53,8 @@ export interface StoryboardHandlerDeps {
   store: ObjectStore;
   costInr: (adapterKey: string, usage: TokenUsage) => number;
   providerLabel: string;
+  /** What the chosen model will draw, so references are offered only where they are read. */
+  capabilityOf?: (adapterKey: string) => ImageCapability | undefined;
 }
 
 interface StoryboardInput {
@@ -99,11 +118,18 @@ export function createStoryboardHandler(deps: StoryboardHandlerDeps): Record<str
       const frames: Array<{ index: number; prompt: string; url: string; key: string }> = [];
       let usage: TokenUsage = { inputTokens: 0, outputTokens: 0 };
       let blocked = false;
+      // The first frame, kept to show the model while it draws the rest (WP39). Scenes drawn
+      // independently come back as three different kitchens with three different hands; a reel
+      // made of those reads as a machine's work however good each frame is on its own.
+      let anchor: MediaBytes | undefined;
+      const references = deps.capabilityOf?.(adapter.key)?.acceptsReferenceImages ?? false;
+
       for (const [index, scenePrompt] of plan.scenes.entries()) {
         const result = await adapter.generate({
-          prompt: scenePrompt,
+          prompt: references && anchor ? sameWorldAs(scenePrompt) : scenePrompt,
           aspectRatio: ASPECT_RATIO,
           count: 1,
+          ...(references && anchor ? { references: [anchor] } : {}),
         });
         const image = result.images[0];
         if (!image) continue;
@@ -130,6 +156,9 @@ export function createStoryboardHandler(deps: StoryboardHandlerDeps): Record<str
         // The key as well as the url: filming this frame later needs the bytes back, and
         // picking a key out of a public url means knowing how one store spells them (WP33).
         frames.push({ index, prompt: scenePrompt, url: stored.url, key: stored.key });
+        // Every later frame looks at the first, not at the one before it: following the chain
+        // lets the look drift a step at a time until scene three has left scene one behind.
+        anchor ??= { data: image.data, mimeType: image.mimeType };
       }
 
       if (frames.length === 0) {

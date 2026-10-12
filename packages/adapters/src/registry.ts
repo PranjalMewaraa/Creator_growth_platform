@@ -8,6 +8,7 @@ import type {
   Publisher,
   TargetPlatform,
   TextAdapter,
+  ImageCapability,
   TokenUsage,
   VideoCapability,
 } from '@cgp/contracts';
@@ -196,6 +197,8 @@ export interface Providers {
   voiceCostInr: (adapterKey: string, characters: number) => number;
   /** What a video model will film (WP36). Undefined for a key this build does not know. */
   videoCapability: (adapterKey: string) => VideoCapability | undefined;
+  /** What an image model will draw, including whether it reads references (WP36, WP39). */
+  imageCapability: (adapterKey: string) => ImageCapability | undefined;
 }
 
 /** Everything a process needs to call providers, chosen by PROVIDERS. */
@@ -266,6 +269,7 @@ export function createProviders(env: {
     // The capability is the model's, whether the call is real or faked: a fake that accepted
     // what the real model refuses would hide the refusal until it cost money.
     videoCapability: (key) => (isVideoModelKey(key) ? VIDEO_MODELS[key].capability : undefined),
+    imageCapability: (key) => (isImageModelKey(key) ? IMAGE_MODELS[key].capability : undefined),
   };
 }
 

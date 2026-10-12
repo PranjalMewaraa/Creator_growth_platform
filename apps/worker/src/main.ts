@@ -85,6 +85,7 @@ const handlers = {
     planner: providers.rewriters[0],
     moderation: providers.moderation,
     store: providers.store,
+    capabilityOf: providers.imageCapability,
     costInr: providers.imageCostInr,
     providerLabel: providers.mode === 'real' ? 'vertex' : 'fake',
   }),

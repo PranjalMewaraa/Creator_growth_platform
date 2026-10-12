@@ -20,6 +20,8 @@ const gemini: ImageCapability = {
   aspectRatios: ['1:1', '4:5', '9:16', '16:9'],
   maxPerRequest: 4,
   outputMimeTypes: ['image/png', 'image/jpeg'],
+  acceptsReferenceImages: true,
+  maxReferenceImages: 3,
 };
 
 describe('what a video model will film (WP36)', () => {
@@ -72,6 +74,21 @@ describe('what an image model will draw', () => {
     expect(checkImage(gemini, { aspectRatio: '21:9' })[0]?.path).toBe('aspectRatio');
     expect(checkImage(gemini, { count: 9 })[0]?.message).toBe('At most 4 pictures at a time');
     expect(checkImage(gemini, { aspectRatio: '4:5', count: 1 })).toEqual([]);
+  });
+
+  it('refuses more pictures to stay consistent with than it will look at (WP39)', () => {
+    expect(checkImage(gemini, { references: 3 })).toEqual([]);
+    expect(checkImage(gemini, { references: 5 })[0]?.message).toBe(
+      'At most 3 pictures to stay consistent with',
+    );
+    const blind: ImageCapability = {
+      ...gemini,
+      acceptsReferenceImages: false,
+      maxReferenceImages: 0,
+    };
+    expect(checkImage(blind, { references: 1 })[0]?.message).toBe(
+      'This model draws from a description, not from other pictures',
+    );
   });
 });
 

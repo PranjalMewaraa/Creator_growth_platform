@@ -7,6 +7,14 @@ export interface ImageRequest {
   /** Derived from the target platform, never asked of the user. */
   aspectRatio: AspectRatio;
   count: number;
+  /**
+   * Pictures the model should stay consistent with (WP39). A reel whose scenes were drawn
+   * independently looks like three different kitchens; drawing the later frames while looking
+   * at the first one is what keeps the same hand, the same counter, the same light.
+   *
+   * Only models whose capability says `acceptsReferenceImages` are given any.
+   */
+  references?: readonly MediaBytes[];
   seed?: number;
   signal?: AbortSignal;
 }

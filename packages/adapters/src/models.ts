@@ -68,6 +68,10 @@ export const IMAGE_MODELS = {
       aspectRatios: ['1:1', '4:5', '9:16', '16:9'],
       maxPerRequest: 4,
       outputMimeTypes: ['image/png', 'image/jpeg'],
+      // Gemini's image model takes pictures alongside the prompt, which is what keeps a
+      // storyboard's later frames in the same kitchen as its first (WP39).
+      acceptsReferenceImages: true,
+      maxReferenceImages: 3,
     },
   },
 } as const satisfies Record<string, ImageModel>;

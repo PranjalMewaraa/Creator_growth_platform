@@ -18,6 +18,10 @@ export interface ImageCapability {
   /** Most pictures one call will return. */
   maxPerRequest: number;
   outputMimeTypes: readonly string[];
+  /** Whether it can be shown pictures to stay consistent with (WP39). */
+  acceptsReferenceImages: boolean;
+  /** How many it will look at. Zero when it looks at none. */
+  maxReferenceImages: number;
 }
 
 export interface VideoCapability {
@@ -114,6 +118,7 @@ export function checkVideo(
 export interface ImageCapabilityRequest {
   aspectRatio?: string;
   count?: number;
+  references?: number;
 }
 
 export function checkImage(
@@ -132,6 +137,19 @@ export function checkImage(
       path: 'count',
       message: `At most ${capability.maxPerRequest} pictures at a time`,
     });
+  }
+  if (request.references) {
+    if (!capability.acceptsReferenceImages) {
+      issues.push({
+        path: 'references',
+        message: 'This model draws from a description, not from other pictures',
+      });
+    } else if (request.references > capability.maxReferenceImages) {
+      issues.push({
+        path: 'references',
+        message: `At most ${capability.maxReferenceImages} pictures to stay consistent with`,
+      });
+    }
   }
   return issues;
 }

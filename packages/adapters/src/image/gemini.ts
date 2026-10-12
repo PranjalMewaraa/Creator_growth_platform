@@ -59,9 +59,28 @@ export function createGeminiImage(options: GeminiImageOptions): ImageAdapter {
   });
 
   async function one(request: ImageRequest): Promise<[GeneratedImage, GenerateContentResponse]> {
+    // Pictures first, then the words: the model reads the parts in order, and a reference
+    // offered after the instruction is a weaker anchor than one offered before it (WP39).
+    const contents = request.references?.length
+      ? [
+          {
+            role: 'user',
+            parts: [
+              ...request.references.map((reference) => ({
+                inlineData: {
+                  data: Buffer.from(reference.data).toString('base64'),
+                  mimeType: reference.mimeType,
+                },
+              })),
+              { text: request.prompt },
+            ],
+          },
+        ]
+      : request.prompt;
+
     const response = await ai.models.generateContent({
       model: options.model,
-      contents: request.prompt,
+      contents,
       config: {
         responseModalities: ['IMAGE'],
         imageConfig: { aspectRatio: request.aspectRatio },
