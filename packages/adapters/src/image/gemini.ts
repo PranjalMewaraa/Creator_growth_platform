@@ -8,9 +8,15 @@ import {
 } from '@cgp/contracts';
 import { GoogleGenAI, type GenerateContentResponse } from '@google/genai';
 import { normalizeError } from '../errors';
+import { createPacer } from '../pace';
 import { imageSize } from './size';
 
 export interface GeminiImageOptions {
+  /**
+   * Calls a minute the provider allows, from the model's capability (WP36, WP40). Without one
+   * the safe assumption is the limit this project actually has.
+   */
+  requestsPerMinute?: number;
   key: string;
   project: string;
   /** Gemini image models answer on `global` (checked 2026-09-24, D18). */
@@ -117,16 +123,28 @@ export function createGeminiImage(options: GeminiImageOptions): ImageAdapter {
     ];
   }
 
+  /** What the provider says when the minute's allowance is spent. */
+  const isQuotaError = (err: unknown): boolean => {
+    const status = (err as { status?: number } | null)?.status;
+    const message = err instanceof Error ? err.message : String(err);
+    return status === 429 || message.includes('429') || message.includes('RESOURCE_EXHAUSTED');
+  };
+  const pacer = createPacer({
+    perMinute: options.requestsPerMinute ?? 2,
+    isQuotaError,
+  });
+
   return {
     key: options.key,
 
     async generate(request) {
       try {
-        // One at a time, not in parallel. The image quota is metered per minute and a burst of
-        // three trips it every time, which costs the whole set: a thumbnail set is refused
-        // outright rather than taking a few seconds longer.
+        // One at a time, not in parallel, and paced: Vertex allows two of these a minute for
+        // this project and a burst of three trips it every time, which costs the whole set
+        // rather than a few seconds. The pacer lets the first two straight through and holds
+        // the third until the window has room (WP40).
         const results: Array<Awaited<ReturnType<typeof one>>> = [];
-        for (let i = 0; i < request.count; i++) results.push(await one(request));
+        for (let i = 0; i < request.count; i++) results.push(await pacer.run(() => one(request)));
         return {
           images: results.map(([image]) => image),
           usage: usageOf(results.map(([, response]) => response)),

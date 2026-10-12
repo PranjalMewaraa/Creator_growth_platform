@@ -72,6 +72,9 @@ export const IMAGE_MODELS = {
       // storyboard's later frames in the same kitchen as its first (WP39).
       acceptsReferenceImages: true,
       maxReferenceImages: 3,
+      // Vertex: GenContentImageGenRequestsPerMinutePerProjectPerBaseModelGlobal, read from
+      // the quota API 2026-10-12. Fixed, and this project is not eligible to raise it.
+      requestsPerMinute: 2,
     },
   },
 } as const satisfies Record<string, ImageModel>;

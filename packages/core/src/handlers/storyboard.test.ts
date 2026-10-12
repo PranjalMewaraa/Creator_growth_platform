@@ -202,6 +202,7 @@ describe('the storyboard', () => {
             outputMimeTypes: ['image/png'],
             acceptsReferenceImages: true,
             maxReferenceImages: 3,
+            requestsPerMinute: 2,
           }),
         }),
         log,

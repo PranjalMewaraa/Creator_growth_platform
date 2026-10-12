@@ -117,6 +117,8 @@ export function createImageAdapters(mode: ProviderMode, real?: RealProviderOptio
         project: real.project,
         location: config.location,
         model: config.model,
+        // The quota the model declares, so the pacer and the refusal come from one fact.
+        requestsPerMinute: config.capability.requestsPerMinute,
         log: real.log,
       }),
     ] as const;

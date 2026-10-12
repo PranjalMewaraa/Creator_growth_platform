@@ -51,6 +51,13 @@ const LOOK_LABELS: Record<LookKey, string> = {
   aperture: 'Aperture',
 };
 
+/**
+ * What the picture model allows in a minute (WP40). A storyboard of more than this many
+ * frames is paced rather than refused, and saying so beats a creator watching a spinner and
+ * wondering what broke.
+ */
+const IMAGES_PER_MINUTE = 2;
+
 /** The kinds that make a picture or film one, and so take a look (WP37). */
 const VISUAL = new Set(['image', 'thumbnail_set', 'video']);
 
@@ -606,7 +613,10 @@ export function Studio({
                   ))}
                 </div>
                 <span className="text-[11px] text-muted">
-                  Eight seconds each, so {sceneCount * 8}s in all. No voiceover or captions yet.
+                  Eight seconds each, so {sceneCount * 8}s in all.
+                  {sceneCount > IMAGES_PER_MINUTE
+                    ? ` A storyboard of ${sceneCount} takes about a minute to draw: the picture model allows ${IMAGES_PER_MINUTE} a minute.`
+                    : ''}
                 </span>
               </div>
             ) : null}

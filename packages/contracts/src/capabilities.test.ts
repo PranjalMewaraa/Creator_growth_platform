@@ -22,6 +22,7 @@ const gemini: ImageCapability = {
   outputMimeTypes: ['image/png', 'image/jpeg'],
   acceptsReferenceImages: true,
   maxReferenceImages: 3,
+  requestsPerMinute: 2,
 };
 
 describe('what a video model will film (WP36)', () => {

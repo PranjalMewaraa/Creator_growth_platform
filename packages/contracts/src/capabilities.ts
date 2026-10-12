@@ -22,6 +22,12 @@ export interface ImageCapability {
   acceptsReferenceImages: boolean;
   /** How many it will look at. Zero when it looks at none. */
   maxReferenceImages: number;
+  /**
+   * How many calls a minute the provider allows (WP40). A fact about the quota rather than
+   * the model, but it belongs with the model for the same reason the rest of this does: the
+   * engine has to know it before it spends, and one table is better than three guesses.
+   */
+  requestsPerMinute: number;
 }
 
 export interface VideoCapability {
