@@ -2,11 +2,11 @@
 
 import type { CalendarPost } from '@cgp/core';
 import type { TargetPlatform } from '@cgp/contracts';
-import { cx } from '@cgp/ui';
+import { Avatar, Badge, cx } from '@cgp/ui';
 import Link from 'next/link';
 import { useEffect, useState, type ReactNode } from 'react';
 import { artStyle } from '@/lib/art';
-import { COMING_BACK, IN_FLIGHT, NEEDS_YOU, STATUS_SHORT, STATUS_TONE } from '@/lib/post-status';
+import { COMING_BACK, IN_FLIGHT, NEEDS_YOU, STATUS_BADGE, STATUS_SHORT } from '@/lib/post-status';
 
 // Calendar week view (S-07, WP34), styled after a scheduling board: channels and settings on
 // the left, the week as a time grid on the right, one card per post. The posts are the
@@ -50,35 +50,6 @@ function hourOf(iso: string) {
   return at.getHours() + at.getMinutes() / 60;
 }
 
-function initial(name: string) {
-  return name.replace(/^@/, '').trim().charAt(0).toUpperCase() || '?';
-}
-
-function Avatar({
-  platform,
-  name,
-  size = 'md',
-}: {
-  platform: TargetPlatform;
-  name: string;
-  size?: 'md' | 'sm';
-}) {
-  return (
-    <span
-      className={cx('rounded-full p-[2px]', RING[platform], size === 'md' ? 'size-12' : 'size-8')}
-    >
-      <span
-        className={cx(
-          'flex h-full w-full items-center justify-center rounded-full bg-raised font-semibold text-ink',
-          size === 'md' ? 'text-base' : 'text-xs',
-        )}
-      >
-        {initial(name)}
-      </span>
-    </span>
-  );
-}
-
 function Section({
   title,
   action,
@@ -104,17 +75,16 @@ function TargetChips({ post }: { post: CalendarPost }) {
   return (
     <div className="flex flex-wrap items-center gap-1">
       {post.targets.map((target) => (
-        <span
+        <Badge
           key={target.id}
-          title={`${NAMES[target.platform]} · ${target.account}`}
-          className={cx(
-            'flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px]',
-            STATUS_TONE[target.status],
-          )}
+          tone={STATUS_BADGE[target.status]}
+          dot={<span className={cx('size-1.5 shrink-0 rounded-full', RING[target.platform])} />}
+          className="px-1.5"
         >
-          <span className={cx('size-1.5 shrink-0 rounded-full', RING[target.platform])} />
-          {STATUS_SHORT[target.status]}
-        </span>
+          <span title={`${NAMES[target.platform]} · ${target.account}`}>
+            {STATUS_SHORT[target.status]}
+          </span>
+        </Badge>
       ))}
     </div>
   );
@@ -232,7 +202,7 @@ export function WeekCalendar({
                   key={account.id}
                   className="flex w-20 flex-col items-center gap-1.5 text-center"
                 >
-                  <Avatar platform={account.platform} name={account.displayName} />
+                  <Avatar name={account.displayName} ring={RING[account.platform]} size="lg" />
                   <span className="w-full truncate text-xs text-muted" title={account.displayName}>
                     {account.displayName}
                   </span>
@@ -448,8 +418,8 @@ export function WeekCalendar({
                             {account ? (
                               <div className="absolute inset-x-1.5 bottom-1.5 flex items-center gap-2 rounded-lg bg-black/45 p-1.5 backdrop-blur">
                                 <Avatar
-                                  platform={account.platform}
                                   name={account.account}
+                                  ring={RING[account.platform]}
                                   size="sm"
                                 />
                                 <span className="min-w-0">

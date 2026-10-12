@@ -2,10 +2,10 @@
 
 import type { SyncAttempt, SyncView } from '@cgp/core';
 import type { TargetPlatform } from '@cgp/contracts';
-import { cx } from '@cgp/ui';
+import { Avatar, Badge } from '@cgp/ui';
 import Link from 'next/link';
 import { useEffect, useState, type ReactNode } from 'react';
-import { STATUS_TEXT, STATUS_TONE } from '@/lib/post-status';
+import { STATUS_BADGE, STATUS_TEXT } from '@/lib/post-status';
 
 // Sync centre (S-20, WP35): what is publishing, what just tried, and what the platform said
 // about it in its own words.
@@ -46,34 +46,19 @@ function untilText(iso: string) {
   return `at ${when(iso)}`;
 }
 
-function Avatar({ platform, name }: { platform: TargetPlatform; name: string }) {
-  return (
-    <span className={cx('size-9 shrink-0 rounded-full p-[2px]', RING[platform])}>
-      <span className="flex h-full w-full items-center justify-center rounded-full bg-raised text-xs font-semibold text-ink">
-        {name.replace(/^@/, '').trim().charAt(0).toUpperCase() || '?'}
-      </span>
-    </span>
-  );
-}
-
 function Attempt({ attempt }: { attempt: SyncAttempt }) {
   const advice = WHAT_TO_DO[attempt.status];
   return (
     <article className="flex flex-col gap-3 rounded-2xl border border-line bg-surface p-4">
       <div className="flex items-start gap-3">
-        <Avatar platform={attempt.platform} name={attempt.account} />
+        <Avatar name={attempt.account} ring={RING[attempt.platform]} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <span className="text-sm font-medium text-ink">{attempt.account}</span>
             <span className="text-xs text-muted">{NAMES[attempt.platform]}</span>
-            <span
-              className={cx(
-                'ml-auto shrink-0 rounded-full border px-2 py-0.5 text-[11px]',
-                STATUS_TONE[attempt.status],
-              )}
-            >
+            <Badge tone={STATUS_BADGE[attempt.status]} className="ml-auto">
               {STATUS_TEXT[attempt.status]}
-            </span>
+            </Badge>
           </div>
           <p className="mt-1 line-clamp-2 text-sm text-muted" title={attempt.text}>
             {attempt.text || 'No caption'}

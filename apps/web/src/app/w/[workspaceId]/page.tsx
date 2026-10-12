@@ -1,5 +1,5 @@
 import type { TargetPlatform } from '@cgp/contracts';
-import { ArrowUpRightIcon, Card, CardBody, CardHeader, cx } from '@cgp/ui';
+import { ArrowUpRightIcon, Badge, Card, CardBody, CardHeader, cx } from '@cgp/ui';
 import { homeDigest, profileHistory, type HomeDay } from '@cgp/core';
 import Link from 'next/link';
 import { Screen } from '@/components/screen';
@@ -171,24 +171,16 @@ export default async function HomePage({ params }: { params: Promise<{ workspace
                         : 'Connect it before scheduling to it'}
                     </span>
                   </span>
-                  {!account.connected ? (
-                    <Link
-                      href={`${base}/accounts`}
-                      className="rounded-full border border-line px-2.5 py-0.5 text-xs text-muted hover:text-ink"
-                    >
-                      Not connected
-                    </Link>
-                  ) : account.needsAttention ? (
-                    <Link
-                      href={`${base}/accounts`}
-                      className="rounded-full border border-bad/40 px-2.5 py-0.5 text-xs text-bad"
-                    >
-                      Needs attention
+                  {/* A state that needs doing something about is a link to the place it is
+                      done; one that does not is a badge and nothing more (WP47). */}
+                  {!account.connected || account.needsAttention ? (
+                    <Link href={`${base}/accounts`}>
+                      <Badge tone={account.connected ? 'bad' : 'neutral'}>
+                        {account.connected ? 'Needs attention' : 'Not connected'}
+                      </Badge>
                     </Link>
                   ) : (
-                    <span className="rounded-full border border-good/40 px-2.5 py-0.5 text-xs text-good">
-                      Connected
-                    </span>
+                    <Badge tone="good">Connected</Badge>
                   )}
                 </li>
               ))}

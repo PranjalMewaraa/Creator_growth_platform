@@ -1,7 +1,7 @@
 'use client';
 
 import { PLATFORM_TEXT_LIMITS, type PostTargetStatus, type TargetPlatform } from '@cgp/contracts';
-import { Button, cx } from '@cgp/ui';
+import { Badge, Button, cx, SegmentedControl, Tabs } from '@cgp/ui';
 import Link from 'next/link';
 import {
   useEffect,
@@ -11,7 +11,7 @@ import {
   type DragEvent,
   type ReactNode,
 } from 'react';
-import { COMING_BACK, IN_FLIGHT, STATUS_TEXT, STATUS_TONE } from '@/lib/post-status';
+import { COMING_BACK, IN_FLIGHT, STATUS_BADGE, STATUS_TEXT } from '@/lib/post-status';
 import { InstagramPost, LinkedInPost } from './post-previews';
 
 // Split pane (Buffer, Typefully style): compose on the left, a pinned live preview on the
@@ -137,7 +137,7 @@ function defaultSchedule(now = new Date()) {
   return localInputValue(at);
 }
 
-function Badge({ tone, children }: { tone: 'info' | 'warn' | 'bad'; children: ReactNode }) {
+function Note({ tone, children }: { tone: 'info' | 'warn' | 'bad'; children: ReactNode }) {
   return (
     <p
       className={cx(
@@ -499,14 +499,7 @@ export function Composer({
                       View post
                     </a>
                   ) : null}
-                  <span
-                    className={cx(
-                      'rounded-full border px-3 py-1 text-xs',
-                      STATUS_TONE[target.status],
-                    )}
-                  >
-                    {STATUS_TEXT[target.status]}
-                  </span>
+                  <Badge tone={STATUS_BADGE[target.status]}>{STATUS_TEXT[target.status]}</Badge>
                 </div>
               </div>
             ))}
@@ -730,24 +723,16 @@ export function Composer({
                 {hasImage && platforms.includes('instagram') ? (
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-xs text-muted">Instagram frame</span>
-                    <div className="flex rounded-lg border border-line bg-raised p-0.5">
-                      {(['portrait', 'square'] as const).map((f) => (
-                        <button
-                          key={f}
-                          type="button"
-                          aria-pressed={frame === f}
-                          onClick={() => setFrame(f)}
-                          className={cx(
-                            'rounded-md px-3 py-1 text-xs transition',
-                            frame === f
-                              ? 'bg-ink font-medium text-canvas'
-                              : 'text-muted hover:text-ink',
-                          )}
-                        >
-                          {f === 'portrait' ? '4:5 Portrait' : '1:1 Square'}
-                        </button>
-                      ))}
-                    </div>
+                    <SegmentedControl
+                      name="instagram-frame"
+                      label="Instagram frame"
+                      value={frame}
+                      onChange={setFrame}
+                      options={[
+                        { value: 'portrait', label: '4:5 Portrait' },
+                        { value: 'square', label: '1:1 Square' },
+                      ]}
+                    />
                   </div>
                 ) : null}
               </div>
@@ -814,27 +799,16 @@ export function Composer({
       {/* Right: the live preview, pinned while the left side scrolls. */}
       <aside className="flex flex-col gap-4 rounded-2xl border border-line bg-surface p-5 lg:sticky lg:top-20">
         <div className="flex items-center justify-between gap-3">
-          <div
-            role="tablist"
-            aria-label="Preview"
-            className="flex rounded-lg border border-line bg-raised p-0.5"
-          >
-            {previewPlatforms.map((p) => (
-              <button
-                key={p}
-                type="button"
-                role="tab"
-                aria-selected={activeTab === p}
-                onClick={() => setTab(p)}
-                className={cx(
-                  'rounded-md px-4 py-1.5 text-sm transition',
-                  activeTab === p ? 'bg-ink font-medium text-canvas' : 'text-muted hover:text-ink',
-                )}
-              >
-                {NAMES[p]}
-              </button>
-            ))}
-          </div>
+          {/* The hand-rolled strip had no arrow keys and put every tab in the tab order; the
+              library's does both properly (WP43). */}
+          {activeTab ? (
+            <Tabs
+              label="Preview"
+              value={activeTab}
+              onChange={setTab}
+              options={previewPlatforms.map((p) => ({ value: p, label: NAMES[p] }))}
+            />
+          ) : null}
           <span className="text-xs text-muted">
             {selected.length === 0 ? 'Nothing selected yet' : 'Live preview'}
           </span>
@@ -842,25 +816,25 @@ export function Composer({
 
         {activeTab === 'instagram' ? (
           hasImage ? (
-            <Badge tone="info">
+            <Note tone="info">
               Fitted to {frame === 'portrait' ? '4:5' : '1:1'} with bars in your brand colour.
               Nothing is cropped.
-            </Badge>
+            </Note>
           ) : (
-            <Badge tone="warn">Instagram needs an image.</Badge>
+            <Note tone="warn">Instagram needs an image.</Note>
           )
         ) : activeTab === 'linkedin' ? (
-          <Badge tone="info">
+          <Note tone="info">
             {hasImage
               ? 'The image goes out as uploaded, at its own shape.'
               : 'A text post. Adding an image is optional.'}
-          </Badge>
+          </Note>
         ) : null}
         {activeTab && text.length > LIMITS[activeTab] ? (
-          <Badge tone="bad">
+          <Note tone="bad">
             {(text.length - LIMITS[activeTab]).toLocaleString('en-IN')} characters over the{' '}
             {NAMES[activeTab]} limit.
-          </Badge>
+          </Note>
         ) : null}
 
         <div className="flex min-h-[420px] justify-center rounded-xl bg-canvas px-4 py-6">

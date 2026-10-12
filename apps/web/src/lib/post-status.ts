@@ -1,4 +1,5 @@
 import type { PostTargetStatus } from '@cgp/contracts';
+import type { BadgeTone } from '@cgp/ui';
 
 /**
  * How a post target reads to a person, in one place, so the composer and the calendar never
@@ -42,6 +43,22 @@ export const STATUS_SHORT: Record<PostTargetStatus, string> = {
   reauth_required: 'Reconnect',
   failed: 'Failed',
   needs_verification: 'Check',
+};
+
+/**
+ * The badge tone each status wears (WP47). The classes below stayed for the places that style
+ * something other than a badge; everything that is a badge now reads from here, so a status
+ * cannot be amber on one screen and orange on the next.
+ */
+export const STATUS_BADGE: Record<PostTargetStatus, BadgeTone> = {
+  pending: 'neutral',
+  claimed: 'accent',
+  published: 'good',
+  retry_scheduled: 'warn',
+  quota_wait: 'warn',
+  reauth_required: 'bad',
+  failed: 'bad',
+  needs_verification: 'warn',
 };
 
 export const STATUS_TONE: Record<PostTargetStatus, string> = {

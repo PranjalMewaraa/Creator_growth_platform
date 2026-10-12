@@ -1,7 +1,7 @@
 import type { TargetPlatform } from '@cgp/contracts';
 import { insights, type InsightPost } from '@cgp/core';
 import { parseEncryptionKey, decryptSecret } from '@cgp/config';
-import { Card, CardHeader, EmptyState, cx } from '@cgp/ui';
+import { Badge, Card, CardHeader, EmptyState, type BadgeTone } from '@cgp/ui';
 import { Screen } from '@/components/screen';
 import { getDb, getEnv, getLogger } from '@/server/runtime';
 import { getProviders } from '@/server/providers';
@@ -16,10 +16,10 @@ const REPORTS: Record<TargetPlatform, string> = {
     'LinkedIn reports reactions and comments on your own posts. Impressions need organisation access, so they are not shown.',
 };
 
-const STANDING: Record<NonNullable<InsightPost['standing']>, { label: string; tone: string }> = {
-  above: { label: 'Above your usual', tone: 'border-good/50 text-good' },
-  typical: { label: 'About usual', tone: 'border-line text-muted' },
-  below: { label: 'Below your usual', tone: 'border-hot/50 text-hot' },
+const STANDING: Record<NonNullable<InsightPost['standing']>, { label: string; tone: BadgeTone }> = {
+  above: { label: 'Above your usual', tone: 'good' },
+  typical: { label: 'About usual', tone: 'neutral' },
+  below: { label: 'Below your usual', tone: 'warn' },
 };
 
 function Metric({ label, value }: { label: string; value: number | undefined }) {
@@ -100,14 +100,9 @@ export default async function InsightsPage({
                     </p>
                   </div>
                   {post.standing ? (
-                    <span
-                      className={cx(
-                        'shrink-0 rounded-full border px-2.5 py-0.5 text-xs',
-                        STANDING[post.standing].tone,
-                      )}
-                    >
+                    <Badge tone={STANDING[post.standing].tone}>
                       {STANDING[post.standing].label}
-                    </span>
+                    </Badge>
                   ) : null}
                 </div>
                 <div className="flex flex-wrap gap-5">
