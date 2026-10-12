@@ -290,14 +290,33 @@ Recommended hosts:
 
 ### 3.2 Build and deploy (Cloud Run)
 
-Both images build from the repository root. The worker uses `apps/worker/Dockerfile`; the web
-can use the same base with `pnpm --filter @cgp/web build` and `pnpm --filter @cgp/web start`
-(a `apps/web/Dockerfile` following the same pattern is a ten-line change when you choose Cloud
-Run for the web; ask and it will be added).
+Both images build from the repository root, from `apps/web/Dockerfile` and
+`apps/worker/Dockerfile`. They share a base and a layout so they cannot drift; the web's adds
+one step, `next build`, which needs no secrets because the web reads its environment on the
+first request, not at build time.
 
 ```bash
-gcloud builds submit --tag asia-south1-docker.pkg.dev/$PROJECT/cgp/worker:$(git rev-parse --short HEAD) -f apps/worker/Dockerfile .
+gcloud builds submit --config - . <<'YAML'
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: [build, -f, apps/web/Dockerfile, -t, asia-south1-docker.pkg.dev/$PROJECT_ID/cgp/web:$SHORT_SHA, .]
+  - name: gcr.io/cloud-builders/docker
+    args: [build, -f, apps/worker/Dockerfile, -t, asia-south1-docker.pkg.dev/$PROJECT_ID/cgp/worker:$SHORT_SHA, .]
+images:
+  - asia-south1-docker.pkg.dev/$PROJECT_ID/cgp/web:$SHORT_SHA
+  - asia-south1-docker.pkg.dev/$PROJECT_ID/cgp/worker:$SHORT_SHA
+YAML
 ```
+
+Deploy the web. It listens on 3000, so Cloud Run is told so; it scales to zero happily
+because nothing stateful lives in it:
+
+```bash
+gcloud run deploy cgp-web --image asia-south1-docker.pkg.dev/$PROJECT/cgp/web:$SHA --region asia-south1 --allow-unauthenticated --port 3000 --timeout 3600 --min-instances 0 --max-instances 10 --memory 1Gi --cpu 1 --service-account cgp-web@$PROJECT.iam.gserviceaccount.com --set-secrets DATABASE_URL=cgp-database-url:latest,REDIS_URL=cgp-redis-url:latest,TOKEN_ENCRYPTION_KEY=cgp-token-key:latest,AUTH_SECRET=cgp-auth-secret:latest,RESEND_API_KEY=cgp-resend-key:latest --set-env-vars NODE_ENV=production,PROVIDERS=real,MODERATION=google,PUBLISHING=real,GCS_BUCKET=cgp-prod-media,GOOGLE_CLOUD_PROJECT=$PROJECT,APP_URL=https://app.yourdomain,EMAIL_FROM="Creator Growth Platform <signin@yourdomain>"
+```
+
+`--timeout 3600` matters: the job event stream is one long response, and Cloud Run's default
+of 300 s would cut a four-minute reel's ledger short. Then the worker:
 
 ```bash
 gcloud run deploy cgp-worker --image asia-south1-docker.pkg.dev/$PROJECT/cgp/worker:$SHA --region asia-south1 --no-allow-unauthenticated --ingress internal --min-instances 1 --max-instances 1 --no-cpu-throttling --memory 2Gi --cpu 2 --service-account cgp-worker@$PROJECT.iam.gserviceaccount.com --set-secrets DATABASE_URL=cgp-database-url:latest,REDIS_URL=cgp-redis-url:latest,TOKEN_ENCRYPTION_KEY=cgp-token-key:latest --set-env-vars NODE_ENV=production,PROVIDERS=real,MODERATION=google,PUBLISHING=real,GCS_BUCKET=cgp-prod-media,GOOGLE_CLOUD_PROJECT=$PROJECT

@@ -13,10 +13,11 @@
 
 FROM node:24-bookworm-slim
 
-# ca-certificates for Neon, Upstash and Vertex over TLS; fontconfig because resvg looks for
-# system fonts before falling back to the ones the repository ships.
+# ca-certificates for Neon, Upstash and Vertex over TLS. No fonts: the text layer draws with
+# the files in packages/core/fonts, resolved through the package, so nothing is read from the
+# system (packages/core/src/render/fonts.ts).
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates fontconfig \
+  && apt-get install -y --no-install-recommends ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
 RUN corepack enable
