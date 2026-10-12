@@ -4,6 +4,7 @@ import {
   LOOK_KEYS,
   LOOK_VOCABULARY,
   type CompiledPromptView,
+  type JobStage,
   type JobStatus,
   type JobView,
   type LookKey,
@@ -14,6 +15,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { artStyle } from '@/lib/art';
+import { WorkLedger } from './work-ledger';
 import { ImageOutput, OutputView, Storyboard, VideoOutput, type Rendition } from './output-view';
 import { TemplatePicker, type TemplateCard } from './template-picker';
 import { PromptDisclosure } from './prompt-disclosure';
@@ -200,6 +202,9 @@ export function Studio({
   const [job, setJob] = useState<JobView | null>(null);
   const [jobIntent, setJobIntent] = useState('');
   const [streamed, setStreamed] = useState('');
+  // What the worker says it is doing (WP44). Keyed, so a stage that reports twice — working
+  // then done — updates its line rather than adding a second one.
+  const [stages, setStages] = useState<JobStage[]>([]);
   const [outputs, setOutputs] = useState<Output[]>([]);
   const opened = useRef(false);
 
@@ -292,6 +297,16 @@ export function Studio({
       const { text } = JSON.parse((e as MessageEvent<string>).data) as { text: string };
       setStreamed((s) => s + text);
     });
+    events.addEventListener('stage', (e) => {
+      const { stage } = JSON.parse((e as MessageEvent<string>).data) as { stage: JobStage };
+      setStages((current) => {
+        const at = current.findIndex((s) => s.key === stage.key);
+        if (at === -1) return [...current, stage];
+        const next = [...current];
+        next[at] = stage;
+        return next;
+      });
+    });
     events.addEventListener('status', (e) => {
       const next = (JSON.parse((e as MessageEvent<string>).data) as { job: JobView }).job;
       setJob(next);
@@ -309,6 +324,7 @@ export function Studio({
     async (id: string) => {
       setError(null);
       setStreamed('');
+      setStages([]);
       setOutputs([]);
       const r = await fetch(`${base}/jobs/${id}`).catch(() => null);
       if (!r?.ok) return;
@@ -889,13 +905,20 @@ export function Studio({
                   </p>
                 </div>
               ) : checking ? (
-                <p className="text-sm text-muted">
-                  {job.generatorKey === 'video'
-                    ? 'Filming scene by scene, then joining them. Minutes, not seconds.'
-                    : DRAWN.has(job.generatorKey)
-                      ? 'Drawing it now; pictures arrive all at once.'
-                      : 'Waiting for the first words…'}
-                </p>
+                // The work ledger where the blank wait used to be (WP44). It only appears once
+                // the worker has said something; until then the sentence below sets the
+                // expectation, which for a reel is minutes.
+                stages.length > 0 ? (
+                  <WorkLedger stages={stages} />
+                ) : (
+                  <p className="text-body text-muted">
+                    {job.generatorKey === 'video'
+                      ? 'Filming scene by scene, then joining them. Minutes, not seconds.'
+                      : DRAWN.has(job.generatorKey)
+                        ? 'Drawing it now; pictures arrive all at once.'
+                        : 'Waiting for the first words…'}
+                  </p>
+                )
               ) : job.status === 'COMPLETE' ? (
                 <p className="text-sm text-muted">Loading the result…</p>
               ) : null}

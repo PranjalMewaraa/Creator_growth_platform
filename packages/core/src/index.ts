@@ -47,7 +47,13 @@ export {
   type RenderState,
 } from './calendar';
 export { createRedis, waitForRedis } from './redis';
-export { jobChannel, publishDelta, subscribeDeltas, type JobChannelOptions } from './events';
+export {
+  jobChannel,
+  publishDelta,
+  publishStage,
+  subscribeDeltas,
+  type JobChannelOptions,
+} from './events';
 export { jobEventStream, type JobStreamOptions, type JobStreamSource } from './job-stream';
 export {
   compileGeneration,

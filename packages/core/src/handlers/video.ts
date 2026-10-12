@@ -6,6 +6,7 @@ import type {
   ObjectStore,
   TextAdapter,
   VideoAdapter,
+  JobStage,
   VideoCapability,
   VideoRequest,
   VoiceAdapter,
@@ -71,6 +72,8 @@ export interface VideoHandlerDeps {
   costInr: (adapterKey: string, resolution: VideoRequest['resolution'], seconds: number) => number;
   /** What the chosen model will film, so an impossible clip is refused before it is paid for. */
   capabilityOf?: (adapterKey: string) => VideoCapability | undefined;
+  /** Says what is happening, as it happens (WP44). Best effort, like the deltas. */
+  publishStage?: (jobId: string, stage: JobStage) => Promise<void>;
   providerLabel: string;
   /** The renderer, which joins the scenes into one reel (plan section 4.6). */
   ffmpeg: FfmpegOptions;
@@ -243,6 +246,12 @@ export function createVideoHandlers(deps: VideoHandlerDeps): Record<string, JobH
       );
       if (!config) throw new Error(`${prompt.compilerProfileKey} is missing`);
 
+      const say = (stage: JobStage) =>
+        void deps.publishStage?.(job.id, stage).catch(() => undefined);
+      const since = (from: number) => Math.round((Date.now() - from) / 100) / 10;
+      const planningFrom = Date.now();
+      say({ key: 'plan', label: 'Planning the scenes', status: 'working' });
+
       // A reel committed from a storyboard films the scenes that were approved, rather than
       // planning again and arriving somewhere close but different (WP26).
       const approved =
@@ -273,6 +282,15 @@ export function createVideoHandlers(deps: VideoHandlerDeps): Record<string, JobH
         },
         'scenes planned',
       );
+      say({
+        key: 'plan',
+        label: approved ? 'Using the scenes you approved' : 'Planned the scenes',
+        status: 'done',
+        seconds: since(planningFrom),
+      });
+      // One a minute is the Veo quota (WP41), so the wait is named rather than left to feel
+      // like a stall.
+      const perMinute = deps.capabilityOf?.(adapter.key)?.requestsPerMinute;
 
       // The output row exists before the first clip, so a render that dies halfway leaves the
       // scenes it planned and the clips it finished.
@@ -308,6 +326,17 @@ export function createVideoHandlers(deps: VideoHandlerDeps): Record<string, JobH
         // WP38 has no key to fetch, and those reels film from the words as they always did.
         const frame = frames.find((f) => f.index === index);
         const startImage = frame ? await readFrame(deps, frame.key, log) : undefined;
+        const filmingFrom = Date.now();
+        say({
+          key: `scene-${index}`,
+          label: startImage ? 'Filming the frame you approved' : 'Filming the scene',
+          status: 'working',
+          index: index + 1,
+          total: scenes.length,
+          ...(perMinute && index + 1 > perMinute
+            ? { note: `the video model films ${perMinute} a minute, so this one waits its turn` }
+            : {}),
+        });
         const result = await renderScene(deps, adapter, scene.prompt, log, startImage);
         if (!result.ok) {
           blocked ||= result.blocked;
@@ -326,6 +355,14 @@ export function createVideoHandlers(deps: VideoHandlerDeps): Record<string, JobH
           continue;
         }
         const clipUrl = await storeClip(deps, job.workspaceId, scene, result.clip, 0);
+        say({
+          key: `scene-${index}`,
+          label: 'Filmed the scene',
+          status: 'done',
+          index: index + 1,
+          total: scenes.length,
+          seconds: since(filmingFrom),
+        });
         await setSceneClip(deps.db, job.workspaceId, scene.id, {
           clipUrl,
           durationS: result.clip.durationSeconds,
@@ -342,7 +379,15 @@ export function createVideoHandlers(deps: VideoHandlerDeps): Record<string, JobH
 
       // What is said over it, written by the engine from the same prompt and the scenes it
       // planned (invariant 4), then spoken. A reel with no voice still renders.
+      say({ key: 'voice', label: 'Speaking the voiceover', status: 'working' });
+      const voiceFrom = Date.now();
       const optimistic = await speaking;
+      say({
+        key: 'voice',
+        label: optimistic ? 'Spoke the voiceover' : 'No voiceover; the reel stays silent',
+        status: 'done',
+        seconds: since(voiceFrom),
+      });
       const spoken =
         rendered.length === plan.scenes.length
           ? optimistic
@@ -370,7 +415,15 @@ export function createVideoHandlers(deps: VideoHandlerDeps): Record<string, JobH
 
       // The reel itself: scenes joined, voice over them, bed ducked under it, logo cornered
       // (plan section 4.6). A render that cannot run leaves the scenes, already paid for.
+      say({ key: 'reel', label: 'Cutting the reel', status: 'working' });
+      const cuttingFrom = Date.now();
       const reel = await renderReel(deps, job.workspaceId, rendered, spoken?.audio, captions, log);
+      say({
+        key: 'reel',
+        label: reel ? 'Cut the reel' : 'The scenes are kept; the reel could not be cut',
+        status: reel ? 'done' : 'failed',
+        seconds: since(cuttingFrom),
+      });
       if (reel) {
         await ws.update(
           outputs,

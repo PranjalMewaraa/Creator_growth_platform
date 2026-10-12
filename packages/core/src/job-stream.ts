@@ -1,10 +1,13 @@
-import { isTerminalStatus, type JobEvent, type JobView } from '@cgp/contracts';
+import { isTerminalStatus, type JobEvent, type JobStage, type JobView } from '@cgp/contracts';
 
 export interface JobStreamSource {
   /** Reads the job from Postgres. Undefined once it is gone from this workspace. */
   read(): Promise<JobView | undefined>;
-  /** Relays deltas until the returned function is called. */
-  subscribe(onDelta: (text: string) => void): Promise<() => Promise<void>>;
+  /** Relays deltas and stages until the returned function is called. */
+  subscribe(
+    onDelta: (text: string) => void,
+    onStage?: (stage: JobStage) => void,
+  ): Promise<() => Promise<void>>;
 }
 
 export interface JobStreamOptions {
@@ -53,7 +56,10 @@ export function jobEventStream(
       controller.enqueue(encoder.encode(`retry: ${pollMs}\n\n`));
 
       // Subscribe before the first read, so no delta falls between the two.
-      stop = await source.subscribe((text) => send({ type: 'delta', text }));
+      stop = await source.subscribe(
+        (text) => send({ type: 'delta', text }),
+        (stage) => send({ type: 'stage', stage }),
+      );
 
       let last: string | undefined;
       const poll = async () => {

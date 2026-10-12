@@ -22,7 +22,8 @@ export const GET = withRequestContext(async (_request: Request, { params }: Cont
 
   const body = jobEventStream({
     read: () => findJob(db, workspaceId, jobId),
-    subscribe: (onDelta) => subscribeDeltas(getRedis(), jobId, onDelta),
+    subscribe: (onDelta, onStage) =>
+      subscribeDeltas(getRedis(), jobId, onDelta, undefined, onStage),
   });
   return new Response(body, {
     headers: {

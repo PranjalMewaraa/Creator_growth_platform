@@ -3,6 +3,7 @@ import type {
   ImageAdapter,
   ModerationAdapter,
   ImageCapability,
+  JobStage,
   MediaBytes,
   ObjectStore,
   TextAdapter,
@@ -55,6 +56,11 @@ export interface StoryboardHandlerDeps {
   providerLabel: string;
   /** What the chosen model will draw, so references are offered only where they are read. */
   capabilityOf?: (adapterKey: string) => ImageCapability | undefined;
+  /**
+   * Says what is happening, as it happens (WP44). Best effort: nobody listening is fine, and a
+   * failure to say so never fails the work.
+   */
+  publishStage?: (jobId: string, stage: JobStage) => Promise<void>;
 }
 
 interface StoryboardInput {
@@ -105,6 +111,12 @@ export function createStoryboardHandler(deps: StoryboardHandlerDeps): Record<str
 
       const sceneCount =
         typeof input.sceneCount === 'number' && input.sceneCount > 0 ? input.sceneCount : 3;
+      const say = (stage: JobStage) =>
+        void deps.publishStage?.(job.id, stage).catch(() => undefined);
+      const started = Date.now();
+      const since = (from: number) => Math.round((Date.now() - from) / 100) / 10;
+
+      say({ key: 'plan', label: 'Planning the scenes', status: 'working' });
       const plan = await planScenes({
         prompt: prompt.text,
         config,
@@ -112,6 +124,8 @@ export function createStoryboardHandler(deps: StoryboardHandlerDeps): Record<str
         provider: deps.planner,
         log,
       });
+
+      say({ key: 'plan', label: 'Planning the scenes', status: 'done', seconds: since(started) });
 
       // One still per scene, drawn one at a time: the image quota is metered by the minute and
       // a burst of three loses the set rather than one frame.
@@ -124,7 +138,21 @@ export function createStoryboardHandler(deps: StoryboardHandlerDeps): Record<str
       let anchor: MediaBytes | undefined;
       const references = deps.capabilityOf?.(adapter.key)?.acceptsReferenceImages ?? false;
 
+      const perMinute = deps.capabilityOf?.(adapter.key)?.requestsPerMinute;
       for (const [index, scenePrompt] of plan.scenes.entries()) {
+        const drawingFrom = Date.now();
+        say({
+          key: `frame-${index}`,
+          label: 'Drawing the frame',
+          status: 'working',
+          index: index + 1,
+          total: plan.scenes.length,
+          // Told rather than hidden: from the third frame on there is a real wait, and saying
+          // why turns it from a stall into a known cost (WP40).
+          ...(perMinute && index + 1 > perMinute
+            ? { note: `waiting for the picture model, which allows ${perMinute} a minute` }
+            : {}),
+        });
         const result = await adapter.generate({
           prompt: references && anchor ? sameWorldAs(scenePrompt) : scenePrompt,
           aspectRatio: ASPECT_RATIO,
@@ -156,6 +184,16 @@ export function createStoryboardHandler(deps: StoryboardHandlerDeps): Record<str
         // The key as well as the url: filming this frame later needs the bytes back, and
         // picking a key out of a public url means knowing how one store spells them (WP33).
         frames.push({ index, prompt: scenePrompt, url: stored.url, key: stored.key });
+        // The frame is shown the moment it exists, rather than all three at the end.
+        say({
+          key: `frame-${index}`,
+          label: 'Drew the frame',
+          status: 'done',
+          index: index + 1,
+          total: plan.scenes.length,
+          url: stored.url,
+          seconds: since(drawingFrom),
+        });
         // Every later frame looks at the first, not at the one before it: following the chain
         // lets the look drift a step at a time until scene three has left scene one behind.
         anchor ??= { data: image.data, mimeType: image.mimeType };

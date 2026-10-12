@@ -72,4 +72,29 @@ export interface JobView {
  * The server ends the stream after a terminal status, but EventSource reconnects whenever a
  * stream ends, so the client closes it on the first terminal status it sees.
  */
-export type JobEvent = { type: 'status'; job: JobView } | { type: 'delta'; text: string };
+/**
+ * One step of work, as it happens (WP44). Three of this product's operations take between
+ * eighty seconds and four minutes, and the screen used to say nothing for all of it. These are
+ * the stages the worker already logs, sent to the browser instead of only to a log file.
+ */
+export interface JobStage {
+  /** Stable per stage, so a repeat updates the line rather than adding another. */
+  key: string;
+  /** What is happening, in the words a creator reads. */
+  label: string;
+  status: 'working' | 'waiting' | 'done' | 'failed';
+  /** For work with countable parts: frame 2 of 3. */
+  index?: number;
+  total?: number;
+  /** Why this is taking the time it is. Shown only when there is an honest reason. */
+  note?: string;
+  /** Something this stage produced, such as a frame that can be looked at already. */
+  url?: string;
+  /** How long it took, once it is done. */
+  seconds?: number;
+}
+
+export type JobEvent =
+  | { type: 'status'; job: JobView }
+  | { type: 'delta'; text: string }
+  | { type: 'stage'; stage: JobStage };
