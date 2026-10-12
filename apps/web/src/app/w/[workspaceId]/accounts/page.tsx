@@ -1,6 +1,6 @@
 import type { TargetPlatform } from '@cgp/contracts';
 import { listAccounts } from '@cgp/core';
-import { Card, CardHeader } from '@cgp/ui';
+import { Badge, Card, CardHeader } from '@cgp/ui';
 import { Screen } from '@/components/screen';
 import { getDb, getEnv } from '@/server/runtime';
 import { oauthApp } from '@/server/oauth';
@@ -108,15 +108,9 @@ export default async function AccountsPage({
                 </div>
                 <div className="flex items-center gap-3">
                   {account ? (
-                    <span
-                      className={
-                        account.health === 'ok'
-                          ? 'rounded-full border border-good/40 px-3 py-1 text-xs text-good'
-                          : 'rounded-full border border-bad/40 px-3 py-1 text-xs text-bad'
-                      }
-                    >
+                    <Badge tone={account.health === 'ok' ? 'good' : 'bad'}>
                       {account.health === 'ok' ? 'Connected' : 'Needs attention'}
-                    </span>
+                    </Badge>
                   ) : null}
                   {configured ? (
                     // A plain link, not a fetch: the platform's consent screen is a place the

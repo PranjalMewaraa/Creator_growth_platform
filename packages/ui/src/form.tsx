@@ -7,13 +7,18 @@ const CONTROL =
 export function Field({
   label,
   hint,
+  error,
   htmlFor,
+  required = false,
   hideLabel = false,
   children,
 }: {
   label: string;
   hint?: string;
+  /** What is wrong, shown in place of the hint and next to the field it belongs to (WP43). */
+  error?: string;
   htmlFor?: string;
+  required?: boolean;
   /** Visually hidden but still read by screen readers, for placeholder led designs. */
   hideLabel?: boolean;
   children: ReactNode;
@@ -22,12 +27,29 @@ export function Field({
     <div className="flex flex-col gap-1.5">
       <label
         htmlFor={htmlFor}
-        className={cx('text-sm font-medium text-muted', hideLabel && 'sr-only')}
+        className={cx('text-label font-medium text-muted', hideLabel && 'sr-only')}
       >
         {label}
+        {required ? (
+          <span className="ml-1 text-bad" aria-hidden>
+            *
+          </span>
+        ) : null}
       </label>
       {children}
-      {hint ? <p className="text-xs text-faint">{hint}</p> : null}
+      {/* The error replaces the hint rather than joining it: two messages about one field is
+          one more than anybody reads. Announced, because it usually appears after a submit. */}
+      {error ? (
+        <p
+          id={htmlFor ? `${htmlFor}-error` : undefined}
+          role="alert"
+          className="text-caption text-bad"
+        >
+          {error}
+        </p>
+      ) : hint ? (
+        <p className="text-caption text-faint">{hint}</p>
+      ) : null}
     </div>
   );
 }
@@ -35,10 +57,13 @@ export function Field({
 export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   /** Decorative icon inside the field, on the left. */
   icon?: ReactNode;
+  /** Marks the field as wrong, in the border and to a screen reader. */
+  invalid?: boolean;
 }
 
-export function Input({ className, icon, ...props }: InputProps) {
-  if (!icon) return <input {...props} className={cx(CONTROL, className)} />;
+export function Input({ className, icon, invalid, ...props }: InputProps) {
+  const control = cx(CONTROL, invalid && 'border-bad/70 focus:border-bad focus:ring-bad/15');
+  if (!icon) return <input {...props} aria-invalid={invalid} className={cx(control, className)} />;
   return (
     <div className="relative">
       <span
@@ -47,7 +72,7 @@ export function Input({ className, icon, ...props }: InputProps) {
       >
         {icon}
       </span>
-      <input {...props} className={cx(CONTROL, 'pl-11', className)} />
+      <input {...props} aria-invalid={invalid} className={cx(control, 'pl-11', className)} />
     </div>
   );
 }
