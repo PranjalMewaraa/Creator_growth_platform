@@ -4,7 +4,7 @@ import { cx } from './cx';
 /** Cards resolve independently, so a screen never waits behind one spinner (plan section 13). */
 export function Card({ className, children }: { className?: string; children: ReactNode }) {
   return (
-    <section className={cx('rounded-2xl border border-line bg-surface', className)}>
+    <section className={cx('rounded-2xl border border-line bg-surface shadow-raised', className)}>
       {children}
     </section>
   );
@@ -22,8 +22,8 @@ export function CardHeader({
   return (
     <header className="flex items-start justify-between gap-3 px-5 pt-5">
       <div>
-        <h2 className="text-sm font-medium text-ink">{title}</h2>
-        {note ? <p className="mt-0.5 text-xs text-faint">{note}</p> : null}
+        <h2 className="text-subtitle font-medium text-ink">{title}</h2>
+        {note ? <p className="mt-0.5 text-caption text-faint">{note}</p> : null}
       </div>
       {action}
     </header>

@@ -28,10 +28,122 @@
   /* AI surfaces only (the engine, the agent): a neon pair with a glow. Yellow stays the action. */
   --color-ai: #8b5cf6;
   --color-ai-hot: #d946ef;
+
+  /*
+   * Type scale (WP42). Six steps, each with the job it does, because `text-sm text-muted` was
+   * doing four different jobs across the screens. Sizes are rem so a browser's own text size
+   * setting still works.
+   */
+  --text-display: 2rem; /* 32px: one per screen, the thing it is about */
+  --text-display--line-height: 1.1;
+  --text-display--letter-spacing: -0.02em;
+  --text-title: 1.25rem; /* 20px: a card or a section */
+  --text-title--line-height: 1.3;
+  --text-title--letter-spacing: -0.01em;
+  --text-subtitle: 1rem; /* 16px: a row's name, the minimum on a phone */
+  --text-subtitle--line-height: 1.4;
+  --text-body: 0.875rem; /* 14px: prose, capped at 68ch so it stays readable */
+  --text-body--line-height: 1.6;
+  --text-label: 0.75rem; /* 12px: what a control is */
+  --text-label--line-height: 1.4;
+  --text-caption: 0.6875rem; /* 11px: the quiet note under a thing */
+  --text-caption--line-height: 1.4;
+
+  /*
+   * Elevation (WP42). Three, and only three: flat sits on the canvas, raised is a card,
+   * floating is a thing over the page. A dozen shadows had accumulated by accident.
+   */
+  --shadow-raised: 0 1px 2px rgb(0 0 0 / 0.3);
+  --shadow-floating: 0 12px 32px -8px rgb(0 0 0 / 0.55);
+
+  /*
+   * Motion (WP42). One curve, three durations, inside the 150-300ms a micro interaction
+   * should take. Transform and opacity only: animating width or height makes the browser
+   * lay the page out again on every frame.
+   */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+}
+
+/*
+ * Durations as utilities rather than theme keys: Tailwind has an `--ease-*` namespace but no
+ * `--duration-*` one, so a `duration-base` class defined there silently generates nothing and
+ * the transition runs at the browser default. Caught by reading the built stylesheet.
+ */
+@utility duration-fast {
+  transition-duration: 150ms;
+}
+@utility duration-base {
+  transition-duration: 200ms;
+}
+@utility duration-slow {
+  transition-duration: 320ms;
+}
+
+/*
+ * Spacing and radius are conventions rather than new tokens (WP42), because Tailwind's own
+ * scale already has the values we want and redefining them would move every existing screen.
+ *
+ * Spacing: the 4px base, and of it only 1, 2, 3, 4, 6, 8, 12 (4 to 48px). Anything else is an
+ * accident worth questioning in review.
+ *
+ * Radius: three, by the size of the thing. `rounded-lg` (8px) for a chip or a small control,
+ * `rounded-xl` (12px) for a control or an inner panel, `rounded-2xl` (16px) for a card or a
+ * dialog, `rounded-full` for a pill or an avatar. No arbitrary values.
+ */
+
+/*
+ * The layers things stack in, written down once (WP42). Picking a number at the call site is
+ * how a dialog ends up behind a sticky header.
+ */
+@utility z-nav {
+  z-index: 10;
+}
+@utility z-sticky {
+  z-index: 20;
+}
+@utility z-dropdown {
+  z-index: 30;
+}
+@utility z-dialog {
+  z-index: 40;
+}
+@utility z-toast {
+  z-index: 50;
+}
+
+/*
+ * One focus ring, everywhere (WP42). Keyboard users get the same mark on every control, and
+ * it is offset so it reads against a surface as well as against the canvas.
+ */
+@utility focus-ring {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
 }
 
 :root {
   color-scheme: dark;
+}
+
+/* Every interactive thing gets the ring, without each one remembering to ask for it. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/*
+ * Someone who has asked their machine for less movement gets less movement (WP42). Not none:
+ * a state change still needs to be noticed, so transitions collapse to something immediate
+ * rather than disappearing.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 body {

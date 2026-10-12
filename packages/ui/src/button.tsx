@@ -18,7 +18,11 @@ export function Button({ variant = 'primary', className, ...props }: ButtonProps
     <button
       {...props}
       className={cx(
-        'inline-flex h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-medium transition disabled:cursor-not-allowed',
+        // h-11 is 44px, the smallest a finger reliably hits. The transition is by colour and
+        // never by scale: a control that grows on hover moves the things next to it.
+        'inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl px-4',
+        'text-body font-medium transition-[background-color,border-color,color,box-shadow,filter]',
+        'duration-base ease-standard disabled:cursor-not-allowed',
         VARIANTS[variant],
         className,
       )}
