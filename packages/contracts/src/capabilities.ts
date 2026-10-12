@@ -39,6 +39,11 @@ export interface VideoCapability {
   acceptsStartImage: boolean;
   /** Whether the model makes its own sound. Ours does not; the voice is ours to add. */
   generatesAudio: boolean;
+  /**
+   * Submissions a minute the provider allows (WP40). For Veo this is one, which is why three
+   * scenes cannot be filmed at once however much we would like them to be.
+   */
+  requestsPerMinute: number;
 }
 
 export interface VoiceCapability {

@@ -293,6 +293,13 @@ export function createVideoHandlers(deps: VideoHandlerDeps): Record<string, JobH
       if (!output) throw new Error('Output insert returned no row');
       const scenes = await createScenes(deps.db, job.workspaceId, output.id, plan.scenes);
 
+      // The voice is written and spoken while the first clip is being filmed, not after the
+      // last one lands: it depends on the scenes that were planned, not on the footage, and
+      // Veo's one-a-minute quota leaves minutes of waiting to fill (WP41). If a scene fails
+      // after all, the voiceover is redone for the scenes that did arrive — a second TTS call
+      // costs under a rupee, where the wait costs everyone's attention.
+      const speaking = speak(deps, config, prompt.text, plan.scenes, plan.scenes.length, log);
+
       let delivered = 0;
       let blocked = false;
       const rendered: ReelScene[] = [];
@@ -335,7 +342,17 @@ export function createVideoHandlers(deps: VideoHandlerDeps): Record<string, JobH
 
       // What is said over it, written by the engine from the same prompt and the scenes it
       // planned (invariant 4), then spoken. A reel with no voice still renders.
-      const spoken = await speak(deps, config, prompt.text, plan.scenes, rendered.length, log);
+      const optimistic = await speaking;
+      const spoken =
+        rendered.length === plan.scenes.length
+          ? optimistic
+          : await speak(deps, config, prompt.text, plan.scenes, rendered.length, log);
+      if (optimistic && spoken !== optimistic) {
+        log.info(
+          { planned: plan.scenes.length, delivered: rendered.length },
+          'fewer scenes arrived than were planned; the voiceover was written again for them',
+        );
+      }
 
       // Captions come from what the voice said and when it said it (invariant 13), styled by
       // the template. No voice means no captions: transcribing the render is not an option.

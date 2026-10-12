@@ -112,6 +112,10 @@ export const VIDEO_MODELS = {
       // It takes a still to start from, which is what WP38 films a storyboard frame with.
       acceptsStartImage: true,
       generatesAudio: false,
+      // Vertex: LongRunningPredictRequestsPerMinutePerProjectPerBaseModel, read from the
+      // quota API 2026-10-12. One. Three scenes are therefore three minutes, and no amount
+      // of concurrency changes that (WP41).
+      requestsPerMinute: 1,
     },
   },
 } as const satisfies Record<string, VideoModel>;

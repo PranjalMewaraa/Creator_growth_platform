@@ -25,6 +25,10 @@ function veoWith(responses: Array<{ status?: number; body?: unknown }>) {
     project: 'test-project',
     location: 'us-central1',
     model: 'veo-3.1-lite-generate-001',
+    // The real limit is one submission a minute (WP41); these tests are about what the
+    // adapter does with an answer, not about waiting for one.
+    requestsPerMinute: 10_000,
+    quotaRetries: 0,
     authHeaders: () => Promise.resolve({ authorization: 'Bearer test' }),
     fetch: ((url: string, init: { body: string }) => {
       calls.push({ url, body: JSON.parse(init.body) as unknown });

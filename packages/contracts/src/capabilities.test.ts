@@ -14,6 +14,7 @@ const veo: VideoCapability = {
   durationSeconds: { min: 8, max: 8, step: 8 },
   acceptsStartImage: true,
   generatesAudio: false,
+  requestsPerMinute: 1,
 };
 
 const gemini: ImageCapability = {

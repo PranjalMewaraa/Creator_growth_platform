@@ -143,6 +143,8 @@ export function createVideoAdapters(mode: ProviderMode, real?: RealProviderOptio
         project: real.project,
         location: config.location,
         model: config.model,
+        // One a minute, from the model's own capability (WP41).
+        requestsPerMinute: config.capability.requestsPerMinute,
         log: real.log,
       }),
     ] as const;
