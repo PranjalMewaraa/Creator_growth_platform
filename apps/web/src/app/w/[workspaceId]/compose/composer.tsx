@@ -528,7 +528,7 @@ export function Composer({
                         title={account.displayName}
                         onClick={() => toggle(account.id)}
                         className={cx(
-                          'flex h-10 items-center gap-2 rounded-full border pl-1.5 pr-3.5 text-sm transition',
+                          'tap-target flex h-10 cursor-pointer items-center gap-2 rounded-full border pl-1.5 pr-3.5 text-sm transition',
                           on
                             ? 'border-accent bg-accent/10 text-ink'
                             : 'border-line bg-raised text-muted hover:border-faint hover:text-ink',
@@ -571,14 +571,14 @@ export function Composer({
                       type="button"
                       onClick={() => setEmojiOpen((open) => !open)}
                       aria-expanded={emojiOpen}
-                      className="flex h-8 items-center gap-1.5 rounded-lg px-2 text-sm text-muted transition hover:bg-surface hover:text-ink"
+                      className="tap-target flex h-8 cursor-pointer items-center gap-1.5 rounded-lg px-2 text-sm text-muted transition hover:bg-surface hover:text-ink"
                     >
                       <span aria-hidden>😊</span> Emoji
                     </button>
                     <button
                       type="button"
                       onClick={() => insert('#')}
-                      className="flex h-8 items-center rounded-lg px-2 text-sm text-muted transition hover:bg-surface hover:text-ink"
+                      className="tap-target flex h-8 cursor-pointer items-center rounded-lg px-2 text-sm text-muted transition hover:bg-surface hover:text-ink"
                     >
                       # Hashtag
                     </button>
@@ -610,7 +610,7 @@ export function Composer({
                         key={tag}
                         type="button"
                         onClick={() => addHashtag(tag)}
-                        className="rounded-full border border-line px-2.5 py-1 text-xs text-ink transition hover:border-accent/60"
+                        className="tap-target cursor-pointer rounded-full border border-line px-2.5 py-1 text-xs text-ink transition hover:border-accent/60"
                       >
                         {tag}
                       </button>

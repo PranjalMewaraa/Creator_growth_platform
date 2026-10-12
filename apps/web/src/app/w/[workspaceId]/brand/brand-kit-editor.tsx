@@ -161,14 +161,15 @@ export function BrandKitEditor({
                   value={HEX.test(color) ? color : '#000000'}
                   onChange={(event) => setColor(i, event.target.value.toUpperCase())}
                   aria-label={`Colour ${i + 1}`}
-                  className="h-10 w-12 cursor-pointer rounded-lg border border-line bg-raised p-1"
+                  className="h-11 w-12 cursor-pointer rounded-lg border border-line bg-raised p-1"
                 />
                 <input
                   value={color}
                   onChange={(event) => setColor(i, event.target.value.trim())}
+                  aria-label={`Colour ${i + 1} as hex`}
                   maxLength={7}
                   className={cx(
-                    'h-10 w-32 rounded-lg border bg-raised px-3 font-mono text-sm uppercase text-ink outline-none',
+                    'h-11 w-32 rounded-lg border bg-raised px-3 font-mono text-sm uppercase text-ink outline-none',
                     HEX.test(color) ? 'border-line focus:border-accent/70' : 'border-bad/60',
                   )}
                 />
@@ -179,7 +180,7 @@ export function BrandKitEditor({
                   <button
                     type="button"
                     onClick={() => setDrafts((list) => list.filter((_, j) => j !== i))}
-                    className="ml-auto text-xs text-muted hover:text-bad"
+                    className="tap-target ml-auto cursor-pointer text-xs text-muted hover:text-bad"
                   >
                     Remove
                   </button>
@@ -232,6 +233,7 @@ export function BrandKitEditor({
           <input
             value={kit.tagline}
             onChange={(event) => setKit((k) => ({ ...k, tagline: event.target.value }))}
+            aria-label="Tagline"
             maxLength={80}
             placeholder="e.g. Made in small batches"
             className="h-11 w-full rounded-xl border border-line bg-raised px-4 text-sm text-ink outline-none transition placeholder:text-faint focus:border-accent/70 focus:ring-2 focus:ring-accent/15"

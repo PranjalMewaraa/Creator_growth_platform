@@ -189,7 +189,7 @@ export function WeekCalendar({
           action={
             <Link
               href={`/w/${workspaceId}/accounts`}
-              className="text-xs text-accent hover:underline"
+              className="tap-target text-xs text-accent hover:underline"
             >
               Manage
             </Link>
@@ -264,14 +264,14 @@ export function WeekCalendar({
               type="button"
               aria-label="Previous week"
               onClick={() => setWeekOffset((w) => w - 1)}
-              className="grid size-9 place-items-center rounded-lg text-muted hover:bg-surface hover:text-ink"
+              className="grid size-11 place-items-center rounded-lg text-muted hover:bg-surface hover:text-ink"
             >
               ‹
             </button>
             <button
               type="button"
               onClick={() => setWeekOffset(0)}
-              className="rounded-lg px-3 text-sm text-muted hover:bg-surface hover:text-ink"
+              className="h-11 rounded-lg px-3 text-sm text-muted hover:bg-surface hover:text-ink"
             >
               Today
             </button>
@@ -279,7 +279,7 @@ export function WeekCalendar({
               type="button"
               aria-label="Next week"
               onClick={() => setWeekOffset((w) => w + 1)}
-              className="grid size-9 place-items-center rounded-lg text-muted hover:bg-surface hover:text-ink"
+              className="grid size-11 place-items-center rounded-lg text-muted hover:bg-surface hover:text-ink"
             >
               ›
             </button>

@@ -73,7 +73,7 @@ export default async function BrandPage({
               title={`Profile · version ${latest.version}`}
               note="Corrections are saved as a new version; older versions stay, because past posts point at them."
               action={
-                <Link href={onboarding} className="text-xs text-muted hover:text-ink">
+                <Link href={onboarding} className="tap-target text-xs text-muted hover:text-ink">
                   Walk through the questions again
                 </Link>
               }

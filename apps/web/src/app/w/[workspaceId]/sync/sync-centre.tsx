@@ -104,7 +104,7 @@ function Attempt({ attempt }: { attempt: SyncAttempt }) {
             href={attempt.permalink}
             target="_blank"
             rel="noreferrer noopener"
-            className="ml-auto text-accent hover:underline"
+            className="tap-target ml-auto text-accent hover:underline"
           >
             View post ↗
           </a>

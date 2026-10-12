@@ -142,7 +142,7 @@ export function FirstRun({
                     <div className="mt-3 flex flex-wrap items-center gap-3">
                       <Link
                         href={`${base}${step.path}`}
-                        className="inline-flex h-11 items-center rounded-xl bg-accent px-5 text-body font-medium text-accent-ink transition duration-base ease-standard hover:opacity-90 focus-ring"
+                        className="inline-flex h-11 items-center rounded-xl bg-accent px-5 text-body font-medium text-accent-ink transition duration-base ease-standard hover:opacity-90"
                       >
                         {step.cta}
                       </Link>
@@ -150,7 +150,7 @@ export function FirstRun({
                         <button
                           type="button"
                           onClick={() => notNow(step.key)}
-                          className="cursor-pointer rounded-lg px-2 py-1 text-body text-muted transition duration-base ease-standard hover:text-ink focus-ring"
+                          className="cursor-pointer rounded-lg px-2 py-1 text-body text-muted transition duration-base ease-standard hover:text-ink"
                         >
                           Not now
                         </button>
@@ -163,7 +163,7 @@ export function FirstRun({
                   <button
                     type="button"
                     onClick={() => undo(step.key)}
-                    className="mt-2 cursor-pointer rounded-lg text-caption text-accent hover:underline focus-ring"
+                    className="mt-2 cursor-pointer rounded-lg text-caption text-accent hover:underline"
                   >
                     Do it now
                   </button>

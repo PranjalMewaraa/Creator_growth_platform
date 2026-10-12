@@ -114,10 +114,37 @@
 /*
  * One focus ring, everywhere (WP42). Keyboard users get the same mark on every control, and
  * it is offset so it reads against a surface as well as against the canvas.
+ *
+ * The :focus-visible rule below gives it to every control without being asked. This utility
+ * is for the few that turn their own outline off and have to ask for it back — and it is
+ * scoped to focus, which it was not when it was written: as a bare `outline`, every caller
+ * drew a permanent amber ring around itself (WP49).
  */
 @utility focus-ring {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
+  &:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+}
+
+/*
+ * A 44px finger on a 34px chip (WP49). Growing every chip to 44 would make the Studio's
+ * control cluster twice as tall for a problem that is only about where a thumb lands, so the
+ * hit area grows instead of the chip: an invisible box, centred on the control, never smaller
+ * than 44 in either direction. The control keeps its drawn size and gains a tappable one.
+ */
+@utility tap-target {
+  position: relative;
+
+  &::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    translate: -50% -50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+  }
 }
 
 :root {

@@ -31,8 +31,12 @@ function Day({ day, base, timezone }: { day: HomeDay; base: string; timezone: st
       <Link
         href={href}
         className={cx(
-          'flex h-full flex-col items-center gap-1 rounded-xl py-3 transition hover:bg-black/40',
-          day.isToday ? 'bg-black/80' : 'bg-black/15',
+          'flex h-full flex-col items-center gap-1 rounded-xl py-3 transition duration-base ease-standard',
+          // Today inverts: white on near-black. The rest are ink on orange, because white on
+          // #ff5a1f measures 3.12:1 and the rule is 4.5 (WP49).
+          day.isToday
+            ? 'bg-black/80 text-white hover:bg-black/70'
+            : 'bg-black/10 hover:bg-black/20',
         )}
         title={
           day.posts.length === 0
@@ -42,16 +46,24 @@ function Day({ day, base, timezone }: { day: HomeDay; base: string; timezone: st
                 .join(String.fromCharCode(10))
         }
       >
-        <span className="text-xs text-white/75">{day.weekday}</span>
+        <span className={cx('text-xs', day.isToday ? 'text-white/80' : 'text-black/85')}>
+          {day.weekday}
+        </span>
         <span className="text-lg font-semibold tabular-nums">{day.day}</span>
         {day.posts.length === 0 ? (
-          <span className="mt-1 text-xs text-white/40" aria-label="Nothing planned">
+          <span
+            className={cx('mt-1 text-xs', day.isToday ? 'text-white/70' : 'text-black/80')}
+            aria-label="Nothing planned"
+          >
             +
           </span>
         ) : (
           <span className="mt-1 flex gap-0.5" aria-label={`${day.posts.length} scheduled`}>
             {day.posts.slice(0, 3).map((post) => (
-              <span key={post.id} className="size-1.5 rounded-full bg-white" />
+              <span
+                key={post.id}
+                className={cx('size-1.5 rounded-full', day.isToday ? 'bg-white' : 'bg-black/70')}
+              />
             ))}
           </span>
         )}
@@ -99,16 +111,18 @@ export default async function HomePage({ params }: { params: Promise<{ workspace
           </CardBody>
         </Card>
 
-        <section className="relative overflow-hidden rounded-2xl bg-hot p-5 text-white">
+        {/* Ink on orange, not white: #ff5a1f is bright enough that white body text measures
+            2.47:1 against it, and the same ink is what every amber control already uses. */}
+        <section className="relative overflow-hidden rounded-2xl bg-hot p-5 text-accent-ink">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h2 className="text-sm font-medium text-white/85">Next seven days</h2>
+              <h2 className="text-sm font-medium text-black/70">Next seven days</h2>
               <p className="mt-1 text-3xl font-semibold tracking-tight">
                 {digest.scheduled === 0
                   ? 'Nothing scheduled'
                   : `${digest.scheduled} post${digest.scheduled === 1 ? '' : 's'} scheduled`}
               </p>
-              <p className="mt-1 max-w-md text-sm text-white/80">
+              <p className="mt-1 max-w-md text-sm text-black/75">
                 {digest.emptyDays === 0
                   ? 'Every day this week has something on it.'
                   : `${digest.emptyDays} day${digest.emptyDays === 1 ? ' has' : 's have'} nothing on them. Pick one to fill it.`}
@@ -117,12 +131,12 @@ export default async function HomePage({ params }: { params: Promise<{ workspace
             <Link
               href={`${base}/calendar`}
               aria-label="Open calendar"
-              className="grid size-9 shrink-0 place-items-center rounded-full bg-black/20 hover:bg-black/30"
+              className="grid size-11 shrink-0 place-items-center rounded-full bg-black/15 transition duration-base ease-standard hover:bg-black/25"
             >
               <ArrowUpRightIcon />
             </Link>
           </div>
-          <ol className="mt-6 grid grid-cols-7 gap-2">
+          <ol className="mt-6 grid grid-cols-7 gap-1 sm:gap-2">
             {digest.days.map((day) => (
               <Day key={day.startsAt} day={day} base={base} timezone={workspace.timezone} />
             ))}
@@ -135,7 +149,10 @@ export default async function HomePage({ params }: { params: Promise<{ workspace
           <CardHeader
             title="Account health"
             action={
-              <Link href={`${base}/accounts`} className="text-xs text-muted hover:text-ink">
+              <Link
+                href={`${base}/accounts`}
+                className="tap-target text-xs text-muted hover:text-ink"
+              >
                 Manage
               </Link>
             }

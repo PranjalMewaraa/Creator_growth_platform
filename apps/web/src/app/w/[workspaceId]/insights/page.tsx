@@ -117,7 +117,7 @@ export default async function InsightsPage({
                       href={post.permalink}
                       target="_blank"
                       rel="noreferrer noopener"
-                      className="ml-auto self-end text-xs text-accent hover:underline"
+                      className="tap-target ml-auto self-end text-xs text-accent hover:underline"
                     >
                       View post ↗
                     </a>

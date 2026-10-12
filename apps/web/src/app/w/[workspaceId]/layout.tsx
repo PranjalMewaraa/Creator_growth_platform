@@ -53,6 +53,18 @@ export default async function WorkspaceLayout({
     // WP43 and mounted nowhere until now.
     <ToastProvider>
       <div className="min-h-screen bg-canvas">
+        {/*
+         * Eleven stops of chrome stand between the top of the page and the first thing on it,
+         * and on a narrow screen the rail is drawn at the bottom while being tabbed near the
+         * top (WP49). This is the way out: invisible until focused, first in the order, and
+         * it moves focus into the content rather than only scrolling to it.
+         */}
+        <a
+          href="#main"
+          className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-toast focus:inline-flex focus:h-11 focus:items-center focus:rounded-xl focus:bg-accent focus:px-5 focus:text-body focus:font-medium focus:text-accent-ink"
+        >
+          Skip to content
+        </a>
         <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-line bg-canvas/85 pr-4 backdrop-blur sm:pr-6">
           {/* The logo sits over the rail, so the two read as one frame. */}
           <Link
@@ -86,7 +98,11 @@ export default async function WorkspaceLayout({
 
         <NavRail workspaceId={workspace.id} />
 
-        <main className="px-4 pb-24 pt-6 sm:px-6 lg:pb-8 lg:pl-30">
+        <main
+          id="main"
+          tabIndex={-1}
+          className="px-4 pb-24 pt-6 outline-none sm:px-6 lg:pb-8 lg:pl-30"
+        >
           <div className="mx-auto max-w-[1400px]">{children}</div>
         </main>
       </div>

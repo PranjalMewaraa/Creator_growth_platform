@@ -117,7 +117,7 @@ export default async function AccountsPage({
                     // browser goes, not something this page can do on anyone's behalf.
                     <a
                       href={`/api/w/${workspaceId}/accounts/connect/${platform}`}
-                      className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-accent-ink transition hover:opacity-90"
+                      className="inline-flex h-11 items-center rounded-xl bg-accent px-4 text-sm font-medium text-accent-ink transition hover:opacity-90"
                     >
                       {account ? 'Reconnect' : `Connect ${NAMES[platform]}`}
                     </a>

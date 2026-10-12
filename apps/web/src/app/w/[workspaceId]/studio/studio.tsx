@@ -405,7 +405,10 @@ export function Studio({
     // Three panes where there is room (WP45): what you are asking for, what the engine made of
     // it, and what came back. Below that the prompt falls under the controls, as it did when
     // it was a footnote to them.
-    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,44fr)_minmax(0,56fr)] xl:grid-cols-[minmax(0,30fr)_minmax(0,32fr)_minmax(0,38fr)]">
+    // Grid items default to min-width:auto, so a pane refuses to shrink below its own content.
+    // The minmax(0,…) tracks cover that from lg up; below lg there are no tracks at all, which
+    // is why the Studio overflowed at phone and tablet width and nowhere else (WP49).
+    <div className="grid items-start gap-6 *:min-w-0 lg:grid-cols-[minmax(0,44fr)_minmax(0,56fr)] xl:grid-cols-[minmax(0,30fr)_minmax(0,32fr)_minmax(0,38fr)]">
       {/* Left: the request. */}
       <section className="flex flex-col rounded-2xl border border-line bg-surface">
         <header className="px-6 pt-5">
@@ -504,7 +507,7 @@ export function Studio({
                     aria-pressed={platform === p.value}
                     onClick={() => setPlatform(p.value)}
                     className={cx(
-                      'rounded-full border px-3 py-1.5 text-sm transition',
+                      'tap-target cursor-pointer rounded-full border px-3 py-1.5 text-sm transition',
                       platform === p.value
                         ? 'border-accent bg-accent/10 text-ink'
                         : 'border-line bg-raised text-muted hover:text-ink',
@@ -529,7 +532,7 @@ export function Studio({
                       aria-pressed={length === l}
                       onClick={() => setLength(l)}
                       className={cx(
-                        'rounded-full border px-3 py-1.5 text-sm transition',
+                        'tap-target cursor-pointer rounded-full border px-3 py-1.5 text-sm transition',
                         length === l
                           ? 'border-accent bg-accent/10 text-ink'
                           : 'border-line bg-raised text-muted hover:text-ink',
@@ -555,7 +558,7 @@ export function Studio({
                       aria-pressed={count === n}
                       onClick={() => setCount(n)}
                       className={cx(
-                        'rounded-full border px-3 py-1.5 text-sm transition',
+                        'tap-target cursor-pointer rounded-full border px-3 py-1.5 text-sm transition',
                         count === n
                           ? 'border-accent bg-accent/10 text-ink'
                           : 'border-line bg-raised text-muted hover:text-ink',
@@ -641,7 +644,7 @@ export function Studio({
                           )
                         }
                         className={cx(
-                          'rounded-full border px-3 py-1.5 text-sm transition',
+                          'tap-target cursor-pointer rounded-full border px-3 py-1.5 text-sm transition',
                           on
                             ? 'border-accent bg-accent/10 text-ink'
                             : 'border-line bg-raised text-muted hover:text-ink',
@@ -963,7 +966,7 @@ export function Studio({
                     type="button"
                     onClick={() => void openJob(j.id)}
                     className={cx(
-                      'flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition hover:bg-raised',
+                      'flex min-h-11 w-full cursor-pointer items-center gap-3 rounded-xl px-3 py-2 text-left transition hover:bg-raised',
                       job?.id === j.id && 'bg-raised',
                     )}
                   >

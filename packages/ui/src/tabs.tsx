@@ -68,7 +68,9 @@ export function Tabs<T extends string>({
               event.preventDefault();
             }}
             className={cx(
+              // 44 high, because a tab is a tap target and py-1.5 made it 34 (WP49).
               'flex-1 cursor-pointer rounded-lg px-4 py-1.5 text-body',
+              'min-h-11',
               'transition-colors duration-base ease-standard',
               selected ? 'bg-ink font-medium text-canvas' : 'text-muted hover:text-ink',
             )}

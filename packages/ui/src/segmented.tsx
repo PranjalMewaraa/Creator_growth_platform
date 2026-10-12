@@ -33,7 +33,7 @@ export function SegmentedControl<T extends string | number>({
           <label
             key={String(option.value)}
             className={cx(
-              'cursor-pointer rounded-full border px-3 py-1.5 text-body',
+              'tap-target cursor-pointer rounded-full border px-3 py-1.5 text-body',
               'transition-colors duration-base ease-standard',
               'has-[:focus-visible]:outline has-[:focus-visible]:outline-2',
               'has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-accent',

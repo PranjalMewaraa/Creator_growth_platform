@@ -73,6 +73,7 @@ export function ProfileEditor({
       <div className="flex flex-col">
         <Section title="What you make" hint="Formats you post.">
           <TagsField
+            label="Content types"
             options={options.contentTypes}
             value={profile.contentTypes}
             onChange={(v) => set('contentTypes', v)}
@@ -98,7 +99,7 @@ export function ProfileEditor({
                     )
                   }
                   className={cx(
-                    'rounded-full border px-3.5 py-2 text-sm transition',
+                    'tap-target cursor-pointer rounded-full border px-3.5 py-2 text-sm transition',
                     on
                       ? 'border-accent bg-accent/10 text-ink'
                       : 'border-line bg-raised text-muted hover:text-ink',
@@ -112,6 +113,7 @@ export function ProfileEditor({
         </Section>
         <Section title="Who is posting" hint="One person or a team.">
           <ChoiceField
+            label="Who is posting"
             options={options.teamShapes}
             value={profile.teamShape}
             onChange={(v) => set('teamShape', v)}
@@ -120,6 +122,7 @@ export function ProfileEditor({
         </Section>
         <Section title="Content pillars" hint="Three to five themes. Also hashtag suggestions.">
           <TagsField
+            label="Content pillars"
             value={profile.pillars}
             onChange={(v) => set('pillars', v)}
             placeholder="Add a pillar"
@@ -128,6 +131,7 @@ export function ProfileEditor({
         </Section>
         <Section title="90 day goal" hint="What the content is working towards.">
           <TextField
+            label="90 day goal"
             value={profile.goal90d}
             onChange={(v) => set('goal90d', v)}
             placeholder="Your goal"
@@ -136,6 +140,7 @@ export function ProfileEditor({
         </Section>
         <Section title="Cadence" hint="Your posting rhythm.">
           <ChoiceField
+            label="Cadence"
             options={options.cadences}
             value={profile.cadence}
             onChange={(v) => set('cadence', v)}
@@ -144,6 +149,7 @@ export function ProfileEditor({
         </Section>
         <Section title="Tone" hint="How everything should sound.">
           <ChoiceField
+            label="Tone"
             options={options.tones}
             value={profile.tone}
             onChange={(v) => set('tone', v)}
@@ -152,6 +158,7 @@ export function ProfileEditor({
         </Section>
         <Section title="Words to avoid" hint="Every prompt forbids them.">
           <TagsField
+            label="Words to avoid"
             value={profile.prohibitedWords}
             onChange={(v) => set('prohibitedWords', v)}
             placeholder="Add a word"

@@ -33,7 +33,7 @@ export function UserMenu({ email, name }: { email: string; name: string }) {
           setPending(true);
           void authClient.signOut().then(() => router.push('/sign-in'));
         }}
-        className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-muted hover:bg-raised hover:text-ink disabled:opacity-60"
+        className="flex min-h-11 w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-muted hover:bg-raised hover:text-ink disabled:opacity-60"
       >
         <LogOutIcon />
         {pending ? 'Signing out' : 'Sign out'}

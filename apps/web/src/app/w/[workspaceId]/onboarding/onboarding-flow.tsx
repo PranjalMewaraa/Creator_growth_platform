@@ -150,6 +150,7 @@ export function OnboardingFlow({
       case 'contentTypes':
         return (
           <TagsField
+            label={current.question}
             options={options.contentTypes}
             value={profile.contentTypes}
             onChange={(v) => set('contentTypes', v)}
@@ -199,6 +200,7 @@ export function OnboardingFlow({
       case 'teamShape':
         return (
           <ChoiceField
+            label={current.question}
             options={options.teamShapes}
             value={profile.teamShape}
             onChange={(v) => set('teamShape', v)}
@@ -208,6 +210,7 @@ export function OnboardingFlow({
       case 'pillars':
         return (
           <TagsField
+            label={current.question}
             value={profile.pillars}
             onChange={(v) => set('pillars', v)}
             placeholder="e.g. How to, Behind the scenes, Customer stories"
@@ -217,6 +220,7 @@ export function OnboardingFlow({
       case 'goal90d':
         return (
           <TextField
+            label={current.question}
             value={profile.goal90d}
             onChange={(v) => set('goal90d', v)}
             placeholder="What would make the next three months a success?"
@@ -227,6 +231,7 @@ export function OnboardingFlow({
       case 'cadence':
         return (
           <ChoiceField
+            label={current.question}
             options={options.cadences}
             value={profile.cadence}
             onChange={(v) => set('cadence', v)}
@@ -236,6 +241,7 @@ export function OnboardingFlow({
       case 'tone':
         return (
           <ChoiceField
+            label={current.question}
             options={options.tones}
             value={profile.tone}
             onChange={(v) => set('tone', v)}
@@ -245,6 +251,7 @@ export function OnboardingFlow({
       case 'prohibitedWords':
         return (
           <TagsField
+            label={current.question}
             value={profile.prohibitedWords}
             onChange={(v) => set('prohibitedWords', v)}
             placeholder="Type a word and press Enter"
@@ -308,7 +315,7 @@ export function OnboardingFlow({
                         <button
                           type="button"
                           onClick={() => setIndex(i)}
-                          className="shrink-0 text-xs text-accent hover:underline"
+                          className="tap-target shrink-0 cursor-pointer text-xs text-accent hover:underline"
                         >
                           Change
                         </button>

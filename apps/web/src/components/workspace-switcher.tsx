@@ -28,7 +28,7 @@ export function WorkspaceSwitcher({
               href={`/w/${workspace.workspaceId}`}
               aria-current={workspace.workspaceId === current.id ? 'true' : undefined}
               className={cx(
-                'flex items-center justify-between gap-3 rounded-xl px-3 py-2 text-sm hover:bg-raised',
+                'flex min-h-11 items-center justify-between gap-3 rounded-xl px-3 py-2 text-sm hover:bg-raised',
                 workspace.workspaceId === current.id ? 'text-ink' : 'text-muted',
               )}
             >
@@ -43,7 +43,7 @@ export function WorkspaceSwitcher({
       <div className="my-1.5 h-px bg-line" />
       <Link
         href="/setup"
-        className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm text-muted hover:bg-raised hover:text-ink"
+        className="flex min-h-11 items-center gap-2 rounded-xl px-3 py-2 text-sm text-muted hover:bg-raised hover:text-ink"
       >
         <PlusIcon />
         New workspace
