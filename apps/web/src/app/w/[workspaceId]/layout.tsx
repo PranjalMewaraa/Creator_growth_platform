@@ -1,4 +1,4 @@
-import { CoinsIcon, FilmIcon } from '@cgp/ui';
+import { CoinsIcon, FilmIcon, ToastProvider } from '@cgp/ui';
 import Link from 'next/link';
 import type { ComponentType, ReactNode, SVGProps } from 'react';
 import { Logo } from '@/components/logo';
@@ -48,43 +48,48 @@ export default async function WorkspaceLayout({
   const { workspace, workspaces, user } = await requireWorkspace(workspaceId);
 
   return (
-    <div className="min-h-screen bg-canvas">
-      <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-line bg-canvas/85 pr-4 backdrop-blur sm:pr-6">
-        {/* The logo sits over the rail, so the two read as one frame. */}
-        <Link
-          href={`/w/${workspace.id}`}
-          aria-label="Home"
-          className="flex h-16 shrink-0 items-center justify-center pl-4 lg:w-24 lg:pl-0"
-        >
-          <Logo compact />
-        </Link>
-        <WorkspaceSwitcher current={workspace} workspaces={workspaces} />
+    // The provider sits above the pages so a toast survives the navigation that caused it:
+    // saving the profile confirms itself on Home, where the next step is (WP48). Built in
+    // WP43 and mounted nowhere until now.
+    <ToastProvider>
+      <div className="min-h-screen bg-canvas">
+        <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-line bg-canvas/85 pr-4 backdrop-blur sm:pr-6">
+          {/* The logo sits over the rail, so the two read as one frame. */}
+          <Link
+            href={`/w/${workspace.id}`}
+            aria-label="Home"
+            className="flex h-16 shrink-0 items-center justify-center pl-4 lg:w-24 lg:pl-0"
+          >
+            <Logo compact />
+          </Link>
+          <WorkspaceSwitcher current={workspace} workspaces={workspaces} />
 
-        <div className="ml-auto flex items-center gap-2">
-          <NewPostButton workspaceId={workspace.id} />
-          <span className="hidden items-center gap-2 sm:flex">
-            <Balance
-              label="Credits"
-              value={workspace.creditBalance.toLocaleString('en-IN')}
-              hue="#facc15"
-              Icon={CoinsIcon}
-            />
-            <Balance
-              label="Video seconds"
-              value={String(workspace.videoSecondsBalance)}
-              hue="#e879f9"
-              Icon={FilmIcon}
-            />
-          </span>
-          <UserMenu email={user.email} name={user.name} />
-        </div>
-      </header>
+          <div className="ml-auto flex items-center gap-2">
+            <NewPostButton workspaceId={workspace.id} />
+            <span className="hidden items-center gap-2 sm:flex">
+              <Balance
+                label="Credits"
+                value={workspace.creditBalance.toLocaleString('en-IN')}
+                hue="#facc15"
+                Icon={CoinsIcon}
+              />
+              <Balance
+                label="Video seconds"
+                value={String(workspace.videoSecondsBalance)}
+                hue="#e879f9"
+                Icon={FilmIcon}
+              />
+            </span>
+            <UserMenu email={user.email} name={user.name} />
+          </div>
+        </header>
 
-      <NavRail workspaceId={workspace.id} />
+        <NavRail workspaceId={workspace.id} />
 
-      <main className="px-4 pb-24 pt-6 sm:px-6 lg:pb-8 lg:pl-30">
-        <div className="mx-auto max-w-[1400px]">{children}</div>
-      </main>
-    </div>
+        <main className="px-4 pb-24 pt-6 sm:px-6 lg:pb-8 lg:pl-30">
+          <div className="mx-auto max-w-[1400px]">{children}</div>
+        </main>
+      </div>
+    </ToastProvider>
   );
 }

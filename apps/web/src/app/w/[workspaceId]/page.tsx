@@ -1,7 +1,8 @@
 import type { TargetPlatform } from '@cgp/contracts';
 import { ArrowUpRightIcon, Badge, Card, CardBody, CardHeader, cx } from '@cgp/ui';
-import { homeDigest, profileHistory, type HomeDay } from '@cgp/core';
+import { firstRun, homeDigest, type HomeDay } from '@cgp/core';
 import Link from 'next/link';
+import { FirstRun } from '@/components/first-run';
 import { Screen } from '@/components/screen';
 import { getDb } from '@/server/runtime';
 import { requireWorkspace } from '@/server/session';
@@ -64,30 +65,17 @@ export default async function HomePage({ params }: { params: Promise<{ workspace
   const { workspace } = await requireWorkspace(workspaceId);
   const base = `/w/${workspace.id}`;
   const db = getDb();
-  const [digest, [profile]] = await Promise.all([
+  const [digest, setup] = await Promise.all([
     homeDigest(db, workspaceId, workspace.timezone),
-    profileHistory(db, workspaceId),
+    firstRun(db, workspaceId),
   ]);
 
   return (
     <Screen title="Home" description="What needs attention in the next seven days.">
-      {!profile ? (
-        <section className="flex flex-col gap-4 rounded-2xl border border-accent/40 bg-accent/5 p-5 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-base font-semibold text-ink">Tell us about your content</h2>
-            <p className="mt-1 max-w-xl text-sm text-muted">
-              Eight quick questions: what you make, where, for what goal and in what voice. Every
-              script, caption and image is written from the answers.
-            </p>
-          </div>
-          <Link
-            href={`${base}/onboarding`}
-            className="inline-flex h-11 shrink-0 items-center justify-center rounded-xl bg-accent px-5 text-sm font-medium text-accent-ink"
-          >
-            Start
-          </Link>
-        </section>
-      ) : null}
+      {/* Four steps rather than one banner (WP48): the profile was the only one Home ever
+          mentioned, so a workspace could sit with no channel connected and nothing saying
+          that was why nothing published. */}
+      <FirstRun state={setup} base={base} workspaceId={workspaceId} />
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">
         <Card>
           <CardHeader title="Balance" note="Credits and video seconds are counted separately." />

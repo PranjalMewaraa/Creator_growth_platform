@@ -1,7 +1,7 @@
 'use client';
 
 import type { ProfileInput } from '@cgp/core';
-import { Button, cx } from '@cgp/ui';
+import { Button, cx, Progress, useToast } from '@cgp/ui';
 import { useRouter } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
 import { BriefPreview, ChoiceField, TagsField, TextField } from '@/components/profile-fields';
@@ -117,6 +117,7 @@ export function OnboardingFlow({
   initial: ProfileInput | null;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [profile, setProfile] = useState<ProfileInput>(initial ?? EMPTY);
   const [index, setIndex] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -134,7 +135,14 @@ export function OnboardingFlow({
     setSaving(false);
     if (!result) return setError('Could not save. Check your connection and try again.');
     if (!result.ok) return setError(result.issues.map((i) => i.message).join('. '));
-    router.push(`/w/${workspaceId}/brand?saved=${result.version}`);
+    toast({
+      tone: 'good',
+      message: `Profile saved as version ${result.version}. Every prompt uses it from now on.`,
+    });
+    // First time through, Home is where the thread continues: its card knows which of the
+    // four steps is next (WP48). Someone re-running onboarding to correct an answer came
+    // from the Brand screen and wants to see the version they just made, so send them back.
+    router.push(initial ? `/w/${workspaceId}/brand?saved=${result.version}` : `/w/${workspaceId}`);
   }
 
   function field(current: Step): ReactNode {
@@ -254,12 +262,12 @@ export function OnboardingFlow({
             <span>Setting up {workspaceName}</span>
             <span>{reviewing ? 'Review' : `Question ${index + 1} of ${STEPS.length}`}</span>
           </div>
-          <div className="mt-3 h-1 rounded-full bg-raised">
-            <div
-              className="h-1 rounded-full bg-accent transition-all"
-              style={{ width: `${(Math.min(index, STEPS.length) / STEPS.length) * 100}%` }}
-            />
-          </div>
+          <Progress
+            className="mt-3"
+            label={`Question ${Math.min(index + 1, STEPS.length)} of ${STEPS.length}`}
+            value={Math.min(index, STEPS.length)}
+            max={STEPS.length}
+          />
         </div>
 
         <div className="flex flex-1 flex-col gap-6 px-6 py-8 sm:px-8">

@@ -162,6 +162,7 @@ export {
   type SaveBrandKitResult,
 } from './brand-kit';
 export { jobOutputs, recentGenerationJobs, type StudioJob, type StudioOutput } from './studio';
+export { firstRun, type FirstRunKey, type FirstRunState, type FirstRunStep } from './first-run';
 export { listTemplates, type TemplateCard } from './templates';
 export {
   acceptOutput,
