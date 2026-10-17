@@ -4,6 +4,9 @@ import { SetupForm } from './setup-form';
 
 export const metadata = { title: 'Create a workspace' };
 
+/** See the comment on the root page: a route with no dynamic segment must say this itself. */
+export const dynamic = 'force-dynamic';
+
 /** S-02: establish the tenant. Who the workspace is for comes later, in onboarding. */
 export default async function SetupPage() {
   const user = await requireUser();

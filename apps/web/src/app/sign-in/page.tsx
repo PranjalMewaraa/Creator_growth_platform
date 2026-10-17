@@ -5,6 +5,9 @@ import { SignInForm } from './sign-in-form';
 
 export const metadata = { title: 'Log in' };
 
+/** See the comment on the root page: a route with no dynamic segment must say this itself. */
+export const dynamic = 'force-dynamic';
+
 export default async function SignInPage() {
   if (await currentUser()) redirect('/');
   return (
