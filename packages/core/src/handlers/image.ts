@@ -1,6 +1,7 @@
 import type {
   AspectRatio,
   ImageAdapter,
+  ImageCapability,
   ModerationAdapter,
   ObjectStore,
   OutputType,
@@ -41,11 +42,19 @@ export interface ImageHandlerDeps {
   costInr: (adapterKey: string, usage: TokenUsage) => number;
   /** Recorded as the telemetry provider, such as `vertex` or `fake`. */
   providerLabel: string;
+  capabilityOf?: (adapterKey: string) => ImageCapability | undefined;
 }
 
 interface ImageJobInput {
   compiledPromptId?: unknown;
   count?: unknown;
+  /** A picture the creator uploaded to stay consistent with, by its store key (WP60). */
+  referenceImageKey?: unknown;
+}
+
+/** Inferred from the extension `storeReferenceImage` chose; the store returns bytes alone. */
+function mimeTypeFor(key: string): string {
+  return key.endsWith('.png') ? 'image/png' : 'image/jpeg';
 }
 
 /**
@@ -98,9 +107,28 @@ export function createImageHandlers(deps: ImageHandlerDeps): Record<string, JobH
           ? (resolved as AspectRatio)
           : UNTARGETED[kind];
 
+      // Only a model that says it reads them is given one (WP60, same reasoning as the
+      // storyboard's own anchor frame) — an uploaded reference is otherwise silently dropped
+      // rather than sent to a model that would ignore or reject it.
+      const acceptsReferences = deps.capabilityOf?.(adapter.key)?.acceptsReferenceImages ?? false;
+      let references: Array<{ data: Uint8Array; mimeType: string }> | undefined;
+      if (acceptsReferences && typeof input.referenceImageKey === 'string') {
+        try {
+          const data = await deps.store.get(input.referenceImageKey);
+          references = [{ data, mimeType: mimeTypeFor(input.referenceImageKey) }];
+        } catch (err) {
+          log.warn({ err, key: input.referenceImageKey }, 'reference image could not be read');
+        }
+      }
+
       let result;
       try {
-        result = await adapter.generate({ prompt: prompt.text, aspectRatio, count });
+        result = await adapter.generate({
+          prompt: prompt.text,
+          aspectRatio,
+          count,
+          ...(references ? { references } : {}),
+        });
       } catch (err) {
         // A refusal to draw is a moderation outcome, not a failure: refunded as BLOCKED.
         if (isAdapterError(err) && err.code === 'SAFETY_BLOCKED') throw new JobBlocked('other');

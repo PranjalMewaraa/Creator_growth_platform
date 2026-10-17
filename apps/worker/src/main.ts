@@ -79,6 +79,7 @@ const handlers = {
     store: providers.store,
     costInr: providers.imageCostInr,
     providerLabel: providers.mode === 'real' ? 'vertex' : 'fake',
+    capabilityOf: providers.imageCapability,
   }),
   ...createStoryboardHandler({
     db,

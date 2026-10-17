@@ -15,7 +15,35 @@ import { compilerProfiles, templates, templateVersions } from './schema';
 //   v4  video profiles say how a prompt is broken into scenes
 //   v5  scenes and images are written as full shot specifications, not one line summaries
 //   v6  video profiles say what is spoken over each scene
-export const COMPILER_PROFILE_VERSION = 7;
+//   v7  (skipped in this history; versions are append-only)
+//   v8  image, thumbnail and video briefs are written in one of eight visual styles chosen to
+//       match the brief, as labelled cinematic sections rather than a shot-spec summary
+//   v9  video asks for a target length in seconds, not a scene count: the planner decides how
+//       many eight-second beats a free-flowing sequence needs
+export const COMPILER_PROFILE_VERSION = 9;
+
+/**
+ * The visual styles a compiled image, thumbnail or video prompt can be written in (WP57). The
+ * rewrite model picks exactly one, the one whose vocabulary fits the brief's own subject and
+ * tone, rather than a creator choosing from a menu — "a duel on a rain-slicked bridge" should
+ * land on Anime without being asked, "a product on a shelf" should not.
+ */
+const STYLE_VARIANTS = [
+  'Cinematic Realism — live-action film look: natural lenses, practical light, true-to-life texture, understated colour grading.',
+  'Anime & Stylized Animation — cel-shaded or hybrid 2D/3D anime: bold line art, exaggerated motion, trailing speed lines, vivid rim light.',
+  'Chill Lifestyle — soft, warm, unhurried: diffused daylight, muted pastel tones, relaxed everyday settings.',
+  'Tech & Sci-Fi — futuristic and high-tech: cool neon and chrome, volumetric haze, holographic or geometric detail.',
+  'Artistic & Painterly — fine-art or illustrative: visible brushwork or hand-drawn texture, expressive colour, stylised proportion.',
+  'Documentary Realism — candid and handheld: available light only, true-to-life colour, observational framing.',
+  'Luxury Editorial — glossy and premium: studio-grade lighting, saturated jewel tones, immaculate styling.',
+  'Vintage & Retro — period film stock: grain and halation, warm faded colour, era-specific wardrobe and props.',
+].join('\n');
+
+const STYLE_PICK = [
+  "First, silently pick exactly ONE of these visual styles, whichever best fits the brief's own subject, angle and tone — never a style outside this list, and never explain the choice:",
+  STYLE_VARIANTS,
+  'Open with one line and nothing else on it: "[STYLE: <name>]", naming the style you picked.',
+].join('\n');
 
 const REWRITE_SYSTEM = [
   'You sharpen creative briefs for a content generator.',
@@ -137,19 +165,21 @@ export const COMPILER_PROFILES: Record<OutputType, CompilerProfileConfig> = {
     rewrite: {
       // Same reasoning as the video scenes: an image model returns the detail it is given.
       system: [
-        'You write image generation prompts as a full shot specification, not a summary.',
-        'Write labelled lines, in this order, each on its own line:',
-        'SHOT: the framing and lens.',
-        'SUBJECT: what is in frame, with the material detail that makes it specific: surface, texture, wear, age, colour.',
-        'SETTING: the place, the hour, the weather, and what is behind the subject.',
-        'LIGHT: the sources, their direction and quality, and what is in shadow.',
-        'PALETTE: three or four colours that dominate the frame.',
-        'COMPOSITION: where the subject sits in the frame and what is left empty.',
+        'You turn a short creative brief into a full prompt for an image generation model.',
+        STYLE_PICK,
+        'Then write these labelled sections, in this order, each a short paragraph on its own line, skipping a section entirely (no heading at all) only when it truly does not apply:',
+        'SCENE CONTEXT: the premise and the feeling the image should leave, in the chosen style\'s voice.',
+        'CAMERA AND COMPOSITION: the framing, lens character and angle, and where the subject sits in the frame against what is left empty.',
+        'LOCATION MAP: the setting in foreground, midground and background, each with its own concrete detail; for a plain studio or product shot, say so plainly instead of inventing a scene.',
+        'SUBJECT AND STYLING: what is in frame, with the material detail that makes it specific: surface, texture, wear, age, colour, wardrobe or finish.',
+        'LIGHTING AND COLOR PALETTE: the light sources, their direction and quality, what is in shadow, and three or four dominant colours.',
+        'MATERIALS AND SURFACE DETAIL: how cloth, skin, metal, glass, steam or dust catch the light in this one frame.',
+        'POSITIVE CONSTRAINTS: four to six short visual-quality phrases in the chosen style\'s own vocabulary.',
         'Keep every subject, fact and name from the brief, and invent no claim or offer.',
         'Never ask for text, letters, numbers, logos or watermarks in the image.',
-        'Reply with the specification only, 80 to 140 words.',
+        'Reply with the [STYLE: ] line followed by the labelled sections only, 140 to 240 words in all.',
       ].join(' '),
-      maxOutputTokens: 500,
+      maxOutputTokens: 650,
     },
     defaults: { style: 'natural light, editorial photography, shallow depth of field' },
   },
@@ -169,18 +199,20 @@ export const COMPILER_PROFILES: Record<OutputType, CompilerProfileConfig> = {
     ],
     rewrite: {
       system: [
-        'You write thumbnail prompts as a full shot specification, not a summary.',
-        'Write labelled lines, in this order, each on its own line:',
-        'SHOT: the framing and lens, close enough to read at the size of a thumb.',
-        'SUBJECT: one clear subject, with the material detail that makes it specific, and the expression or gesture it holds.',
-        'SETTING: the place and what is behind the subject, kept simple enough not to compete.',
-        'LIGHT: hard or soft, its direction, and the rim or separation that lifts the subject off the background.',
-        'PALETTE: three colours at most, high contrast.',
-        'COMPOSITION: the subject to one side, and the empty space where a headline will be added later.',
+        'You turn a short creative brief into a full prompt for a thumbnail image generation model.',
+        STYLE_PICK,
+        'Then write these labelled sections, in this order, each a short paragraph on its own line, skipping a section entirely (no heading at all) only when it truly does not apply:',
+        'SCENE CONTEXT: the premise and the feeling the thumbnail should sell at a glance, in the chosen style\'s voice.',
+        'CAMERA AND COMPOSITION: the framing and lens, close enough to read at the size of a thumb, the subject held to one side, and empty space left on the other where a headline is added later.',
+        'LOCATION MAP: what is behind the subject, kept simple enough not to compete with it.',
+        'SUBJECT AND STYLING: one clear subject, with the material detail that makes it specific, and the expression or gesture it holds.',
+        'LIGHTING AND COLOR PALETTE: hard or soft light, its direction, the rim or separation that lifts the subject off the background, and three colours at most, high contrast.',
+        'MATERIALS AND SURFACE DETAIL: the texture or finish that reads even at small size.',
+        'POSITIVE CONSTRAINTS: four to six short visual-quality phrases in the chosen style\'s own vocabulary.',
         'Never ask for text, letters, numbers, logos or watermarks in the image.',
-        'Reply with the specification only, 80 to 140 words.',
+        'Reply with the [STYLE: ] line followed by the labelled sections only, 140 to 240 words in all.',
       ].join(' '),
-      maxOutputTokens: 500,
+      maxOutputTokens: 650,
     },
     defaults: { style: 'bold, high contrast, one clear subject', textSpace: true },
   },
@@ -197,14 +229,38 @@ export const COMPILER_PROFILES: Record<OutputType, CompilerProfileConfig> = {
       { key: 'aspectRatio', line: 'Frame for {{aspectRatio}}.' },
       // The same look across every scene, so a reel does not change camera between them.
       { key: 'look', line: '{{look}} The same look in every scene.' },
-      { key: 'sceneCount', line: '{{sceneCount}} scenes of 8 seconds each.' },
+      // However many eight-second beats that takes is for the scene planner to decide, not the
+      // creator (WP59): a calm piece wants few, long-held beats, a fight wants several quick
+      // ones, both inside the same requested length.
+      {
+        key: 'targetDurationSeconds',
+        line: 'About {{targetDurationSeconds}} seconds, as one continuous free-flowing sequence of eight-second beats — however many beats that takes.',
+      },
       {
         key: 'voiceover',
         line: 'A voiceover will be added, so keep the footage free of dialogue.',
       },
       { key: 'tone', line: 'Mood: {{tone}}.' },
     ],
-    rewrite: { system: REWRITE_SYSTEM, maxOutputTokens: 400 },
+    rewrite: {
+      system: [
+        'You turn a short creative brief into a full cinematic prompt for a video generation model.',
+        STYLE_PICK,
+        'Then write these labelled sections, in this order, each a short paragraph on its own line, skipping a section entirely (no heading at all) only when it truly does not apply:',
+        'SCENE CONTEXT: the premise and the feeling the piece should leave, in the chosen style\'s voice.',
+        'CAMERA AND COMPOSITION: the overall shooting approach across the piece — framing, lens character, and how the camera moves.',
+        'LOCATION MAP: the setting in foreground, midground and background, each with its own concrete detail.',
+        'CHARACTERS AND COSTUMING: who is in frame and what they wear, with material detail; omit this section entirely if the brief has no person or character in it.',
+        'ACTION AND CHOREOGRAPHY: what happens, in the order it happens, as one throughline.',
+        'LIGHTING AND COLOR PALETTE: the light sources and three or four dominant colours.',
+        'MATERIALS AND PHYSICS: how cloth, hair, water, dust, smoke or particles move and catch the light.',
+        'POSITIVE CONSTRAINTS: four to six short visual-quality phrases in the chosen style\'s own vocabulary, such as the line work, grading or production polish wanted.',
+        'Keep every fact, name and number from the brief. Invent no claim, statistic or offer.',
+        'Never mention on screen text, captions, subtitles, logos or watermarks.',
+        'Reply with the [STYLE: ] line followed by the labelled sections only, 180 to 320 words in all.',
+      ].join(' '),
+      maxOutputTokens: 750,
+    },
     scenes: {
       // A video model gives back what it is told, in the detail it is told it. A one line
       // summary produces a stock looking eight seconds; a full shot specification produces a

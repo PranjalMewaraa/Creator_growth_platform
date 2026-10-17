@@ -91,12 +91,17 @@ export interface VideoHandlerDeps {
 
 interface VideoJobInput {
   compiledPromptId?: unknown;
-  sceneCount?: unknown;
+  targetDurationSeconds?: unknown;
   /** Set on a regenerate job: the one scene to draw again. */
   sceneId?: unknown;
   /** Set when this reel was committed from a storyboard, whose scenes it films. */
   storyboardOutputId?: unknown;
+  /** Off for a reel that should stay silent or carry only the scenes' own sound, not a spoken
+   *  narration over it — not every video is explaining something (WP58). Defaults to on. */
+  voiceover?: unknown;
 }
+
+type Spoken = Awaited<ReturnType<typeof speak>>;
 
 /** One tier for both the provider and the render, so they cannot drift apart. */
 const RESOLUTION = '720p' as const satisfies ReelResolution;
@@ -228,7 +233,7 @@ export function createVideoHandlers(deps: VideoHandlerDeps): Record<string, JobH
         const seconds = scenes.reduce((total, scene) => total + (scene.durationS ?? 0), 0);
         log.info({ jobId: job.id }, 'video already rendered, settling without a provider call');
         return {
-          actual: { credits: 0, videoSeconds: Math.round(seconds) },
+          actual: { credits: 0, videoSeconds: Math.min(Math.round(seconds), job.videoSecondsHeld) },
           telemetry: {
             actionClass: generator.key,
             provider: deps.providerLabel,
@@ -237,8 +242,11 @@ export function createVideoHandlers(deps: VideoHandlerDeps): Record<string, JobH
         };
       }
 
-      const sceneCount =
-        typeof input.sceneCount === 'number' && input.sceneCount > 0 ? input.sceneCount : 3;
+      const targetDurationSeconds =
+        typeof input.targetDurationSeconds === 'number' && input.targetDurationSeconds > 0
+          ? input.targetDurationSeconds
+          : 24;
+      const wantsVoiceover = input.voiceover !== false;
       const config = await sceneConfig(
         deps.db,
         prompt.compilerProfileKey,
@@ -264,19 +272,24 @@ export function createVideoHandlers(deps: VideoHandlerDeps): Record<string, JobH
         typeof input.storyboardOutputId === 'string'
           ? await storyboardFrames(deps.db, job.workspaceId, input.storyboardOutputId)
           : [];
+      // A committed storyboard is the plan, already approved at whatever beat count it was
+      // drawn at (WP59) — it is filmed as-is, not re-truncated against a duration asked for
+      // only now, which could differ from the one the storyboard was drawn to.
       const plan = approved
-        ? { scenes: approved.slice(0, sceneCount), fallbackUsed: false }
+        ? { scenes: approved, fallbackUsed: false }
         : await planScenes({
             prompt: prompt.text,
             config,
-            sceneCount,
+            targetDurationSeconds,
+            flexible: true,
             provider: deps.planner,
             log,
           });
       log.info(
         {
           jobId: job.id,
-          sceneCount,
+          sceneCount: plan.scenes.length,
+          targetDurationSeconds,
           fromStoryboard: Boolean(approved),
           fallbackUsed: plan.fallbackUsed,
         },
@@ -299,7 +312,8 @@ export function createVideoHandlers(deps: VideoHandlerDeps): Record<string, JobH
         kind: 'video',
         storageKey: `${job.workspaceId}/scenes/${job.id}`,
         metadata: {
-          sceneCount,
+          sceneCount: plan.scenes.length,
+          targetDurationSeconds,
           resolution: RESOLUTION,
           scenePlanFallback: plan.fallbackUsed,
           adapter: adapter.key,
@@ -316,7 +330,11 @@ export function createVideoHandlers(deps: VideoHandlerDeps): Record<string, JobH
       // Veo's one-a-minute quota leaves minutes of waiting to fill (WP41). If a scene fails
       // after all, the voiceover is redone for the scenes that did arrive — a second TTS call
       // costs under a rupee, where the wait costs everyone's attention.
-      const speaking = speak(deps, config, prompt.text, plan.scenes, plan.scenes.length, log);
+      // Off entirely (WP58) when the reel is not meant to be narrated: no TTS call is made, so
+      // turning it off also costs nothing extra, not just sounding different.
+      const speaking: Promise<Spoken> = wantsVoiceover
+        ? speak(deps, config, prompt.text, plan.scenes, plan.scenes.length, log)
+        : Promise.resolve(undefined);
 
       let delivered = 0;
       let blocked = false;
@@ -378,25 +396,31 @@ export function createVideoHandlers(deps: VideoHandlerDeps): Record<string, JobH
       }
 
       // What is said over it, written by the engine from the same prompt and the scenes it
-      // planned (invariant 4), then spoken. A reel with no voice still renders.
-      say({ key: 'voice', label: 'Speaking the voiceover', status: 'working' });
-      const voiceFrom = Date.now();
-      const optimistic = await speaking;
-      say({
-        key: 'voice',
-        label: optimistic ? 'Spoke the voiceover' : 'No voiceover; the reel stays silent',
-        status: 'done',
-        seconds: since(voiceFrom),
-      });
-      const spoken =
-        rendered.length === plan.scenes.length
-          ? optimistic
-          : await speak(deps, config, prompt.text, plan.scenes, rendered.length, log);
-      if (optimistic && spoken !== optimistic) {
-        log.info(
-          { planned: plan.scenes.length, delivered: rendered.length },
-          'fewer scenes arrived than were planned; the voiceover was written again for them',
-        );
+      // planned (invariant 4), then spoken. A reel with no voice still renders. Skipped
+      // entirely, not just discarded, when the creator asked for no narration (WP58).
+      let spoken: Spoken;
+      if (!wantsVoiceover) {
+        spoken = undefined;
+      } else {
+        say({ key: 'voice', label: 'Speaking the voiceover', status: 'working' });
+        const voiceFrom = Date.now();
+        const optimistic = await speaking;
+        say({
+          key: 'voice',
+          label: optimistic ? 'Spoke the voiceover' : 'No voiceover; the reel stays silent',
+          status: 'done',
+          seconds: since(voiceFrom),
+        });
+        spoken =
+          rendered.length === plan.scenes.length
+            ? optimistic
+            : await speak(deps, config, prompt.text, plan.scenes, rendered.length, log);
+        if (optimistic && spoken !== optimistic) {
+          log.info(
+            { planned: plan.scenes.length, delivered: rendered.length },
+            'fewer scenes arrived than were planned; the voiceover was written again for them',
+          );
+        }
       }
 
       // Captions come from what the voice said and when it said it (invariant 13), styled by
@@ -442,7 +466,7 @@ export function createVideoHandlers(deps: VideoHandlerDeps): Record<string, JobH
 
       const seconds = Math.round(delivered);
       return {
-        actual: { credits: 0, videoSeconds: seconds },
+        actual: { credits: 0, videoSeconds: Math.min(seconds, job.videoSecondsHeld) },
         telemetry: {
           actionClass: generator.key,
           provider: `${deps.providerLabel}:${adapter.key}`,

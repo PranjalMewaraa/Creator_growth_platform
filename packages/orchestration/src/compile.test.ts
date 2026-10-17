@@ -104,7 +104,7 @@ describe('assembly (stage 1 and 3, no rewrite)', () => {
         : outputType === 'image'
           ? { count: 1 }
           : outputType === 'video'
-            ? { sceneCount: 3, voiceover: true }
+            ? { targetDurationSeconds: 24, voiceover: true }
             : {};
     const result = await compile({ db, rewriters: [] }, request({ outputType, params }));
     if (!result.ok) throw new Error(result.reason);

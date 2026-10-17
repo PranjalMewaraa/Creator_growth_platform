@@ -80,8 +80,12 @@ describe('generator definitions', () => {
   });
 
   it('holds video in seconds, not credits', () => {
-    const prepared = generators.get('video')?.prepare({ ...intent, sceneCount: 2 }, rates);
-    expect(prepared?.ok && prepared.estimate).toMatchObject({ credits: 0, videoSeconds: 16 });
+    // Held for the most beats the planner could choose for a 16s target (two, plus the one
+    // extra a free-flowing plan is allowed), not the target itself (WP59).
+    const prepared = generators
+      .get('video')
+      ?.prepare({ ...intent, targetDurationSeconds: 16 }, rates);
+    expect(prepared?.ok && prepared.estimate).toMatchObject({ credits: 0, videoSeconds: 24 });
   });
 
   it('fills priced defaults and leaves unstated instructions absent', () => {

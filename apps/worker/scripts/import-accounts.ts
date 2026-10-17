@@ -44,6 +44,9 @@ try {
       scopes: ['instagram_business_basic', 'instagram_business_content_publish'],
       tokenCiphertext: encryptSecret(kek, instagram),
       tokenExpiresAt: null,
+      // This is the team's own account; WP52 lets other workspaces borrow it so a demo still
+      // shows a real post while the apps are in developer mode.
+      sharedDemo: true,
     });
     console.log(`Instagram connected: @${me.username} (${row.id})`);
   } else {
@@ -66,6 +69,7 @@ try {
       scopes: ['openid', 'profile', 'w_member_social'],
       tokenCiphertext: encryptSecret(kek, linkedin),
       tokenExpiresAt: null,
+      sharedDemo: true,
     });
     console.log(`LinkedIn connected: ${me.name ?? me.sub} (${row.id})`);
   } else {

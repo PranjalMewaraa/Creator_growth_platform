@@ -182,7 +182,7 @@ export function WeekCalendar({
     <div className="grid items-start gap-5 lg:grid-cols-[300px_minmax(0,1fr)]">
       {/* Left: channels and what the week holds. */}
       <aside className="flex flex-col gap-5 rounded-2xl border border-line bg-surface p-5">
-        <h1 className="text-2xl font-semibold tracking-tight text-ink">{workspaceName}</h1>
+        <h1 className="text-display font-display font-semibold text-ink">{workspaceName}</h1>
 
         <Section
           title="Channels"
@@ -227,7 +227,7 @@ export function WeekCalendar({
                 key={label}
                 className="flex flex-col items-center gap-0.5 rounded-xl border border-line bg-raised px-2 py-3"
               >
-                <span className="text-xl font-semibold tabular-nums text-ink">
+                <span className="text-xl font-semibold font-mono tabular-nums text-ink">
                   {posts === null ? '·' : count}
                 </span>
                 <span className="text-center text-[11px] leading-tight text-muted">{label}</span>
@@ -306,7 +306,7 @@ export function WeekCalendar({
                   <div key={d.toISOString()} className="flex flex-col items-center py-3">
                     <span
                       className={cx(
-                        'grid size-10 place-items-center rounded-full text-2xl font-light tabular-nums',
+                        'grid size-10 place-items-center rounded-full text-2xl font-light font-mono tabular-nums',
                         isToday ? 'bg-accent font-medium text-accent-ink' : 'text-ink',
                       )}
                     >
@@ -329,7 +329,7 @@ export function WeekCalendar({
                 {hours.map((h) => (
                   <span
                     key={h}
-                    className="absolute right-3 -translate-y-1/2 text-xs tabular-nums text-muted"
+                    className="absolute right-3 -translate-y-1/2 text-xs font-mono tabular-nums text-muted"
                     style={{ top: (h - startHour) * HOUR_PX + 12 }}
                   >
                     {hhmm(h)}

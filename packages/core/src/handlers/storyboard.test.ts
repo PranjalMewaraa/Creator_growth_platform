@@ -51,7 +51,7 @@ function handlers(adapters: Record<string, ImageAdapter> = createImageAdapters('
   });
 }
 
-async function drawStoryboard(sceneCount = 3) {
+async function drawStoryboard(frames = 3) {
   const workspaceId = await createTestWorkspace(db, { credits: 200, videoSeconds: 120 });
   await addTestProfile(db, workspaceId);
   const started = await startGeneration(
@@ -66,7 +66,12 @@ async function drawStoryboard(sceneCount = 3) {
     {
       workspaceId,
       generatorKey: 'storyboard',
-      input: { intentText: 'A morning in the roastery', targetPlatform: 'instagram', sceneCount },
+      input: {
+        intentText: 'A morning in the roastery',
+        targetPlatform: 'instagram',
+        // Not flexible: a storyboard's plan lands on exactly this many beats (WP59).
+        targetDurationSeconds: frames * 8,
+      },
     },
   );
   if (!started.ok) throw new Error(started.reason);
@@ -137,7 +142,7 @@ describe('the storyboard', () => {
       {
         workspaceId,
         generatorKey: 'storyboard',
-        input: { intentText: 'A roastery', targetPlatform: 'instagram', sceneCount: 1 },
+        input: { intentText: 'A roastery', targetPlatform: 'instagram', targetDurationSeconds: 8 },
       },
     );
     if (!started.ok) throw new Error(started.reason);
@@ -178,7 +183,7 @@ describe('the storyboard', () => {
         input: {
           intentText: 'A morning in the roastery',
           targetPlatform: 'instagram',
-          sceneCount: 3,
+          targetDurationSeconds: 24,
         },
       },
     );
@@ -246,7 +251,7 @@ describe('the storyboard', () => {
       {
         workspaceId,
         generatorKey: 'storyboard',
-        input: { intentText: 'A roastery', targetPlatform: 'instagram', sceneCount: 2 },
+        input: { intentText: 'A roastery', targetPlatform: 'instagram', targetDurationSeconds: 16 },
       },
     );
     if (!started.ok) throw new Error(started.reason);

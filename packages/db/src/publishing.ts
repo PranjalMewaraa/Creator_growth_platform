@@ -16,6 +16,8 @@ export interface NewSocialAccount {
   /** Already envelope encrypted (D11); this package never sees a token in the clear. */
   tokenCiphertext: string;
   tokenExpiresAt: Date | null;
+  /** This row is the team's own account, borrowable by other workspaces (WP52). */
+  sharedDemo?: boolean;
 }
 
 /** Connects an account, or refreshes its token if it is already connected. */
@@ -23,9 +25,10 @@ export async function upsertSocialAccount(
   db: Database,
   account: NewSocialAccount,
 ): Promise<SocialAccountRow> {
+  const sharedDemo = account.sharedDemo ?? false;
   const [row] = await unwrap(db)
     .insert(socialAccounts)
-    .values({ ...account, health: 'ok' })
+    .values({ ...account, sharedDemo, health: 'ok' })
     .onConflictDoUpdate({
       target: [socialAccounts.workspaceId, socialAccounts.platform, socialAccounts.externalId],
       set: {
@@ -33,11 +36,33 @@ export async function upsertSocialAccount(
         scopes: account.scopes,
         tokenCiphertext: account.tokenCiphertext,
         tokenExpiresAt: account.tokenExpiresAt,
+        sharedDemo,
         health: 'ok',
       },
     })
     .returning();
   if (!row) throw new Error('Social account upsert returned no row');
+  return row;
+}
+
+/**
+ * The team's own account for a platform, if one has been marked borrowable (WP52).
+ *
+ * This is a deliberate, narrow exception to invariant 1: it reads across workspaces, which
+ * `scoped()` exists specifically to prevent. It is safe because the only thing it can ever
+ * return is a row the team itself flagged `shared_demo = true` — there is no path from a
+ * caller's input to this query, so it cannot be used to read anyone else's account.
+ */
+export async function findSharedDemoAccount(
+  db: Database,
+  platform: TargetPlatform,
+): Promise<SocialAccountRow | undefined> {
+  const [row] = await unwrap(db)
+    .select()
+    .from(socialAccounts)
+    .where(and(eq(socialAccounts.platform, platform), eq(socialAccounts.sharedDemo, true)))
+    .orderBy(desc(socialAccounts.createdAt))
+    .limit(1);
   return row;
 }
 

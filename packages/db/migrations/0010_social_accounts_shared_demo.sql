@@ -1,0 +1,1 @@
+ALTER TABLE "social_accounts" ADD COLUMN "shared_demo" boolean DEFAULT false NOT NULL;

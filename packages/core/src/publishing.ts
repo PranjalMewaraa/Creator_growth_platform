@@ -29,13 +29,14 @@ export const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const IMAGE_TYPES = [
+export const IMAGE_TYPES = [
   { mimeType: 'image/jpeg', extension: 'jpg', magic: [0xff, 0xd8, 0xff] },
   { mimeType: 'image/png', extension: 'png', magic: [0x89, 0x50, 0x4e, 0x47] },
 ] as const;
 
-/** The type the bytes really are; the browser's claim is not trusted. */
-function sniffImage(data: Uint8Array) {
+/** The type the bytes really are; the browser's claim is not trusted. Shared with references.ts,
+ *  which stores a different kind of upload but needs the same real-bytes sniff. */
+export function sniffImage(data: Uint8Array) {
   return IMAGE_TYPES.find(({ magic }) => magic.every((byte, i) => data[i] === byte));
 }
 
@@ -355,13 +356,17 @@ export async function listAccounts(db: Database, workspaceId: string) {
   const rows = await scoped(db, workspaceId).select(socialAccounts, {
     orderBy: (t, order) => order.asc(t.platform),
   });
-  return rows.map(({ id, platform, displayName, externalId, health, scopes, tokenExpiresAt }) => ({
-    id,
-    platform,
-    displayName: displayName ?? externalId,
-    health,
-    // What the person allowed, shown as the platform named it (S-19).
-    scopes,
-    tokenExpiresAt: tokenExpiresAt?.toISOString() ?? null,
-  }));
+  return rows.map(
+    ({ id, platform, displayName, externalId, health, scopes, tokenExpiresAt, sharedDemo }) => ({
+      id,
+      platform,
+      displayName: displayName ?? externalId,
+      health,
+      // What the person allowed, shown as the platform named it (S-19).
+      scopes,
+      tokenExpiresAt: tokenExpiresAt?.toISOString() ?? null,
+      /** The team's own account, borrowed rather than connected (WP52): said plainly, never hidden. */
+      sharedDemo,
+    }),
+  );
 }

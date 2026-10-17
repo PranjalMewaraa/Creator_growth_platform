@@ -1,10 +1,12 @@
 import type { TargetPlatform } from '@cgp/contracts';
 import { listAccounts } from '@cgp/core';
+import { findSharedDemoAccount } from '@cgp/db';
 import { Badge, Card, CardHeader } from '@cgp/ui';
 import { Screen } from '@/components/screen';
 import { getDb, getEnv } from '@/server/runtime';
 import { oauthApp } from '@/server/oauth';
 import { requireWorkspace } from '@/server/session';
+import { connectDemoAccountAction } from './actions';
 
 const NAMES: Record<TargetPlatform, string> = { instagram: 'Instagram', linkedin: 'LinkedIn' };
 
@@ -42,6 +44,15 @@ const OUTCOMES: Record<string, { tone: 'good' | 'bad'; message: string }> = {
     tone: 'bad',
     message: 'The platform refused to swap the code for a token. Its reason is in the server log.',
   },
+  demo_connected: {
+    tone: 'good',
+    message:
+      "Connected to the team's demo account. Posts from here really publish and are visible publicly — read the note below before sending anything.",
+  },
+  demo_unavailable: {
+    tone: 'bad',
+    message: 'No demo account is set up for this platform yet.',
+  },
 };
 
 function expiry(iso: string | null): string {
@@ -66,14 +77,25 @@ export default async function AccountsPage({
   const { workspaceId } = await params;
   const { connect } = await searchParams;
   await requireWorkspace(workspaceId);
-  const accounts = await listAccounts(getDb(), workspaceId);
   const env = getEnv();
+  const db = getDb();
+  const demoSharing = env.DEMO_ACCOUNT_SHARING === 'on';
+  const [accounts, demoInstagram, demoLinkedin] = await Promise.all([
+    listAccounts(db, workspaceId),
+    demoSharing ? findSharedDemoAccount(db, 'instagram') : undefined,
+    demoSharing ? findSharedDemoAccount(db, 'linkedin') : undefined,
+  ]);
   const outcome = connect ? OUTCOMES[connect] : undefined;
 
   const platforms = (Object.keys(NAMES) as TargetPlatform[]).map((platform) => ({
     platform,
     account: accounts.find((a) => a.platform === platform),
     configured: Boolean(oauthApp(env, platform)),
+    // A shared demo account exists for this platform and this workspace is not already
+    // using it under its own name (connecting it again would just re-copy the same row).
+    demoAvailable:
+      (platform === 'instagram' ? demoInstagram : demoLinkedin) !== undefined &&
+      !accounts.some((a) => a.platform === platform && a.sharedDemo),
   }));
 
   return (
@@ -96,7 +118,7 @@ export default async function AccountsPage({
           note="Tokens are stored encrypted and never shown, here or anywhere else."
         />
         <ul className="flex flex-col gap-3 px-5 py-5">
-          {platforms.map(({ platform, account, configured }) => (
+          {platforms.map(({ platform, account, configured, demoAvailable }) => (
             <li
               key={platform}
               className="flex flex-col gap-3 rounded-xl border border-line bg-raised px-4 py-4"
@@ -108,12 +130,13 @@ export default async function AccountsPage({
                     {account ? account.displayName : 'Not connected'}
                   </p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                   {account ? (
                     <Badge tone={account.health === 'ok' ? 'good' : 'bad'}>
                       {account.health === 'ok' ? 'Connected' : 'Needs attention'}
                     </Badge>
                   ) : null}
+                  {account?.sharedDemo ? <Badge tone="warn">Team&apos;s demo account</Badge> : null}
                   {configured ? (
                     // A plain link, not a fetch: the platform's consent screen is a place the
                     // browser goes, not something this page can do on anyone's behalf.
@@ -131,8 +154,33 @@ export default async function AccountsPage({
                       No app configured
                     </span>
                   )}
+                  {demoAvailable ? (
+                    // Same action either way, so a visitor who cannot complete real OAuth —
+                    // both apps are still developer mode, so only the team's own test
+                    // accounts can consent — has a second path to see a real post go out
+                    // (WP52). A form, not a link: this is a same-site write, not a redirect
+                    // to a platform's own consent screen.
+                    <form action={connectDemoAccountAction.bind(null, workspaceId, platform)}>
+                      <button
+                        type="submit"
+                        className="inline-flex h-11 cursor-pointer items-center rounded-xl border border-accent/50 px-4 text-sm font-medium text-ink transition hover:border-accent"
+                      >
+                        Use the team&apos;s demo account
+                      </button>
+                    </form>
+                  ) : null}
                 </div>
               </div>
+
+              {account?.sharedDemo ? (
+                <p className="rounded-lg border border-hot/40 bg-hot/5 px-3 py-2 text-xs leading-5 text-ink">
+                  This is the team&apos;s own {NAMES[platform]} account, shared so a demo can show a
+                  real post going out. <strong>Anything sent from here really publishes</strong> and
+                  is visible to the public under the team&apos;s name — nothing private, nothing you
+                  would not want attached to it. Posting limits and the platform&apos;s daily quota
+                  are shared with everyone else borrowing this account.
+                </p>
+              ) : null}
 
               {account ? (
                 <p className="text-xs text-muted">

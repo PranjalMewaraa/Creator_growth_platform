@@ -27,7 +27,7 @@ function Metric({ label, value }: { label: string; value: number | undefined }) 
   return (
     <div className="min-w-16">
       <p className="text-xs text-faint">{label}</p>
-      <p className="text-base font-semibold tabular-nums text-ink">
+      <p className="text-base font-semibold font-mono tabular-nums text-ink">
         {typeof value === 'number' ? value.toLocaleString('en-IN') : '—'}
       </p>
     </div>

@@ -71,6 +71,13 @@
       "when": 1790587361235,
       "tag": "0009_rendition_kind",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792228254592,
+      "tag": "0010_social_accounts_shared_demo",
+      "breakpoints": true
     }
   ]
 }

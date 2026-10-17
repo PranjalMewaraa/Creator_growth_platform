@@ -21,7 +21,7 @@ export function Trouble({
       <p className="text-caption font-medium uppercase tracking-wide text-faint">
         Creator Growth Platform
       </p>
-      <h1 className="text-title font-semibold tracking-tight text-ink">{title}</h1>
+      <h1 className="text-title font-display font-semibold text-ink">{title}</h1>
       <div className="text-body leading-6 text-muted">{children}</div>
       <div className="mt-2 flex flex-wrap items-center gap-3">
         {action}

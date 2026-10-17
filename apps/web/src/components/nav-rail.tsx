@@ -13,29 +13,37 @@ import {
 } from '@cgp/ui';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import type { CSSProperties, ComponentType, SVGProps } from 'react';
+import type { ComponentType, SVGProps } from 'react';
 
-// The destinations (plan section 13) as a rail of colour coded icons: a vertical rail on wide
-// screens, a bottom bar on phones. Composer is a layer, reached from New post, not a destination.
+// The destinations (plan section 13): a vertical rail on wide screens, a bottom bar on
+// phones. Composer is a layer, reached from New post, not a destination.
 
 interface Destination {
   segment: string;
   label: string;
-  hue: string;
   Icon: ComponentType<SVGProps<SVGSVGElement>>;
 }
 
 const DESTINATIONS: Destination[] = [
-  { segment: '', label: 'Home', hue: '#a78bfa', Icon: HomeIcon },
-  { segment: 'studio', label: 'Studio', hue: '#e879f9', Icon: SparklesIcon },
-  { segment: 'calendar', label: 'Calendar', hue: '#fb923c', Icon: CalendarIcon },
-  { segment: 'brand', label: 'Brand', hue: '#facc15', Icon: PaletteIcon },
-  { segment: 'accounts', label: 'Accounts', hue: '#38bdf8', Icon: LinkIcon },
-  { segment: 'sync', label: 'Sync centre', hue: '#22d3ee', Icon: SyncIcon },
-  { segment: 'insights', label: 'Insights', hue: '#34d399', Icon: ChartIcon },
-  { segment: 'settings', label: 'Settings', hue: '#fb7185', Icon: GearIcon },
+  { segment: '', label: 'Home', Icon: HomeIcon },
+  { segment: 'studio', label: 'Studio', Icon: SparklesIcon },
+  { segment: 'calendar', label: 'Calendar', Icon: CalendarIcon },
+  { segment: 'brand', label: 'Brand', Icon: PaletteIcon },
+  { segment: 'accounts', label: 'Accounts', Icon: LinkIcon },
+  { segment: 'sync', label: 'Sync centre', Icon: SyncIcon },
+  { segment: 'insights', label: 'Insights', Icon: ChartIcon },
+  { segment: 'settings', label: 'Settings', Icon: GearIcon },
 ];
 
+/**
+ * Minimal rail (WP53): a hue per destination used to be the rail's whole idea, eight
+ * differently tinted pills competing for the eye before anyone had picked anything. One hue
+ * now does the work the eight did — on the single item that is actually active — and every
+ * icon rests at the same quiet grey the rest of the time. The hue is the chrome's own blue
+ * neon (`neon-glow`), not the yellow accent: this marks where you are, not a thing to do,
+ * and the product has exactly one of those. No `hover:scale-105` either: the plan rules
+ * scale transforms out as reading cheap, and this rail had been the one place still doing it.
+ */
 function Item({
   href,
   active,
@@ -47,15 +55,7 @@ function Item({
   destination: Destination;
   vertical: boolean;
 }) {
-  const { label, hue, Icon } = destination;
-  const style = {
-    '--hue': hue,
-    backgroundColor: active ? hue : `color-mix(in oklab, ${hue} 14%, transparent)`,
-    color: active ? '#15120a' : hue,
-    boxShadow: active
-      ? `0 0 0 1px color-mix(in oklab, ${hue} 60%, transparent), 0 10px 30px -8px ${hue}`
-      : undefined,
-  } as CSSProperties;
+  const { label, Icon } = destination;
 
   return (
     <Link
@@ -63,15 +63,14 @@ function Item({
       aria-current={active ? 'page' : undefined}
       aria-label={label}
       className={cx(
-        'group relative grid place-items-center rounded-2xl transition hover:scale-105',
-        vertical ? 'size-12' : 'size-11',
+        'group relative grid size-11 place-items-center rounded-xl transition-colors duration-base ease-standard',
+        active ? 'neon-glow bg-neon/15 text-neon-hot' : 'text-faint hover:bg-raised hover:text-ink',
       )}
-      style={style}
     >
-      <Icon width={22} height={22} />
+      <Icon width={20} height={20} />
       {vertical ? (
         // Names on hover, so the rail stays quiet.
-        <span className="pointer-events-none absolute left-full ml-3 whitespace-nowrap rounded-lg border border-line bg-raised px-2.5 py-1 text-xs font-medium text-ink opacity-0 shadow-xl transition group-hover:opacity-100 group-focus-visible:opacity-100">
+        <span className="pointer-events-none absolute left-full ml-3 whitespace-nowrap rounded-lg border border-line bg-raised px-2.5 py-1 text-xs font-medium text-ink opacity-0 shadow-floating transition-opacity duration-base ease-standard group-hover:opacity-100 group-focus-visible:opacity-100">
           {label}
         </span>
       ) : null}
@@ -92,7 +91,7 @@ export function NavRail({ workspaceId }: { workspaceId: string }) {
     <>
       <nav
         aria-label="Workspace"
-        className="fixed bottom-0 left-0 top-16 z-10 hidden w-24 flex-col items-center gap-3 border-r border-line bg-canvas/80 pt-6 backdrop-blur lg:flex"
+        className="fixed bottom-0 left-0 top-16 z-10 hidden w-18 flex-col items-center gap-1.5 border-r border-line bg-canvas/80 pt-5 backdrop-blur lg:flex"
       >
         {items.map(({ destination, href, active }) => (
           <Item

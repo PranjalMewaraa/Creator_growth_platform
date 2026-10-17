@@ -4,6 +4,9 @@ import { firstRun, homeDigest, type HomeDay } from '@cgp/core';
 import Link from 'next/link';
 import { FirstRun } from '@/components/first-run';
 import { Screen } from '@/components/screen';
+import { artStyle } from '@/lib/art';
+import { STUDIO_KINDS } from '@/lib/studio-kinds';
+import { listArt } from '@/server/art';
 import { getDb } from '@/server/runtime';
 import { requireWorkspace } from '@/server/session';
 
@@ -31,9 +34,11 @@ function Day({ day, base, timezone }: { day: HomeDay; base: string; timezone: st
       <Link
         href={href}
         className={cx(
-          'flex h-full flex-col items-center gap-1 rounded-xl py-3 transition duration-base ease-standard',
+          'flex h-full flex-col items-center gap-1 rounded-xl py-3 ring-1 ring-transparent',
+          'transition-colors duration-base ease-standard hover:ring-white/30',
           // Today inverts: white on near-black. The rest are ink on orange, because white on
-          // #ff5a1f measures 3.12:1 and the rule is 4.5 (WP49).
+          // #ff5a1f measures 3.12:1 and the rule is 4.5 (WP49). The hover ring sits outside
+          // both backgrounds, so it never touches a pair WP49 already measured.
           day.isToday
             ? 'bg-black/80 text-white hover:bg-black/70'
             : 'bg-black/10 hover:bg-black/20',
@@ -42,14 +47,14 @@ function Day({ day, base, timezone }: { day: HomeDay; base: string; timezone: st
           day.posts.length === 0
             ? 'Nothing planned. Write something for this day.'
             : day.posts
-                .map((post) => `${clock(post.at)} ${post.text || 'No caption'}`)
-                .join(String.fromCharCode(10))
+              .map((post) => `${clock(post.at)} ${post.text || 'No caption'}`)
+              .join(String.fromCharCode(10))
         }
       >
         <span className={cx('text-xs', day.isToday ? 'text-white/80' : 'text-black/85')}>
           {day.weekday}
         </span>
-        <span className="text-lg font-semibold tabular-nums">{day.day}</span>
+        <span className="text-lg font-semibold font-mono tabular-nums">{day.day}</span>
         {day.posts.length === 0 ? (
           <span
             className={cx('mt-1 text-xs', day.isToday ? 'text-white/70' : 'text-black/80')}
@@ -79,6 +84,7 @@ export default async function HomePage({ params }: { params: Promise<{ workspace
   const { workspace } = await requireWorkspace(workspaceId);
   const base = `/w/${workspace.id}`;
   const db = getDb();
+  const art = listArt();
   const [digest, setup] = await Promise.all([
     homeDigest(db, workspaceId, workspace.timezone),
     firstRun(db, workspaceId),
@@ -90,11 +96,59 @@ export default async function HomePage({ params }: { params: Promise<{ workspace
           mentioned, so a workspace could sit with no channel connected and nothing saying
           that was why nothing published. */}
       <FirstRun state={setup} base={base} workspaceId={workspaceId} />
+
+      {/* What's on your mind today? (WP53) — the six real things the Studio can make, not a
+          tool catalogue invented for the occasion: STUDIO_KINDS is the exact list Studio's
+          own picker reads, so a card here and the card it opens never disagree. The art is
+          the same mechanism Studio's picker already used — whatever the team has dropped
+          into public/art (real generated images, never stock), gradient where there is
+          none — so Home gained nothing make-believe to get this. */}
+      <section aria-labelledby="studio-kinds-heading" className="flex flex-col gap-3">
+        <h2 id="studio-kinds-heading" className="text-title font-display font-semibold text-ink">
+          What&apos;s on your mind today?
+        </h2>
+        <ol className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          {STUDIO_KINDS.map((k, i) => (
+            <li key={k.key}>
+              <Link
+                href={`${base}/studio?kind=${k.key}`}
+                title={k.hint}
+                style={artStyle(i, art)}
+                className="group relative flex aspect-[3/4] flex-col justify-end overflow-hidden rounded-2xl border border-line/80 p-3 ring-1 ring-transparent transition-colors duration-base ease-standard hover:border-accent/60 hover:ring-accent/30"
+              >
+                {/* Keeps the label readable on any art, same scrim Studio's own tiles use. */}
+                <span
+                  aria-hidden
+                  className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent"
+                />
+                <span className="relative flex items-center gap-1.5 text-body font-medium text-white">
+                  <k.Icon width={16} height={16} aria-hidden />
+                  {k.label}
+                </span>
+                <span className="relative text-caption leading-4 text-white/75">{k.hint}</span>
+                {/* The arrow the reference uses on hover — colour only, no movement, no
+                    scale: both are ruled out for hover states (docs/ui-overhaul.md §8). */}
+                <ArrowUpRightIcon
+                  aria-hidden
+                  className="absolute right-3 top-3 text-white/0 transition-colors duration-base ease-standard group-hover:text-white/80"
+                />
+              </Link>
+            </li>
+          ))}
+        </ol>
+      </section>
+
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">
-        <Card>
+        {/* A touch more presence than a plain Card: the ring sits outside the border, the
+            glow outside the box, so neither one touches a background a letter sits on.
+            `!shadow-floating` because Card's own `shadow-raised` sets the same property and
+            `cx` is a plain joiner with no Tailwind-merge — without `!` the two utilities race
+            on generated-CSS order (alphabetical: "raised" sorts after "floating" and wins)
+            rather than on the order the classes are written in. */}
+        <Card className="!shadow-floating ring-1 ring-accent/10">
           <CardHeader title="Balance" note="Credits and video seconds are counted separately." />
           <CardBody className="flex flex-col gap-4">
-            <p className="text-4xl font-semibold tracking-tight tabular-nums text-ink">
+            <p className="text-4xl font-semibold tracking-tight font-mono tabular-nums text-ink">
               {workspace.creditBalance.toLocaleString('en-IN')}
               <span className="ml-2 text-base font-normal text-muted">credits</span>
             </p>
@@ -114,17 +168,22 @@ export default async function HomePage({ params }: { params: Promise<{ workspace
         </Card>
 
         {/* Ink on orange, not white: #ff5a1f is bright enough that white body text measures
-            2.47:1 against it, and the same ink is what every amber control already uses. */}
-        <section className="relative overflow-hidden rounded-2xl bg-hot p-5 text-accent-ink">
+            2.47:1 against it, and the same ink is what every amber control already uses. The
+            glow is an external drop-shadow, so it adds presence without touching the flat
+            bg-hot the text sits on — nothing here can move a ratio WP49 already measured. */}
+        <section className="relative overflow-hidden rounded-2xl border-2 border-cyan-400 bg-transparent p-5 text-white shadow-[0_0_20px_rgba(34,211,238,0.3),_inset_0_0_15px_rgba(34,211,238,0.15)]">
+          {/* Neon Border Glow Effect */}
+          <div className="pointer-events-none absolute inset-0 rounded-2xl border border-cyan-400 opacity-50 blur-[2px]" />
+
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h2 className="text-sm font-medium text-black/70">Next seven days</h2>
-              <p className="mt-1 text-3xl font-semibold tracking-tight">
+              <h2 className="text-sm font-medium text-cyan-300/80">Next seven days</h2>
+              <p className="mt-1 text-3xl font-semibold tracking-tight text-white drop-shadow-[0_0_8px_rgba(34,211,238,0.5)]">
                 {digest.scheduled === 0
                   ? 'Nothing scheduled'
                   : `${digest.scheduled} post${digest.scheduled === 1 ? '' : 's'} scheduled`}
               </p>
-              <p className="mt-1 max-w-md text-sm text-black/75">
+              <p className="mt-1 max-w-md text-sm text-cyan-100/70">
                 {digest.emptyDays === 0
                   ? 'Every day this week has something on it.'
                   : `${digest.emptyDays} day${digest.emptyDays === 1 ? ' has' : 's have'} nothing on them. Pick one to fill it.`}
@@ -133,9 +192,9 @@ export default async function HomePage({ params }: { params: Promise<{ workspace
             <Link
               href={`${base}/calendar`}
               aria-label="Open calendar"
-              className="grid size-11 shrink-0 place-items-center rounded-full bg-black/15 transition duration-base ease-standard hover:bg-black/25"
+              className="grid size-11 shrink-0 place-items-center rounded-full bg-cyan-400/10 border border-cyan-400/30 text-cyan-300 transition duration-base ease-standard hover:bg-cyan-400/30 hover:text-white hover:shadow-[0_0_10px_rgba(34,211,238,0.5)]"
             >
-              <ArrowUpRightIcon />
+              <ArrowUpRightIcon className="size-5" />
             </Link>
           </div>
           <ol className="mt-6 grid grid-cols-7 gap-1 sm:gap-2">
@@ -164,7 +223,7 @@ export default async function HomePage({ params }: { params: Promise<{ workspace
               {digest.accounts.map((account) => (
                 <li
                   key={account.platform}
-                  className="flex items-center justify-between rounded-xl border border-line bg-raised px-4 py-3"
+                  className="flex items-center justify-between rounded-xl border border-line bg-raised px-4 py-3 transition-colors duration-base ease-standard hover:border-faint"
                 >
                   <span className="min-w-0">
                     <span className="block text-sm text-ink">{NAMES[account.platform]}</span>
@@ -214,7 +273,7 @@ function Tile({ label, value, accent }: { label: string; value: string; accent?:
         {accent ? <span className={cx('h-3 w-0.5 rounded-full', accent)} aria-hidden /> : null}
         {label}
       </p>
-      <p className="mt-1 truncate text-lg font-semibold tabular-nums text-ink">{value}</p>
+      <p className="mt-1 truncate text-lg font-semibold font-mono tabular-nums text-ink">{value}</p>
     </div>
   );
 }

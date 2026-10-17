@@ -30,7 +30,7 @@ function tone(used: number, limit: number): string {
 
 function Count({ used, limit, unit }: { used: number; limit: number; unit: string }) {
   return (
-    <span className={cx('tabular-nums', tone(used, limit))}>
+    <span className={cx('font-mono tabular-nums', tone(used, limit))}>
       {used.toLocaleString('en-IN')}/{limit.toLocaleString('en-IN')} {unit}
     </span>
   );
@@ -283,7 +283,7 @@ export function Storyboard({
         <span className="text-body text-muted">
           {frames.length} {frames.length === 1 ? 'scene' : 'scenes'}
           {' · '}
-          <span className="font-semibold tabular-nums text-ink">
+          <span className="font-semibold font-mono tabular-nums text-ink">
             {videoSeconds ?? frames.length * SECONDS_PER_SCENE}s of video
           </span>
         </span>
@@ -334,7 +334,7 @@ export function VideoOutput({
           className="mx-auto max-h-[70vh] w-full bg-black object-contain"
         />
         <figcaption className="flex items-center justify-between px-3 py-2 text-[11px] text-muted">
-          <span className="tabular-nums">
+          <span className="font-mono tabular-nums">
             {width > 0 ? `${width} x ${height}` : 'Reel'} · no voiceover or captions yet
           </span>
           <span className="flex items-center gap-3">
@@ -367,7 +367,7 @@ export function VideoOutput({
           <ol className="flex flex-col gap-2">
             {scenes.map((scene) => (
               <li key={scene.id} className="flex items-start gap-3">
-                <span className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-full border border-line text-caption tabular-nums text-muted">
+                <span className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-full border border-line text-caption font-mono tabular-nums text-muted">
                   {scene.index + 1}
                 </span>
                 <p
@@ -463,7 +463,9 @@ export function ImageOutput({
         </a>
       )}
       <figcaption className="flex items-center justify-between gap-3 px-3 py-2 text-[11px] text-muted">
-        <span className="tabular-nums">{width > 0 ? `${width} x ${height}` : 'Image'}</span>
+        <span className="font-mono tabular-nums">
+          {width > 0 ? `${width} x ${height}` : 'Image'}
+        </span>
         <span className="flex items-center gap-3">
           {editing ? null : (
             <button type="button" onClick={() => setEditing(true)} className="hover:text-ink">
@@ -552,11 +554,13 @@ function ScriptMeter({ text, targetSeconds }: { text: string; targetSeconds?: nu
   const under = targetSeconds ? seconds < targetSeconds * 0.9 : false;
   return (
     <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted">
-      <span className="tabular-nums">
+      <span className="font-mono tabular-nums">
         {spoken.toLocaleString('en-IN')} words, about {seconds}s spoken
       </span>
       {targetSeconds ? (
-        <span className={cx('tabular-nums', over || under ? 'text-accent' : 'text-muted')}>
+        <span
+          className={cx('font-mono tabular-nums', over || under ? 'text-accent' : 'text-muted')}
+        >
           {over ? 'longer than' : under ? 'shorter than' : 'as asked:'} {targetSeconds}s
         </span>
       ) : null}
@@ -620,7 +624,9 @@ export function OutputView({
                   <p className="text-[15px] leading-6 text-ink">{item}</p>
                   <div className="flex shrink-0 items-center gap-2">
                     {/* No platform publishes a limit on these, so it is a count, not a verdict. */}
-                    <span className="text-[11px] tabular-nums text-faint">{item.length}</span>
+                    <span className="text-[11px] font-mono tabular-nums text-faint">
+                      {item.length}
+                    </span>
                     <CopyButton text={item} locked={locked} accept={acceptOf(item)} />
                   </div>
                 </div>

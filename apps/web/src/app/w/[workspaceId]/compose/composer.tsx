@@ -21,6 +21,8 @@ export interface ComposerAccount {
   id: string;
   platform: TargetPlatform;
   displayName: string;
+  /** The team's own account, borrowed rather than connected (WP52): posting through it is real. */
+  sharedDemo?: boolean;
 }
 
 type Frame = 'portrait' | 'square';
@@ -203,6 +205,9 @@ export function Composer({
   const base = `/api/w/${workspaceId}`;
   const selected = accounts.filter((a) => chosen.includes(a.id));
   const platforms = [...new Set(selected.map((a) => a.platform))];
+  // Whether sending this would really post from the team's own account rather than the
+  // workspace's (WP52): worth saying right where the decision to send is made.
+  const usingSharedDemo = selected.some((a) => a.sharedDemo);
   const hasImage = file !== null || fromStudio !== null;
   const imageMissing = platforms.includes('instagram') && !hasImage;
   const over = platforms.filter((p) => text.length > LIMITS[p]);
@@ -444,7 +449,7 @@ export function Composer({
   if (accounts.length === 0) {
     return (
       <section className="rounded-2xl border border-line bg-surface px-6 py-8">
-        <h1 className="text-xl font-semibold text-ink">Create post</h1>
+        <h1 className="text-title font-display font-semibold text-ink">Create post</h1>
         <p className="mt-2 max-w-prose text-sm text-muted">
           Connect Instagram or LinkedIn first. Until the connect flow exists, run{' '}
           <code className="text-ink">pnpm --filter @cgp/worker accounts:import</code> with this
@@ -469,7 +474,7 @@ export function Composer({
       {/* Left: creation and controls. */}
       <section className="flex flex-col rounded-2xl border border-line bg-surface">
         <header className="flex items-center justify-between gap-3 px-6 pt-5">
-          <h1 className="text-xl font-semibold tracking-tight text-ink">Create post</h1>
+          <h1 className="text-title font-display font-semibold text-ink">Create post</h1>
           <span className="text-xs text-muted" aria-live="polite">
             {publicationId
               ? pendingSchedule
@@ -542,7 +547,11 @@ export function Composer({
                         key={account.id}
                         type="button"
                         aria-pressed={on}
-                        title={account.displayName}
+                        title={
+                          account.sharedDemo
+                            ? `${account.displayName} — the team's own account, borrowed`
+                            : account.displayName
+                        }
                         onClick={() => toggle(account.id)}
                         className={cx(
                           'tap-target flex h-10 cursor-pointer items-center gap-2 rounded-full border pl-1.5 pr-3.5 text-sm transition',
@@ -559,6 +568,7 @@ export function Composer({
                           </span>
                         </span>
                         {NAMES[account.platform]}
+                        {account.sharedDemo ? <span className="text-faint">(demo)</span> : null}
                       </button>
                     );
                   })}
@@ -643,7 +653,7 @@ export function Composer({
                       <span
                         key={p}
                         className={cx(
-                          'rounded-md border px-2 py-0.5 text-xs font-medium tabular-nums',
+                          'rounded-md border px-2 py-0.5 text-xs font-medium font-mono tabular-nums',
                           ratio > 1
                             ? 'border-bad/50 bg-bad/10 text-bad'
                             : ratio > 0.9
@@ -762,6 +772,13 @@ export function Composer({
               {!live ? (
                 <p className="text-xs text-muted">
                   Practice mode: publishing is faked, nothing leaves this machine.
+                </p>
+              ) : usingSharedDemo ? (
+                // live is true here, so this really leaves the machine: the loudest version
+                // of the warning belongs at the moment of sending, not only on Accounts.
+                <p className="rounded-lg border border-hot/40 bg-hot/5 px-3 py-2 text-xs leading-5 text-ink">
+                  This sends from the team&apos;s own account, for real, visible to the public.
+                  Nothing private, nothing you would not want attached to it.
                 </p>
               ) : null}
               <div className="flex gap-2">

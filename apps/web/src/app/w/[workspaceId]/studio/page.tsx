@@ -12,10 +12,10 @@ export default async function StudioPage({
   searchParams,
 }: {
   params: Promise<{ workspaceId: string }>;
-  searchParams: Promise<{ job?: string }>;
+  searchParams: Promise<{ job?: string; kind?: string }>;
 }) {
   const { workspaceId } = await params;
-  const { job } = await searchParams;
+  const { job, kind } = await searchParams;
   const { workspace } = await requireWorkspace(workspaceId);
   const db = getDb();
   const [[profile], [kit], jobs] = await Promise.all([
@@ -37,6 +37,7 @@ export default async function StudioPage({
       ready={{ profile: Boolean(profile), brandKit: Boolean(kit) }}
       initialJobs={jobs}
       initialJobId={job ?? null}
+      initialKind={kind ?? null}
       profileTone={profile?.profile.tone ?? null}
       brandColours={kit?.colors ?? []}
       templates={templates}

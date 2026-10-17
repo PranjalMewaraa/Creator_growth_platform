@@ -84,7 +84,10 @@ const INTENT = { intentText: 'A morning in the roastery', targetPlatform: 'insta
 async function storyboard() {
   const workspaceId = await createTestWorkspace(db, { credits: 400, videoSeconds: 120 });
   await addTestProfile(db, workspaceId);
-  const { started } = await run(workspaceId, 'storyboard', { ...INTENT, sceneCount: 3 });
+  const { started } = await run(workspaceId, 'storyboard', {
+    ...INTENT,
+    targetDurationSeconds: 24,
+  });
   const [output] = await jobOutputs(db, workspaceId, started.job.id, store);
   if (!output?.storyboard) throw new Error('no storyboard');
   return { workspaceId, outputId: output.id, frames: output.storyboard };

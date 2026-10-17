@@ -87,6 +87,7 @@ export {
   createPublication,
   findPostTarget,
   findPublication,
+  findSharedDemoAccount,
   publicationsBetween,
   recentPostTargets,
   markPostTarget,

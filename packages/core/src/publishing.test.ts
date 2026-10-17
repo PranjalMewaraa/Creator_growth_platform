@@ -2,11 +2,25 @@ import { randomBytes } from 'node:crypto';
 import { createFakeModeration, createMemoryStore } from '@cgp/adapters';
 import { createLogger, encryptSecret } from '@cgp/config';
 import type { QueuedJobData, TargetPlatform } from '@cgp/contracts';
-import { jobs, postTargets, scoped, upsertSocialAccount, type Database } from '@cgp/db';
+import {
+  findSharedDemoAccount,
+  jobs,
+  postTargets,
+  scoped,
+  socialAccounts,
+  upsertSocialAccount,
+  type Database,
+} from '@cgp/db';
 import { addTestProfile, createTestDatabase, createTestWorkspace } from '@cgp/db/testing';
 import sharp from 'sharp';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { instagramKey, publicationView, startPublication, storeUpload } from './publishing';
+import {
+  instagramKey,
+  listAccounts,
+  publicationView,
+  startPublication,
+  storeUpload,
+} from './publishing';
 import type { Queues } from './queues';
 
 const log = createLogger({ service: 'test', level: 'silent' });
@@ -355,5 +369,85 @@ describe('scheduling a post (WP31)', () => {
     });
     // A clock a few seconds behind the server's is not a mistake.
     expect(await post(new Date(Date.now() - 5_000))).toMatchObject({ ok: true });
+  });
+});
+
+describe('borrowing the team account (WP52)', () => {
+  it('finds nothing until a row is marked shared, from any workspace', async () => {
+    const workspaceId = await createTestWorkspace(db);
+    expect(await findSharedDemoAccount(db, 'instagram')).toBeUndefined();
+
+    await upsertSocialAccount(db, {
+      workspaceId,
+      platform: 'instagram',
+      externalId: 'team-ig',
+      displayName: '@team',
+      scopes: ['instagram_business_basic'],
+      tokenCiphertext: encryptSecret(kek, 'team-token'),
+      tokenExpiresAt: null,
+      sharedDemo: true,
+    });
+
+    const found = await findSharedDemoAccount(db, 'instagram');
+    expect(found?.externalId).toBe('team-ig');
+    // Ordinary connects default to false and stay invisible to the finder.
+    expect(await findSharedDemoAccount(db, 'linkedin')).toBeUndefined();
+  });
+
+  it('lets a second workspace hold its own row pointing at the same external account', async () => {
+    const owner = await createTestWorkspace(db);
+    const borrower = await createTestWorkspace(db);
+    const ciphertext = encryptSecret(kek, 'team-token');
+
+    await upsertSocialAccount(db, {
+      workspaceId: owner,
+      platform: 'linkedin',
+      externalId: 'team-li',
+      displayName: 'Team',
+      scopes: ['openid', 'profile', 'w_member_social'],
+      tokenCiphertext: ciphertext,
+      tokenExpiresAt: null,
+      sharedDemo: true,
+    });
+    const source = await findSharedDemoAccount(db, 'linkedin');
+    if (!source) throw new Error('no shared account');
+
+    const copy = await upsertSocialAccount(db, {
+      workspaceId: borrower,
+      platform: 'linkedin',
+      externalId: source.externalId,
+      displayName: source.displayName,
+      scopes: source.scopes,
+      tokenCiphertext: source.tokenCiphertext,
+      tokenExpiresAt: source.tokenExpiresAt,
+      sharedDemo: true,
+    });
+
+    // Two rows, one external account, each workspace's own copy (invariant 1 still holds:
+    // every query a normal caller makes stays scoped to its own workspace's row).
+    expect(copy.workspaceId).toBe(borrower);
+    expect(copy.externalId).toBe('team-li');
+    expect(copy.tokenCiphertext).toBe(ciphertext);
+
+    const theirs = await scoped(db, owner).select(socialAccounts);
+    const borrowed = await scoped(db, borrower).select(socialAccounts);
+    expect(theirs).toHaveLength(1);
+    expect(borrowed).toHaveLength(1);
+    expect(theirs[0]?.id).not.toBe(borrowed[0]?.id);
+  });
+
+  it('surfaces sharedDemo through listAccounts, for the UI to say so plainly', async () => {
+    const workspaceId = await createTestWorkspace(db);
+    await upsertSocialAccount(db, {
+      workspaceId,
+      platform: 'instagram',
+      externalId: 'own-ig',
+      displayName: '@mine',
+      scopes: ['instagram_business_basic'],
+      tokenCiphertext: encryptSecret(kek, 'x'),
+      tokenExpiresAt: null,
+    });
+    const [account] = await listAccounts(db, workspaceId);
+    expect(account?.sharedDemo).toBe(false);
   });
 });

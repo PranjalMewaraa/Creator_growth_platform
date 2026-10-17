@@ -281,7 +281,7 @@ export function OnboardingFlow({
           {step && !reviewing ? (
             <>
               <div>
-                <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
+                <h1 className="font-display text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
                   {step.question}
                 </h1>
                 <p className="mt-2 text-sm text-muted">{step.help}</p>
@@ -291,7 +291,7 @@ export function OnboardingFlow({
           ) : (
             <>
               <div>
-                <h1 className="text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
+                <h1 className="font-display text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
                   Looks right?
                 </h1>
                 <p className="mt-2 text-sm text-muted">

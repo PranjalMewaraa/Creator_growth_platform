@@ -146,8 +146,10 @@ describe('the handler map', () => {
 describe('a video render', () => {
   it('plans the scenes, renders them in order, and settles the seconds delivered', async () => {
     const { workspaceId, started } = await startVideo();
-    // Three scenes of eight seconds, held before anything ran.
-    expect(started.job.held.videoSeconds).toBe(24);
+    // Held for the most beats a free-flowing plan could pick for the 24s default — four,
+    // one more than the three the deterministic fallback (no planner in this test) actually
+    // delivers (WP59); settlement below is on what was actually delivered.
+    expect(started.job.held.videoSeconds).toBe(32);
 
     const result = await processJob(
       { db, handlers: fakeHandlers(), log },
@@ -178,9 +180,11 @@ describe('a video render', () => {
     }
   }, 300_000);
 
-  it('asks for the number of scenes the creator chose', async () => {
-    const { workspaceId, started } = await startVideo({ sceneCount: 1 });
-    expect(started.job.held.videoSeconds).toBe(8);
+  it('asks for the length the creator chose, in eight-second beats', async () => {
+    const { workspaceId, started } = await startVideo({ targetDurationSeconds: 8 });
+    // Held for up to two beats (one more than the single beat an 8s target implies); the
+    // fallback planner (no planner in this test) still lands on exactly one.
+    expect(started.job.held.videoSeconds).toBe(16);
     await processJob(
       { db, handlers: fakeHandlers(), log },
       { jobId: started.job.id, correlationId: 'c' },
@@ -224,7 +228,7 @@ describe('a video render', () => {
   }, 300_000);
 
   it('never pays twice for a redelivered render', async () => {
-    const { workspaceId, started } = await startVideo({ sceneCount: 1 });
+    const { workspaceId, started } = await startVideo({ targetDurationSeconds: 8 });
     const handlers = fakeHandlers();
     await processJob({ db, handlers, log }, { jobId: started.job.id, correlationId: 'c' });
     const [job] = await scoped(db, workspaceId).select((await import('@cgp/db')).jobs, {
@@ -247,7 +251,7 @@ describe('a video render', () => {
       checkImage: () =>
         Promise.resolve({ allowed: false, flagged: [{ category: 'violence' as const, score: 1 }] }),
     };
-    const { workspaceId, started } = await startVideo({ sceneCount: 1 });
+    const { workspaceId, started } = await startVideo({ targetDurationSeconds: 8 });
     const result = await processJob(
       {
         db,
@@ -263,7 +267,7 @@ describe('a video render', () => {
 
 describe('the reel', () => {
   it('is rendered from the scenes and kept as the output, when a renderer is there', async () => {
-    const { workspaceId, started } = await startVideo({ sceneCount: 2 });
+    const { workspaceId, started } = await startVideo({ targetDurationSeconds: 16 });
     // The fake video adapter returns the same fixture clip, which is a real MP4.
     const result = await processJob(
       { db, handlers: handlersWith({ 'veo-3.1-lite': scripted([]) }), log },
@@ -364,7 +368,7 @@ describe('regenerating one scene', () => {
 
 describe('the second provider', () => {
   it('is a terminal refusal, not a silent failure', async () => {
-    const { started } = await startVideo({ sceneCount: 1 });
+    const { started } = await startVideo({ targetDurationSeconds: 8 });
     const stub: VideoAdapter = {
       key: 'second',
       submit: () =>
@@ -425,7 +429,7 @@ describe('filming the frame that was approved (WP38)', () => {
       {
         workspaceId,
         generatorKey: 'storyboard',
-        input: { ...intent, targetPlatform: 'instagram', sceneCount: frames },
+        input: { ...intent, targetPlatform: 'instagram', targetDurationSeconds: frames * 8 },
       },
     );
     if (!started.ok) throw new Error(started.reason);
@@ -494,7 +498,9 @@ describe('filming the frame that was approved (WP38)', () => {
         input: {
           ...intent,
           targetPlatform: 'instagram',
-          sceneCount: frames,
+          // A reel committed from a storyboard films exactly its approved scenes regardless
+          // (WP59), so this is unused on that path — kept for a direct-to-video fallback.
+          targetDurationSeconds: frames * 8,
           storyboardOutputId: storyboard.id,
         },
       },

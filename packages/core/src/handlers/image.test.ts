@@ -3,6 +3,7 @@ import { createLogger } from '@cgp/config';
 import {
   AdapterError,
   type ImageAdapter,
+  type ImageCapability,
   type ModerationAdapter,
   type QueuedJobData,
 } from '@cgp/contracts';
@@ -61,6 +62,7 @@ function handlersWith(
   adapters: Record<string, ImageAdapter>,
   moderation: ModerationAdapter = createFakeModeration(),
   costInr = () => 0,
+  capabilityOf?: (adapterKey: string) => ImageCapability | undefined,
 ) {
   return createImageHandlers({
     db,
@@ -70,6 +72,7 @@ function handlersWith(
     store,
     costInr,
     providerLabel: 'fake',
+    capabilityOf,
   });
 }
 
@@ -210,5 +213,61 @@ describe('image generation end to end', () => {
     const again = await handler(job, log);
     expect(again.telemetry.realisedCostInr).toBe(0);
     expect(await scoped(db, workspaceId).select(outputs)).toHaveLength(1);
+  });
+});
+
+describe('reference image (WP60)', () => {
+  /** An image adapter that remembers what references it was given. */
+  function watchingAdapter() {
+    const seen: Array<{ references: number }> = [];
+    const adapter: ImageAdapter = {
+      key: 'gemini-flash-lite-image',
+      generate: (request) => {
+        seen.push({ references: request.references?.length ?? 0 });
+        return Promise.resolve({
+          images: [{ data: new Uint8Array([1]), mimeType: 'image/png', width: 1, height: 1 }],
+          usage: { inputTokens: 0, outputTokens: 0 },
+        });
+      },
+    };
+    return { adapter, seen };
+  }
+
+  async function runWithReference(
+    acceptsReferenceImages: boolean,
+  ): Promise<Array<{ references: number }>> {
+    const { adapter, seen } = watchingAdapter();
+    const workspaceId = await workspace();
+    const key = `${workspaceId}/references/test.png`;
+    await store.put(key, new Uint8Array([1, 2, 3]), 'image/png');
+
+    const started = await startGeneration(deps(), {
+      workspaceId,
+      generatorKey: 'image',
+      input: { ...intent, referenceImageKey: key },
+    });
+    if (!started.ok) throw new Error(started.reason);
+    await processJob(
+      {
+        db,
+        handlers: handlersWith(
+          { 'gemini-flash-lite-image': adapter },
+          undefined,
+          undefined,
+          () => ({ acceptsReferenceImages }) as ImageCapability,
+        ),
+        log,
+      },
+      { jobId: started.job.id, correlationId: started.job.id } satisfies QueuedJobData,
+    );
+    return seen;
+  }
+
+  it('sends an uploaded reference to a model whose capability accepts one', async () => {
+    expect(await runWithReference(true)).toEqual([{ references: 1 }]);
+  });
+
+  it('never sends a reference to a model whose capability does not accept one', async () => {
+    expect(await runWithReference(false)).toEqual([{ references: 0 }]);
   });
 });

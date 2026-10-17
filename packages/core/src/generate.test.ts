@@ -123,14 +123,16 @@ describe('startGeneration', () => {
     const result = await startGeneration(deps(queues), {
       workspaceId,
       generatorKey: 'video',
-      input: { ...intent, sceneCount: 2 },
+      input: { ...intent, targetDurationSeconds: 16 },
     });
 
     if (!result.ok) throw new Error(result.reason);
     expect(result.job).toMatchObject({
       status: 'QUEUED',
       jobClass: 'render',
-      held: { credits: 0, videoSeconds: 16 },
+      // Held for the most beats a free-flowing plan could choose for 16s: two, plus one
+      // extra (WP59), not 16 itself.
+      held: { credits: 0, videoSeconds: 24 },
     });
     expect(added).toEqual([
       {
@@ -140,10 +142,13 @@ describe('startGeneration', () => {
       },
     ]);
     const [job] = await scoped(db, workspaceId).select(jobs);
-    expect(job?.input).toMatchObject({ sceneCount: 2, compiledPromptId: result.prompt.id });
+    expect(job?.input).toMatchObject({
+      targetDurationSeconds: 16,
+      compiledPromptId: result.prompt.id,
+    });
     const [prompt] = await scoped(db, workspaceId).select(compiledPrompts);
     expect(prompt?.jobId).toBe(result.job.id);
-    expect((await scoped(db, workspaceId).workspace())?.videoSecondsBalance).toBe(14);
+    expect((await scoped(db, workspaceId).workspace())?.videoSecondsBalance).toBe(6);
   });
 
   it('dispatches the prompt the user edited, not a fresh compile', async () => {

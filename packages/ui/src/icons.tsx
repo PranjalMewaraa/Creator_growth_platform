@@ -150,6 +150,51 @@ export function FilmIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+export function ImageIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
+      <circle cx="9" cy="10" r="1.6" />
+      <path d="m5 17 4.5-5 3 3.2L16 11l3 4.5" />
+    </svg>
+  );
+}
+
+export function TypeIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M5 6h14M12 6v12M9 18h6" />
+    </svg>
+  );
+}
+
+export function ClockIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.5V12l3 2" />
+    </svg>
+  );
+}
+
+export function CameraIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M4 8.5a1.5 1.5 0 0 1 1.5-1.5h2l1-1.8h7l1 1.8h2A1.5 1.5 0 0 1 20 8.5v9A1.5 1.5 0 0 1 18.5 19h-13A1.5 1.5 0 0 1 4 17.5z" />
+      <circle cx="12" cy="13" r="3.4" />
+    </svg>
+  );
+}
+
+export function EyeIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M3 12s3.6-6.5 9-6.5S21 12 21 12s-3.6 6.5-9 6.5S3 12 3 12z" />
+      <circle cx="12" cy="12" r="2.6" />
+    </svg>
+  );
+}
+
 export function BellIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg {...base} {...props}>
@@ -166,6 +211,24 @@ export function SyncIcon(props: SVGProps<SVGSVGElement>) {
       <path d="M20 12a8 8 0 0 1-13.7 5.6L4 15.4" />
       <path d="M4 12a8 8 0 0 1 13.7-5.6L20 8.6" />
       <path d="M20 4.5v4.1h-4.1M4 19.5v-4.1h4.1" />
+    </svg>
+  );
+}
+
+export function MicIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <rect x="9" y="3" width="6" height="11" rx="3" />
+      <path d="M5.5 11a6.5 6.5 0 0 0 13 0" />
+      <path d="M12 17.5v3.3M9 20.8h6" />
+    </svg>
+  );
+}
+
+export function CloseIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M6 6l12 12M18 6L6 18" />
     </svg>
   );
 }

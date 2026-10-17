@@ -8,9 +8,14 @@
  * Accent (yellow) marks the action to take; hot (orange) marks the thing to look at.
  */
 @theme {
+  /* Inter: body, navigation and inputs (WP53) — the typeface the product is read in. */
   --font-sans:
-    var(--font-poppins), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial,
+    var(--font-inter), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial,
     sans-serif;
+  /* Plus Jakarta Sans: the one headline a screen has, applied through `font-display`. */
+  --font-display: var(--font-plus-jakarta-sans), var(--font-sans);
+  /* JetBrains Mono: tabular figures, applied through `font-mono` beside `tabular-nums`. */
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   /* Cards sit visibly above the canvas; secondary text stays readable (zinc 400 and up). */
   --color-canvas: #0f0f11;
@@ -20,14 +25,24 @@
   --color-ink: #f5f5f4;
   --color-muted: #a1a1aa;
   --color-faint: #8b8b94;
-  --color-accent: #facc15;
-  --color-accent-ink: #15120a;
+  /*
+   * Blue neon is the primary now (WP54): every `bg-accent`/`text-accent`/`border-accent` in
+   * the product repoints here in one place, because none of them hold a literal hex — the
+   * token was the whole point of WP42. White text measured 2.14:1 on this blue and failed
+   * outright; #0a1420 measures 8.94:1, same shape the yellow accent needed, just a darker,
+   * blue-tinted ink instead of amber's near-black.
+   */
+  --color-accent: #38bdf8;
+  --color-accent-ink: #0a1420;
   --color-hot: #ff5a1f;
   --color-good: #3ddc97;
   --color-bad: #ff7a7a;
-  /* AI surfaces only (the engine, the agent): a neon pair with a glow. Yellow stays the action. */
+  /* AI surfaces only (the engine, the agent): a neon pair with a glow. */
   --color-ai: #8b5cf6;
   --color-ai-hot: #d946ef;
+  /* The gradient partner for the chrome's glow (WP53/54): same blue family as the accent. */
+  --color-neon: #38bdf8;
+  --color-neon-hot: #22d3ee;
 
   /*
    * Type scale (WP42). Six steps, each with the job it does, because `text-sm text-muted` was
@@ -210,6 +225,19 @@ body {
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+}
+
+/*
+ * The chrome's neon (WP53): sky to cyan, on the mark and the one route that is open right
+ * now. The same shape as ai-glow, a different pair, because those glow for a different
+ * reason — the engine working versus where you are — and conflating the two would make
+ * neither mean anything.
+ */
+@utility neon-glow {
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--color-neon) 55%, transparent),
+    0 10px 32px -10px color-mix(in oklab, var(--color-neon-hot) 60%, transparent),
+    0 0 44px -16px color-mix(in oklab, var(--color-neon) 65%, transparent);
 }
 
 /* The two keyframes the primitives use (WP43). Both are entrances, neither is decorative. */

@@ -5,8 +5,12 @@ import {
   type SettingValue,
 } from '@cgp/contracts';
 
-/** Longest brief kept, whether written by the model or by the user. */
-export const MAX_BRIEF_CHARS = 2000;
+// Longest brief kept, whether written by the model or by the user. 2000 was sized for a single
+// prose paragraph; the image/thumbnail/video rewrite (WP57) now asks for up to eight labelled
+// sections, which a 180–320 word reply can run past at normal prose density, so the ceiling
+// grew with it rather than letting the style/section instructions get silently truncated mid
+// section on an ordinary reply.
+export const MAX_BRIEF_CHARS = 3000;
 
 const PLACEHOLDER = /\{\{(\w+)\}\}/g;
 

@@ -65,7 +65,7 @@ export interface StoryboardHandlerDeps {
 
 interface StoryboardInput {
   compiledPromptId?: unknown;
-  sceneCount?: unknown;
+  targetDurationSeconds?: unknown;
 }
 
 export function createStoryboardHandler(deps: StoryboardHandlerDeps): Record<string, JobHandler> {
@@ -109,18 +109,24 @@ export function createStoryboardHandler(deps: StoryboardHandlerDeps): Record<str
       const config = profile?.config as CompilerProfileConfig | undefined;
       if (!config) throw new Error(`${prompt.compilerProfileKey} is missing`);
 
-      const sceneCount =
-        typeof input.sceneCount === 'number' && input.sceneCount > 0 ? input.sceneCount : 3;
+      const targetDurationSeconds =
+        typeof input.targetDurationSeconds === 'number' && input.targetDurationSeconds > 0
+          ? input.targetDurationSeconds
+          : 24;
       const say = (stage: JobStage) =>
         void deps.publishStage?.(job.id, stage).catch(() => undefined);
       const started = Date.now();
       const since = (from: number) => Math.round((Date.now() - from) / 100) / 10;
 
       say({ key: 'plan', label: 'Planning the scenes', status: 'working' });
+      // Not flexible (WP59): the storyboard's credits are held and settled flat against one
+      // frame count, so the plan has to land on exactly the count that hold was sized for —
+      // see packages/core/src/generators/definitions.ts's scenesFor.
       const plan = await planScenes({
         prompt: prompt.text,
         config,
-        sceneCount,
+        targetDurationSeconds,
+        flexible: false,
         provider: deps.planner,
         log,
       });
@@ -213,7 +219,8 @@ export function createStoryboardHandler(deps: StoryboardHandlerDeps): Record<str
           // What the render will film, so committing does not re-plan and drift.
           scenePrompts: plan.scenes,
           scenePlanFallback: plan.fallbackUsed,
-          sceneCount,
+          sceneCount: plan.scenes.length,
+          targetDurationSeconds,
           adapter: adapter.key,
         },
         compiledPromptId: prompt.id,

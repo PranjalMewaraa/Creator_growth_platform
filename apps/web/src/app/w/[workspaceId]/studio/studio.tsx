@@ -10,11 +10,39 @@ import {
   type LookKey,
   type TargetPlatform,
 } from '@cgp/contracts';
-import { Button, Chip, cx, SegmentedControl } from '@cgp/ui';
+import {
+  Button,
+  CameraIcon,
+  ChevronDownIcon,
+  ClockIcon,
+  CloseIcon,
+  cx,
+  Dialog,
+  EyeIcon,
+  FilmIcon,
+  ImageIcon,
+  LinkIcon,
+  MicIcon,
+  PaletteIcon,
+  Select,
+  SparklesIcon,
+  Toggle,
+  TypeIcon,
+} from '@cgp/ui';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { artStyle } from '@/lib/art';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ComponentType,
+  type ReactNode,
+  type SVGProps,
+} from 'react';
+import { STUDIO_KINDS } from '@/lib/studio-kinds';
+import { GenerationStatus } from './generation-status';
+import { KindPickerDialog } from './kind-picker-dialog';
 import { WorkLedger } from './work-ledger';
 import {
   ImageOutput,
@@ -25,11 +53,16 @@ import {
   type ReelScene,
   type Rendition,
 } from './output-view';
-import { TemplatePicker, type TemplateCard } from './template-picker';
+import { TemplatesDialog } from './templates-dialog';
+import type { TemplateCard } from './template-picker';
 import { PromptDisclosure } from './prompt-disclosure';
 
-// Studio (plan section 13, WP14): plain intent in, compiled prompt visible and editable, cost
-// before submit, output streamed, and the job carries on if you leave.
+// Studio (plan section 13, WP14, redone WP56): plain intent in, compiled prompt visible and
+// editable, cost before submit, output streamed, and the job carries on if you leave.
+//
+// What you want to make is decided once, by the kind picker dialog (or a `?kind=` link from
+// Home), not re-asked by a card grid eating a third of the screen on every visit. Everything
+// below is the layout for a kind already chosen: a prompt, its controls, and what comes back.
 
 export interface StudioJobSummary extends JobView {
   intentText: string;
@@ -48,55 +81,21 @@ interface Output {
   compiledPromptId: string;
 }
 
-interface Kind {
-  key: string;
-  label: string;
-  hint: string;
-  /** What this generator makes, which is how its templates are found. */
-  outputType: string;
-  soon?: boolean;
-}
-
 const LOOK_LABELS: Record<LookKey, string> = {
   camera: 'Camera',
   lens: 'Lens',
-  focalLength: 'Focal',
+  focalLength: 'Focal length',
   aperture: 'Aperture',
 };
 
-/**
- * What the picture model allows in a minute (WP40). A storyboard of more than this many
- * frames is paced rather than refused, and saying so beats a creator watching a spinner and
- * wondering what broke.
- */
-const IMAGES_PER_MINUTE = 2;
-
 /** The kinds that make a picture or film one, and so take a look (WP37). */
 const VISUAL = new Set(['image', 'thumbnail_set', 'video']);
+/** The kinds whose model reads a reference picture (WP60): Veo has no equivalent for video. */
+const REFERENCEABLE = new Set(['image', 'thumbnail_set']);
 
-const KINDS: Kind[] = [
-  { key: 'script', label: 'Script', hint: 'The words to say on camera', outputType: 'script' },
-  {
-    key: 'hook_title_set',
-    label: 'Hooks & titles',
-    hint: 'Openers that stop the scroll',
-    outputType: 'hook',
-  },
-  {
-    key: 'caption_set',
-    label: 'Captions',
-    hint: 'One caption per platform',
-    outputType: 'caption',
-  },
-  { key: 'image', label: 'Image', hint: 'A picture for the post', outputType: 'image' },
-  {
-    key: 'thumbnail_set',
-    label: 'Thumbnail',
-    hint: 'Three to choose between',
-    outputType: 'thumbnail',
-  },
-  { key: 'video', label: 'Video', hint: 'Up to three eight second scenes', outputType: 'video' },
-];
+// The six generators, named once in @/lib/studio-kinds so Home's cards, this dialog and the
+// picker never drift apart (WP53).
+const KINDS = STUDIO_KINDS;
 const LABEL: Record<string, string> = Object.fromEntries(KINDS.map((k) => [k.key, k.label]));
 
 const PLATFORMS: Array<{ value: TargetPlatform; label: string }> = [
@@ -105,6 +104,9 @@ const PLATFORMS: Array<{ value: TargetPlatform; label: string }> = [
 ];
 const LENGTHS = [15, 30, 45, 60, 90];
 const COUNTS = [1, 2, 3, 4];
+// A length to ask for, not a scene count to pick: the planner decides how many eight-second
+// beats best fill it (WP59). Bounded to match packages/core's MIN/MAX_VIDEO_SECONDS.
+const VIDEO_DURATIONS = [8, 16, 24, 32, 40, 48];
 
 /** Pictures are drawn, not written, so the running state says what is actually happening. */
 const DRAWN: ReadonlySet<string> = new Set(['image', 'thumbnail_set', 'video']);
@@ -153,6 +155,56 @@ function ago(iso: string) {
   return hours < 24 ? `${hours} h ago` : `${Math.round(hours / 24)} d ago`;
 }
 
+/** A control row's label, with an icon so the panel reads at a glance (WP56). */
+function ControlLabel({
+  icon: Icon,
+  children,
+}: {
+  icon: ComponentType<SVGProps<SVGSVGElement>>;
+  children: ReactNode;
+}) {
+  return (
+    <span className="flex items-center gap-1.5 text-label font-medium uppercase tracking-wide text-muted">
+      <Icon width={13} height={13} aria-hidden className="text-faint" />
+      {children}
+    </span>
+  );
+}
+
+/** A dropdown with its own chevron, the shape every select in the app already uses. */
+function Dropdown({
+  value,
+  onChange,
+  options,
+  'aria-label': ariaLabel,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  options: Array<{ value: string; label: string }>;
+  'aria-label': string;
+}) {
+  return (
+    <div className="relative">
+      <Select
+        aria-label={ariaLabel}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-10 pr-9 text-sm"
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </Select>
+      <ChevronDownIcon
+        aria-hidden
+        className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-faint"
+      />
+    </div>
+  );
+}
+
 export function Studio({
   workspaceId,
   credits,
@@ -160,6 +212,7 @@ export function Studio({
   ready,
   initialJobs,
   initialJobId,
+  initialKind,
   profileTone,
   brandColours,
   templates,
@@ -172,33 +225,53 @@ export function Studio({
   ready: { profile: boolean; brandKit: boolean };
   initialJobs: StudioJobSummary[];
   initialJobId: string | null;
+  /** Arriving with a kind already decided skips the picker dialog (WP53/56). */
+  initialKind: string | null;
   profileTone: string | null;
   /** The brand kit's colours, offered first when a text layer is coloured. */
   brandColours: string[];
   /** Every template with its real preview and price (WP19). */
   templates: TemplateCard[];
-  /** Card art from public/art, for the generator tiles. */
+  /** Card art from public/art, for the kind picker's tiles. */
   art: string[];
 }) {
   const router = useRouter();
   const base = `/api/w/${workspaceId}`;
 
-  const [kind, setKind] = useState('script');
+  const startingKind = KINDS.find((k) => k.key === initialKind)?.key ?? null;
+  const [kind, setKind] = useState(startingKind ?? 'script');
+  // Only asked when nobody said yet (WP56): a link from Home already knows, so it never opens.
+  const [kindDialogOpen, setKindDialogOpen] = useState(startingKind === null);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [promptOpen, setPromptOpen] = useState(false);
+
   const [intent, setIntent] = useState('');
   const [platform, setPlatform] = useState<TargetPlatform | null>('instagram');
   const [captionFor, setCaptionFor] = useState<TargetPlatform[]>([]);
   const [length, setLength] = useState<number | null>(null);
   const [count, setCount] = useState(1);
-  const [sceneCount, setSceneCount] = useState(3);
+  // How long the reel should run; how many eight-second beats fill that is for the engine's
+  // scene planner to decide, not the creator (WP59) — a calm piece wants fewer, longer-held
+  // beats, a fight wants several quick ones, both inside the same requested length.
+  const [durationSeconds, setDurationSeconds] = useState(24);
+  // Off for a reel that should carry no spoken narration (WP58): a fight scene is not a video
+  // essay, and captions are timed by the voice, so they turn off together with it.
+  const [voiceover, setVoiceover] = useState(true);
   const [tone, setTone] = useState('');
   // The look (WP37): the parts a creator picked, each outranking the template's (FR-PO-06).
   const [look, setLook] = useState<Partial<Record<LookKey, string>>>({});
   const [templateId, setTemplateId] = useState<string | null>(null);
+  // A picture to stay consistent with, for the one model that reads one (WP60).
+  const [referenceImage, setReferenceImage] = useState<{ key: string; url: string } | null>(null);
+  const [referenceUploading, setReferenceUploading] = useState(false);
+  const [referenceError, setReferenceError] = useState<string | null>(null);
+  const referenceInputRef = useRef<HTMLInputElement>(null);
   // The templates for what is being made, plain one first, since that is the default.
   const outputType = KINDS.find((k) => k.key === kind)?.outputType;
   const kindTemplates = templates
     .filter((template) => template.outputType === outputType)
     .sort((a, b) => Number(b.slug.startsWith('default-')) - Number(a.slug.startsWith('default-')));
+  const selectedTemplate = kindTemplates.find((t) => t.id === templateId);
 
   const [cost, setCost] = useState<{ credits: number; videoSeconds: number } | null>(null);
   const [storyboardCost, setStoryboardCost] = useState<number | null>(null);
@@ -231,7 +304,8 @@ export function Studio({
     ...(kind === 'script' && length ? { durationSeconds: length } : {}),
     ...(kind === 'image' ? { count } : {}),
     ...(VISUAL.has(kind) ? look : {}),
-    ...(kind === 'video' ? { sceneCount } : {}),
+    ...(kind === 'video' ? { targetDurationSeconds: durationSeconds, voiceover } : {}),
+    ...(REFERENCEABLE.has(kind) && referenceImage ? { referenceImageKey: referenceImage.key } : {}),
     ...(templateId ? { templateId } : {}),
     ...(kind === 'caption_set' && captionFor.length ? { platforms: captionFor } : {}),
   };
@@ -383,6 +457,23 @@ export function Studio({
     void openJob(initialJobId);
   }, [initialJobId, openJob]);
 
+  async function uploadReference(file: File) {
+    setReferenceUploading(true);
+    setReferenceError(null);
+    const form = new FormData();
+    form.set('file', file);
+    const r = await fetch(`${base}/references`, { method: 'POST', body: form }).catch(() => null);
+    setReferenceUploading(false);
+    const body = (await r?.json().catch(() => ({}))) as ApiBody & {
+      reference?: { key: string; url: string };
+    };
+    if (!r?.ok || !body.reference) {
+      setReferenceError(refusal(body ?? {}));
+      return;
+    }
+    setReferenceImage(body.reference);
+  }
+
   async function compile() {
     setBusy('compiling');
     setError(null);
@@ -393,9 +484,13 @@ export function Studio({
     }).catch(() => null);
     setBusy(null);
     const body = (await r?.json().catch(() => ({}))) as ApiBody & { prompt?: CompiledPromptView };
-    if (!r?.ok || !body.prompt) return setError(refusal(body ?? {}));
+    if (!r?.ok || !body.prompt) {
+      setError(refusal(body ?? {}));
+      return null;
+    }
     setPrompt(body.prompt);
     setPromptFor(requestKey);
+    return body.prompt;
   }
 
   async function generate(as: string = kind, extra: Record<string, unknown> = {}) {
@@ -443,402 +538,609 @@ export function Studio({
   const credit = (n: number) => `${n} ${n === 1 ? 'credit' : 'credits'}`;
 
   return (
-    // Three panes where there is room (WP45): what you are asking for, what the engine made of
-    // it, and what came back. Below that the prompt falls under the controls, as it did when
-    // it was a footnote to them.
-    // Grid items default to min-width:auto, so a pane refuses to shrink below its own content.
-    // The minmax(0,…) tracks cover that from lg up; below lg there are no tracks at all, which
-    // is why the Studio overflowed at phone and tablet width and nowhere else (WP49).
-    <div className="grid items-start gap-6 *:min-w-0 lg:grid-cols-[minmax(0,44fr)_minmax(0,56fr)] xl:grid-cols-[minmax(0,30fr)_minmax(0,32fr)_minmax(0,38fr)]">
-      {/* Left: the request. */}
-      <section className="flex flex-col rounded-2xl border border-line bg-surface">
-        <header className="px-6 pt-5">
-          <h1 className="text-xl font-semibold tracking-tight text-ink">Studio</h1>
-          <p className="mt-1 text-sm text-muted">
-            Say what you want in plain words. The engine writes the full prompt from your profile
-            and brand kit.
-          </p>
-        </header>
+    <>
+      <KindPickerDialog
+        open={kindDialogOpen}
+        art={art}
+        onPick={(picked) => {
+          setKind(picked);
+          setTemplateId(null);
+          setReferenceImage(null);
+          setKindDialogOpen(false);
+          router.replace(`?kind=${picked}`, { scroll: false });
+        }}
+      />
 
-        {blocked ? (
-          <div className="mx-6 mt-4 rounded-xl border border-accent/40 bg-accent/5 px-4 py-3 text-sm text-ink">
-            {!ready.profile
-              ? 'Answer the profile questions first; every prompt is written from them.'
-              : 'Save a brand kit first; every prompt uses it.'}{' '}
-            <Link
-              href={`/w/${workspaceId}/${ready.profile ? 'brand' : 'onboarding'}`}
-              className="text-accent hover:underline"
-            >
-              {ready.profile ? 'Open Brand' : 'Start'}
-            </Link>
-          </div>
-        ) : null}
-
-        <div className="flex flex-col gap-5 px-6 py-5">
-          <div className="grid grid-cols-3 gap-2">
-            {KINDS.map((k, i) => (
-              <button
-                key={k.key}
-                type="button"
-                disabled={k.soon}
-                aria-pressed={kind === k.key}
-                onClick={() => {
-                  setKind(k.key);
-                  // Templates belong to one output type, so the choice does not carry over.
-                  setTemplateId(null);
-                }}
-                title={k.hint}
-                className={cx(
-                  'relative flex h-24 flex-col justify-end overflow-hidden rounded-xl border p-2.5 text-left transition',
-                  kind === k.key
-                    ? 'border-accent ring-2 ring-accent/40'
-                    : 'border-line hover:-translate-y-0.5 hover:border-faint',
-                  k.soon && 'cursor-not-allowed grayscale hover:translate-y-0 hover:border-line',
-                )}
-                style={artStyle(i, art)}
-              >
-                {/* Keeps the label readable on any art. */}
-                <span
-                  aria-hidden
-                  className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent"
-                />
-                {k.soon ? (
-                  <span className="absolute right-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-[10px] uppercase tracking-wide text-white/80">
-                    Soon
-                  </span>
-                ) : null}
-                <span className="relative text-sm font-semibold text-white">{k.label}</span>
-                <span className="relative text-[11px] leading-4 text-white/75">{k.hint}</span>
-              </button>
-            ))}
-          </div>
-
-          <TemplatePicker
-            templates={kindTemplates}
-            selected={templateId}
-            onSelect={setTemplateId}
-          />
-
-          <div className="flex flex-col gap-2">
-            <label
-              htmlFor="studio-intent"
-              className="text-xs font-medium uppercase tracking-wide text-muted"
-            >
-              What do you want?
-            </label>
-            <textarea
-              id="studio-intent"
-              value={intent}
-              onChange={(event) => setIntent(event.target.value)}
-              rows={4}
-              maxLength={2000}
-              placeholder="e.g. Our cold brew now ships across Jaipur"
-              className="w-full resize-y rounded-xl border border-line bg-raised px-4 py-3 text-[15px] leading-6 text-ink outline-none transition placeholder:text-faint focus:border-accent/70 focus:ring-2 focus:ring-accent/15"
-            />
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="flex flex-col gap-2">
-              <span className="text-xs font-medium uppercase tracking-wide text-muted">For</span>
-              <div className="flex flex-wrap gap-1.5">
-                {[...PLATFORMS, { value: null, label: 'Anywhere' }].map((p) => (
-                  <button
-                    key={p.label}
-                    type="button"
-                    aria-pressed={platform === p.value}
-                    onClick={() => setPlatform(p.value)}
-                    className={cx(
-                      'tap-target cursor-pointer rounded-full border px-3 py-1.5 text-sm transition',
-                      platform === p.value
-                        ? 'border-accent bg-accent/10 text-ink'
-                        : 'border-line bg-raised text-muted hover:text-ink',
-                    )}
-                  >
-                    {p.label}
-                  </button>
-                ))}
-              </div>
+      {/*
+        Two panes, left to right, roughly 2:3 (WP56): what you are asking for, and what came
+        back. The engine's own compiled-prompt disclosure used to be a third pane reserved
+        whether it had anything to show or not; it is a dialog now, opened from the prompt box
+        that made it, which is also why this grid needed only two tracks instead of three.
+        Grid items default to min-width:auto, so a pane refuses to shrink below its own
+        content — *:min-w-0 is what let the Studio overflow at phone and tablet width and
+        nowhere else when it was missing (WP49).
+      */}
+      <div className="grid items-start gap-6 *:min-w-0 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+        {/* Left: the request. */}
+        <section className="flex flex-col rounded-2xl border border-line bg-surface">
+          <header className="flex items-start justify-between gap-3 px-6 pt-5">
+            <div>
+              <h1 className="text-title font-display font-semibold text-ink">
+                {KINDS.find((k) => k.key === kind)?.label ?? 'Studio'}
+              </h1>
+              <p className="mt-1 text-sm text-muted">{KINDS.find((k) => k.key === kind)?.hint}</p>
             </div>
-
-            {kind === 'script' ? (
-              <div className="flex flex-col gap-2">
-                <span className="text-xs font-medium uppercase tracking-wide text-muted">
-                  Length
-                </span>
-                <div className="flex flex-wrap gap-1.5">
-                  {[null, ...LENGTHS].map((l) => (
-                    <button
-                      key={String(l)}
-                      type="button"
-                      aria-pressed={length === l}
-                      onClick={() => setLength(l)}
-                      className={cx(
-                        'tap-target cursor-pointer rounded-full border px-3 py-1.5 text-sm transition',
-                        length === l
-                          ? 'border-accent bg-accent/10 text-ink'
-                          : 'border-line bg-raised text-muted hover:text-ink',
-                      )}
-                    >
-                      {l ? `${l}s` : 'Default'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-
-            {kind === 'image' ? (
-              <div className="flex flex-col gap-2">
-                <span className="text-xs font-medium uppercase tracking-wide text-muted">
-                  How many
-                </span>
-                <div className="flex flex-wrap gap-1.5">
-                  {COUNTS.map((n) => (
-                    <button
-                      key={n}
-                      type="button"
-                      aria-pressed={count === n}
-                      onClick={() => setCount(n)}
-                      className={cx(
-                        'tap-target cursor-pointer rounded-full border px-3 py-1.5 text-sm transition',
-                        count === n
-                          ? 'border-accent bg-accent/10 text-ink'
-                          : 'border-line bg-raised text-muted hover:text-ink',
-                      )}
-                    >
-                      {n}
-                    </button>
-                  ))}
-                </div>
-                <span className="text-[11px] text-muted">Each one costs its own credits.</span>
-              </div>
-            ) : null}
-
-            {VISUAL.has(kind) ? (
-              <div className="flex flex-col gap-2">
-                <span className="text-xs font-medium uppercase tracking-wide text-muted">Look</span>
-                {LOOK_KEYS.map((key) => (
-                  <div key={key} className="flex flex-wrap items-center gap-1.5">
-                    <span className="w-16 shrink-0 text-[11px] text-faint">{LOOK_LABELS[key]}</span>
-                    {LOOK_VOCABULARY[key].map((option) => (
-                      <Chip
-                        key={option.id}
-                        title={option.phrase}
-                        selected={look[key] === option.id}
-                        onClick={() =>
-                          // Picking the chosen one again clears it, so a creator can take a
-                          // part back out rather than being stuck with a look once touched.
-                          setLook((current) => ({
-                            ...current,
-                            [key]: current[key] === option.id ? undefined : option.id,
-                          }))
-                        }
-                      >
-                        {option.label}
-                      </Chip>
-                    ))}
-                  </div>
-                ))}
-                <span className="text-[11px] text-muted">
-                  Written into the prompt as the engine composes it. Leave it alone and the template
-                  decides.
-                </span>
-              </div>
-            ) : null}
-
-            {kind === 'video' ? (
-              <div className="flex flex-col gap-2">
-                <span className="text-xs font-medium uppercase tracking-wide text-muted">
-                  Scenes
-                </span>
-                <SegmentedControl
-                  name="scene-count"
-                  label="Scenes"
-                  value={sceneCount}
-                  onChange={setSceneCount}
-                  options={[1, 2, 3].map((n) => ({ value: n, label: String(n) }))}
-                />
-                <span className="text-[11px] text-muted">
-                  Eight seconds each, so {sceneCount * 8}s in all.
-                  {sceneCount > IMAGES_PER_MINUTE
-                    ? ` A storyboard of ${sceneCount} takes about a minute to draw: the picture model allows ${IMAGES_PER_MINUTE} a minute.`
-                    : ''}
-                </span>
-              </div>
-            ) : null}
-
-            {kind === 'caption_set' ? (
-              <div className="flex flex-col gap-2">
-                <span className="text-xs font-medium uppercase tracking-wide text-muted">
-                  Captions for
-                </span>
-                <div className="flex flex-wrap gap-1.5">
-                  {PLATFORMS.map((p) => {
-                    const on = captionFor.includes(p.value);
-                    return (
-                      <button
-                        key={p.value}
-                        type="button"
-                        aria-pressed={on}
-                        onClick={() =>
-                          setCaptionFor((list) =>
-                            on ? list.filter((v) => v !== p.value) : [...list, p.value],
-                          )
-                        }
-                        className={cx(
-                          'tap-target cursor-pointer rounded-full border px-3 py-1.5 text-sm transition',
-                          on
-                            ? 'border-accent bg-accent/10 text-ink'
-                            : 'border-line bg-raised text-muted hover:text-ink',
-                        )}
-                      >
-                        {p.label}
-                      </button>
-                    );
-                  })}
-                </div>
-                <span className="text-[11px] text-muted">
-                  None picked: the platform on the left.
-                </span>
-              </div>
-            ) : null}
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <label
-              htmlFor="studio-tone"
-              className="text-xs font-medium uppercase tracking-wide text-muted"
+            <button
+              type="button"
+              onClick={() => setKindDialogOpen(true)}
+              className="tap-target shrink-0 cursor-pointer rounded-lg px-2 py-1 text-caption text-muted transition-colors duration-base ease-standard hover:text-ink"
             >
-              Tone for this one <span className="normal-case text-faint">(optional)</span>
-            </label>
-            <input
-              id="studio-tone"
-              value={tone}
-              onChange={(event) => setTone(event.target.value)}
-              maxLength={80}
-              placeholder={profileTone ? `Your usual: ${profileTone}` : 'Your profile tone'}
-              className="h-11 w-full rounded-xl border border-line bg-raised px-4 text-sm text-ink outline-none transition placeholder:text-faint focus:border-accent/70 focus:ring-2 focus:ring-accent/15"
-            />
-          </div>
+              Change
+            </button>
+          </header>
 
-          {/* On a narrow screen the prompt stays here, under the controls it was made from. */}
-          {prompt ? (
-            <div className="xl:hidden">
-              <PromptDisclosure
-                key={prompt.id}
-                workspaceId={workspaceId}
-                prompt={prompt}
-                stale={stale}
-                onEdited={(edited) => {
-                  setPrompt(edited);
-                  setPromptFor(requestKey);
-                }}
-              />
+          {blocked ? (
+            <div className="mx-6 mt-4 rounded-xl border border-accent/40 bg-accent/5 px-4 py-3 text-sm text-ink">
+              {!ready.profile
+                ? 'Answer the profile questions first; every prompt is written from them.'
+                : 'Save a brand kit first; every prompt uses it.'}{' '}
+              <Link
+                href={`/w/${workspaceId}/${ready.profile ? 'brand' : 'onboarding'}`}
+                className="text-accent hover:underline"
+              >
+                {ready.profile ? 'Open Brand' : 'Start'}
+              </Link>
             </div>
           ) : null}
-        </div>
 
-        <footer className="sticky bottom-0 flex flex-col gap-3 rounded-b-2xl border-t border-line bg-surface/95 px-6 py-4 backdrop-blur">
-          {error ? <p className="text-sm text-bad">{error}</p> : null}
-          <div className="flex items-center justify-between gap-3 text-sm">
-            <span className="text-muted">
-              {input.intentText && cost !== null ? (
-                cost.videoSeconds > 0 ? (
-                  <>
-                    Costs{' '}
-                    <span className="font-semibold text-ink tabular-nums">
-                      {cost.videoSeconds}s of video
-                    </span>{' '}
-                    {/* Per scene, from the server's own estimate rather than a number
-                        repeated here: the generator decides what a scene costs. */}
-                    <span className="text-faint">
-                      ({sceneCount} x {Math.round(cost.videoSeconds / Math.max(sceneCount, 1))}s)
+          <div className="flex flex-col gap-4 px-6 py-5">
+            {/* The prompt box, with the two things it opens onto: the detailed compiled
+                prompt, and the template gallery, both dialogs rather than permanent panes
+                (WP56). */}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between gap-3">
+                <label
+                  htmlFor="studio-intent"
+                  className="text-label font-medium uppercase tracking-wide text-muted"
+                >
+                  What do you want?
+                </label>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!prompt || stale) await compile();
+                    setPromptOpen(true);
+                  }}
+                  disabled={busy === 'compiling'}
+                  className="tap-target flex cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1 text-caption text-muted transition-colors duration-base ease-standard hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <EyeIcon width={14} height={14} aria-hidden />
+                  {busy === 'compiling' ? 'Writing…' : 'See the detailed prompt'}
+                </button>
+              </div>
+              <textarea
+                id="studio-intent"
+                value={intent}
+                onChange={(event) => setIntent(event.target.value)}
+                rows={4}
+                maxLength={2000}
+                placeholder="e.g. Our cold brew now ships across Jaipur"
+                className="w-full resize-y rounded-xl border border-line bg-raised px-4 py-3 text-[15px] leading-6 text-ink outline-none transition placeholder:text-faint focus:border-accent/70 focus:ring-2 focus:ring-accent/15"
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setTemplatesOpen(true)}
+              className="tap-target flex h-11 cursor-pointer items-center justify-between gap-2 rounded-xl border border-line bg-raised px-4 text-left text-sm text-ink transition-colors duration-base ease-standard hover:border-faint"
+            >
+              <span className="flex items-center gap-2 truncate">
+                <PaletteIcon width={16} height={16} aria-hidden className="shrink-0 text-faint" />
+                <span className="truncate">
+                  Template: {selectedTemplate ? selectedTemplate.title : 'Default'}
+                </span>
+              </span>
+              <ChevronDownIcon aria-hidden className="shrink-0 -rotate-90 text-faint" />
+            </button>
+
+            {/* A picture the model reads alongside the prompt, for the result to stay
+                consistent with (WP60). Only offered where the provider reads one: Veo has
+                nothing like it, so video never sees this control. */}
+            {REFERENCEABLE.has(kind) ? (
+              <div className="flex flex-col gap-1.5">
+                <ControlLabel icon={ImageIcon}>
+                  Reference image <span className="normal-case text-faint">(optional)</span>
+                </ControlLabel>
+                {referenceImage ? (
+                  <div className="flex items-center gap-3 rounded-xl border border-line bg-raised px-3 py-2">
+                    {/* A real uploaded picture: next/image cannot optimise it, and need not. */}
+                    <img
+                      src={referenceImage.url}
+                      alt=""
+                      className="size-10 shrink-0 rounded-lg object-cover"
+                    />
+                    <span className="flex-1 truncate text-caption text-muted">
+                      Kept in frame alongside the prompt
                     </span>
+                    <button
+                      type="button"
+                      onClick={() => setReferenceImage(null)}
+                      className="tap-target shrink-0 cursor-pointer rounded-lg p-1.5 text-faint transition-colors duration-base ease-standard hover:text-ink"
+                      aria-label="Remove the reference image"
+                    >
+                      <CloseIcon width={14} height={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <input
+                      ref={referenceInputRef}
+                      type="file"
+                      accept="image/png,image/jpeg"
+                      className="hidden"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        event.target.value = '';
+                        if (file) void uploadReference(file);
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => referenceInputRef.current?.click()}
+                      disabled={referenceUploading}
+                      className="tap-target flex h-11 cursor-pointer items-center gap-2 rounded-xl border border-dashed border-line bg-raised px-4 text-left text-sm text-muted transition-colors duration-base ease-standard hover:border-faint hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <ImageIcon width={16} height={16} aria-hidden className="shrink-0 text-faint" />
+                      {referenceUploading ? 'Uploading…' : 'Upload a picture to match'}
+                    </button>
+                  </>
+                )}
+                {referenceError ? (
+                  <span className="text-caption text-bad">{referenceError}</span>
+                ) : null}
+              </div>
+            ) : null}
+
+            {/* Every control that applies to this kind, iconified, compact, a dropdown
+                wherever there are more than a couple of options to choose between (WP56). */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <ControlLabel icon={LinkIcon}>For</ControlLabel>
+                <Dropdown
+                  aria-label="Platform"
+                  value={platform ?? ''}
+                  onChange={(v) => setPlatform(v === '' ? null : (v as TargetPlatform))}
+                  options={[{ value: '', label: 'Anywhere' }, ...PLATFORMS]}
+                />
+              </div>
+
+              {kind === 'script' ? (
+                <div className="flex flex-col gap-1.5">
+                  <ControlLabel icon={ClockIcon}>Length</ControlLabel>
+                  <Dropdown
+                    aria-label="Length"
+                    value={length === null ? '' : String(length)}
+                    onChange={(v) => setLength(v === '' ? null : Number(v))}
+                    options={[
+                      { value: '', label: 'Default' },
+                      ...LENGTHS.map((l) => ({ value: String(l), label: `${l}s` })),
+                    ]}
+                  />
+                </div>
+              ) : null}
+
+              {kind === 'image' ? (
+                <div className="flex flex-col gap-1.5">
+                  <ControlLabel icon={ImageIcon}>How many</ControlLabel>
+                  <Dropdown
+                    aria-label="How many"
+                    value={String(count)}
+                    onChange={(v) => setCount(Number(v))}
+                    options={COUNTS.map((n) => ({ value: String(n), label: String(n) }))}
+                  />
+                  <span className="text-caption text-faint">Each one costs its own credits.</span>
+                </div>
+              ) : null}
+
+              {kind === 'video' ? (
+                <div className="flex flex-col gap-1.5">
+                  <ControlLabel icon={FilmIcon}>Length</ControlLabel>
+                  <Dropdown
+                    aria-label="Length"
+                    value={String(durationSeconds)}
+                    onChange={(v) => setDurationSeconds(Number(v))}
+                    options={VIDEO_DURATIONS.map((n) => ({ value: String(n), label: `${n}s` }))}
+                  />
+                  <span className="text-caption text-faint">
+                    However many eight-second beats best tell it, free-flowing, in about{' '}
+                    {durationSeconds}s.
+                    {durationSeconds > SECONDS_PER_SCENE
+                      ? ` The video model films one beat a minute, so a longer piece takes a few minutes.`
+                      : ''}
+                  </span>
+                </div>
+              ) : null}
+
+              {kind === 'video' ? (
+                <div className="col-span-2 flex items-center justify-between gap-3 rounded-xl border border-line bg-raised px-4 py-3">
+                  <div className="flex flex-col gap-0.5">
+                    <ControlLabel icon={MicIcon}>Voiceover</ControlLabel>
+                    <span className="text-caption text-faint">
+                      {voiceover
+                        ? 'A narrator speaks over it, and captions follow the voice.'
+                        : 'No narration: the reel plays on its footage alone, with no captions.'}
+                    </span>
+                  </div>
+                  <Toggle on={voiceover} onChange={setVoiceover} label="Voiceover" />
+                </div>
+              ) : null}
+
+              {kind === 'caption_set' ? (
+                <div className="flex flex-col gap-1.5">
+                  <ControlLabel icon={TypeIcon}>Captions for</ControlLabel>
+                  <div className="flex flex-wrap gap-1.5">
+                    {PLATFORMS.map((p) => {
+                      const on = captionFor.includes(p.value);
+                      return (
+                        <button
+                          key={p.value}
+                          type="button"
+                          aria-pressed={on}
+                          onClick={() =>
+                            setCaptionFor((list) =>
+                              on ? list.filter((v) => v !== p.value) : [...list, p.value],
+                            )
+                          }
+                          className={cx(
+                            'tap-target cursor-pointer rounded-full border px-3 py-1.5 text-sm transition',
+                            on
+                              ? 'border-accent bg-accent/10 text-ink'
+                              : 'border-line bg-raised text-muted hover:text-ink',
+                          )}
+                        >
+                          {p.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <span className="text-caption text-faint">None picked: the platform above.</span>
+                </div>
+              ) : null}
+
+              {VISUAL.has(kind)
+                ? LOOK_KEYS.map((key) => (
+                    <div key={key} className="flex flex-col gap-1.5">
+                      <ControlLabel icon={CameraIcon}>{LOOK_LABELS[key]}</ControlLabel>
+                      <Dropdown
+                        aria-label={LOOK_LABELS[key]}
+                        value={look[key] ?? ''}
+                        onChange={(v) =>
+                          setLook((current) => ({ ...current, [key]: v === '' ? undefined : v }))
+                        }
+                        options={[
+                          { value: '', label: 'Template decides' },
+                          ...LOOK_VOCABULARY[key].map((option) => ({
+                            value: option.id,
+                            label: option.label,
+                          })),
+                        ]}
+                      />
+                    </div>
+                  ))
+                : null}
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="studio-tone" className="flex items-center gap-1.5">
+                <ControlLabel icon={SparklesIcon}>
+                  Tone for this one <span className="normal-case text-faint">(optional)</span>
+                </ControlLabel>
+              </label>
+              <input
+                id="studio-tone"
+                value={tone}
+                onChange={(event) => setTone(event.target.value)}
+                maxLength={80}
+                placeholder={profileTone ? `Your usual: ${profileTone}` : 'Your profile tone'}
+                className="h-11 w-full rounded-xl border border-line bg-raised px-4 text-sm text-ink outline-none transition placeholder:text-faint focus:border-accent/70 focus:ring-2 focus:ring-accent/15"
+              />
+            </div>
+          </div>
+
+          <footer className="sticky bottom-0 flex flex-col gap-3 rounded-b-2xl border-t border-line bg-surface/95 px-6 py-4 backdrop-blur">
+            {error ? <p className="text-sm text-bad">{error}</p> : null}
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <span className="text-muted">
+                {input.intentText && cost !== null ? (
+                  cost.videoSeconds > 0 ? (
+                    <>
+                      Holds up to{' '}
+                      <span className="font-semibold text-ink font-mono tabular-nums">
+                        {cost.videoSeconds}s of video
+                      </span>{' '}
+                      <span className="text-faint">settled on what&apos;s actually filmed</span>
+                    </>
+                  ) : (
+                    <>
+                      Costs <span className="font-semibold text-ink">{credit(cost.credits)}</span>
+                    </>
+                  )
+                ) : (
+                  'Cost shows once you describe it'
+                )}
+              </span>
+              <span className="text-muted">
+                {cost?.videoSeconds ? (
+                  <>
+                    Leaves{' '}
+                    <span className="font-mono tabular-nums text-ink">
+                      {Math.max(0, videoSeconds - cost.videoSeconds).toLocaleString('en-IN')}s
+                    </span>{' '}
+                    <span className="text-faint">of {videoSeconds.toLocaleString('en-IN')}s</span>
                   </>
                 ) : (
                   <>
-                    Costs <span className="font-semibold text-ink">{credit(cost.credits)}</span>
+                    Balance{' '}
+                    <span className="font-mono tabular-nums text-ink">
+                      {credits.toLocaleString('en-IN')}
+                    </span>
                   </>
-                )
-              ) : (
-                'Cost shows once you describe it'
-              )}
-            </span>
-            <span className="text-muted">
-              {cost?.videoSeconds ? (
-                <>
-                  Leaves{' '}
-                  <span className="tabular-nums text-ink">
-                    {Math.max(0, videoSeconds - cost.videoSeconds).toLocaleString('en-IN')}s
-                  </span>{' '}
-                  <span className="text-faint">of {videoSeconds.toLocaleString('en-IN')}s</span>
-                </>
-              ) : (
-                <>
-                  Balance{' '}
-                  <span className="tabular-nums text-ink">{credits.toLocaleString('en-IN')}</span>
-                </>
-              )}
-            </span>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant="secondary"
-              onClick={() => void compile()}
-              disabled={!canGo}
-              className="flex-1"
-            >
-              {busy === 'compiling'
-                ? 'Writing prompt…'
-                : prompt && !stale
-                  ? 'Rewrite prompt'
-                  : 'See the prompt'}
-            </Button>
-            {kind === 'video' ? (
+                )}
+              </span>
+            </div>
+            <div className="flex gap-2">
+              {kind === 'video' ? (
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setStoryboardId(null);
+                    void generate('storyboard');
+                  }}
+                  disabled={!canGo}
+                  className="flex-1"
+                >
+                  {busy === 'starting'
+                    ? 'Starting…'
+                    : `Storyboard first${storyboardCost === null ? '' : ` · ${credit(storyboardCost)}`}`}
+                </Button>
+              ) : null}
               <Button
-                variant="secondary"
-                onClick={() => {
-                  setStoryboardId(null);
-                  void generate('storyboard');
-                }}
-                disabled={!canGo}
+                onClick={() =>
+                  void generate(kind, storyboardId ? { storyboardOutputId: storyboardId } : {})
+                }
+                disabled={!canGo || (kind === 'video' && videoSeconds < (cost?.videoSeconds ?? 0))}
                 className="flex-1"
               >
                 {busy === 'starting'
                   ? 'Starting…'
-                  : `Storyboard first${storyboardCost === null ? '' : ` · ${credit(storyboardCost)}`}`}
+                  : kind === 'video'
+                    ? storyboardId
+                      ? 'Film this storyboard'
+                      : 'Film it'
+                    : 'Generate'}
               </Button>
-            ) : null}
-            <Button
-              onClick={() =>
-                void generate(kind, storyboardId ? { storyboardOutputId: storyboardId } : {})
-              }
-              disabled={!canGo || (kind === 'video' && videoSeconds < (cost?.videoSeconds ?? 0))}
-              className="flex-1"
-            >
-              {busy === 'starting'
-                ? 'Starting…'
-                : kind === 'video'
-                  ? storyboardId
-                    ? 'Film this storyboard'
-                    : 'Film it'
-                  : 'Generate'}
-            </Button>
-          </div>
-          <p className="text-[11px] text-muted">
-            Writing the prompt is free. Credits are held when you generate, charged when it is done,
-            and refunded in full if it fails or is blocked.
-          </p>
-        </footer>
-      </section>
+            </div>
+            <p className="text-caption text-muted">
+              Writing the prompt is free. Credits are held when you generate, charged when it is
+              done, and refunded in full if it fails or is blocked.
+            </p>
+          </footer>
+        </section>
 
-      {/* Right: the output, then what was made before. */}
-      {/*
-        The engine's own pane (WP45). It is the product and step 2 of the demo, and it used to
-        be a strip at the bottom of the controls. Collapsed by default still, because plan
-        section 13 says so: the room is for when it is open, not an argument for opening it.
-      */}
-      <section className="hidden flex-col gap-3 xl:flex xl:sticky xl:top-20">
-        {prompt ? (
+        {/* Right: the canvas. What came back, or what is coming. */}
+        <aside className="flex flex-col gap-4 lg:sticky lg:top-20">
+          <section className="flex min-h-[420px] flex-col gap-4 rounded-2xl border border-line bg-surface p-5">
+            {job ? (
+              <>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-ink">
+                      {LABEL[job.generatorKey] ?? job.generatorKey}
+                    </p>
+                    {shownIntent ? (
+                      <p className="truncate text-xs text-muted">{shownIntent}</p>
+                    ) : null}
+                  </div>
+                  <span
+                    className={cx('rounded-full border px-3 py-1 text-xs', STATUS[job.status].tone)}
+                  >
+                    {checking && job.status !== 'QUEUED' ? 'Checking · ' : ''}
+                    {job.status === 'RUNNING' && job.generatorKey === 'video'
+                      ? 'Filming'
+                      : job.status === 'RUNNING' && DRAWN.has(job.generatorKey)
+                        ? 'Drawing'
+                        : STATUS[job.status].label}
+                  </span>
+                </div>
+
+                <p className="text-xs text-muted">
+                  {job.held.videoSeconds > 0
+                    ? job.status === 'COMPLETE'
+                      ? `${job.settled?.videoSeconds ?? job.held.videoSeconds}s of video charged.`
+                      : TERMINAL.has(job.status)
+                        ? `${job.held.videoSeconds}s refunded in full.`
+                        : `${job.held.videoSeconds}s held until it is done.`
+                    : job.status === 'COMPLETE'
+                      ? `${credit(job.settled?.credits ?? job.held.credits)} charged.`
+                      : TERMINAL.has(job.status)
+                        ? `${credit(job.held.credits)} refunded in full.`
+                        : `${credit(job.held.credits)} held until it is done.`}
+                </p>
+
+                {job.error ? (
+                  <p className="rounded-lg border border-bad/40 bg-bad/10 px-3 py-2 text-sm text-ink">
+                    {job.status === 'BLOCKED'
+                      ? `Blocked by the safety check${job.error.category ? ` (${job.error.category})` : ''}. Nothing was charged.`
+                      : job.error.code === 'MODERATION_UNAVAILABLE'
+                        ? 'The safety check was unavailable, so this was not released. Nothing was charged; try again.'
+                        : 'This one did not work. Nothing was charged; try again.'}
+                  </p>
+                ) : null}
+
+                {outputs.length > 0 ? (
+                  outputs[0]?.storyboard ? (
+                    <Storyboard
+                      frames={outputs[0].storyboard}
+                      {...(cost?.videoSeconds ? { videoSeconds: cost.videoSeconds } : {})}
+                      committed={storyboardId === outputs[0].id}
+                      onCommit={() => {
+                        const id = outputs[0]?.id;
+                        if (!id) return;
+                        setStoryboardId(id);
+                        void generate('video', { storyboardOutputId: id });
+                      }}
+                      redrawCredits={redrawCredits}
+                      redrawing={redrawing}
+                      onRedraw={(index, note) => {
+                        const output = outputs[0];
+                        if (!output) return;
+                        setRedrawing(index);
+                        void generate('redraw_frame', {
+                          intentText: shownIntent || input.intentText || 'Redraw',
+                          storyboardOutputId: output.id,
+                          frameIndex: index,
+                          compiledPromptId: output.compiledPromptId,
+                          ...(note ? { note } : {}),
+                        }).finally(() => setRedrawing(null));
+                      }}
+                    />
+                  ) : outputs[0]?.kind === 'video' && outputs[0].media ? (
+                    <VideoOutput
+                      {...outputs[0].media}
+                      scenes={outputs[0].scenes ?? []}
+                      refilmSeconds={SECONDS_PER_SCENE}
+                      refilming={refilming}
+                      onRefilm={(sceneId) => {
+                        const output = outputs[0];
+                        if (!output) return;
+                        setRefilming(sceneId);
+                        void generate('regenerate_scene', {
+                          intentText: shownIntent || input.intentText || 'Film this scene again',
+                          sceneId,
+                          compiledPromptId: output.compiledPromptId,
+                        }).finally(() => setRefilming(null));
+                      }}
+                    />
+                  ) : outputs[0]?.media ? (
+                    <div className={cx('grid gap-3', outputs.length > 1 && 'sm:grid-cols-2')}>
+                      {outputs.map((output) =>
+                        output.media ? (
+                          <ImageOutput
+                            key={output.id}
+                            workspaceId={workspaceId}
+                            outputId={output.id}
+                            brandColours={brandColours}
+                            rendition={output.rendition}
+                            {...output.media}
+                          />
+                        ) : null,
+                      )}
+                    </div>
+                  ) : (
+                    outputs.map((output) => (
+                      <OutputView
+                        key={output.id}
+                        kind={output.kind}
+                        text={output.text}
+                        locked={false}
+                        targetSeconds={shownDuration}
+                        workspaceId={workspaceId}
+                        outputId={output.id}
+                      />
+                    ))
+                  )
+                ) : streamed && (!TERMINAL.has(job.status) || job.status === 'COMPLETE') ? (
+                  <div className="flex flex-col gap-2">
+                    <p className="text-xs text-muted">
+                      {job.status === 'COMPLETE'
+                        ? 'Loading the finished result…'
+                        : 'Writing… copy unlocks once it is checked.'}
+                    </p>
+                    <p className="whitespace-pre-wrap rounded-xl border border-line bg-raised px-4 py-3 text-[15px] leading-7 text-ink/80">
+                      {streamed}
+                    </p>
+                  </div>
+                ) : checking ? (
+                  stages.length > 0 ? (
+                    <WorkLedger stages={stages} />
+                  ) : (
+                    <GenerationStatus
+                      kind={job.generatorKey}
+                      sceneCount={Math.max(1, Math.round(durationSeconds / SECONDS_PER_SCENE))}
+                      label={
+                        job.generatorKey === 'video'
+                          ? 'Filming scene by scene'
+                          : DRAWN.has(job.generatorKey)
+                            ? 'Drawing it now'
+                            : 'Writing…'
+                      }
+                    />
+                  )
+                ) : job.status === 'COMPLETE' ? (
+                  <p className="text-sm text-muted">Loading the result…</p>
+                ) : null}
+              </>
+            ) : (
+              <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center">
+                <p className="text-sm font-medium text-ink">Nothing yet</p>
+                <p className="max-w-xs text-sm text-muted">
+                  What you generate appears here as it is written. You can leave; it keeps going.
+                </p>
+              </div>
+            )}
+          </section>
+
+          {jobs.length > 0 ? (
+            <section className="rounded-2xl border border-line bg-surface p-5">
+              <h2 className="text-sm font-medium text-ink">Recent</h2>
+              <ul className="mt-3 flex flex-col gap-1.5">
+                {jobs.map((j) => (
+                  <li key={j.id}>
+                    <button
+                      type="button"
+                      onClick={() => void openJob(j.id)}
+                      className={cx(
+                        'flex min-h-11 w-full cursor-pointer items-center gap-3 rounded-xl px-3 py-2 text-left transition hover:bg-raised',
+                        job?.id === j.id && 'bg-raised',
+                      )}
+                    >
+                      <span className="w-24 shrink-0 text-xs text-muted">
+                        {LABEL[j.generatorKey] ?? j.generatorKey}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-sm text-ink">
+                        {j.intentText || '—'}
+                      </span>
+                      <span
+                        className={cx(
+                          'rounded-full border px-2 py-0.5 text-[11px]',
+                          STATUS[j.status].tone,
+                        )}
+                      >
+                        {STATUS[j.status].label}
+                      </span>
+                      <span
+                        className="w-16 shrink-0 text-right text-[11px] text-muted"
+                        title={new Date(j.createdAt).toLocaleString('en-IN')}
+                        suppressHydrationWarning
+                      >
+                        {ago(j.createdAt)}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+        </aside>
+      </div>
+
+      {prompt ? (
+        <Dialog
+          open={promptOpen}
+          onClose={() => setPromptOpen(false)}
+          title="The compiled prompt"
+          className="max-w-2xl"
+        >
           <PromptDisclosure
             key={prompt.id}
             workspaceId={workspaceId}
@@ -849,230 +1151,16 @@ export function Studio({
               setPromptFor(requestKey);
             }}
           />
-        ) : (
-          <div className="flex flex-col gap-2 rounded-2xl border border-dashed border-line p-5">
-            <p className="text-subtitle font-medium text-ink">The prompt appears here</p>
-            <p className="text-body text-muted">
-              Say what you want in plain words, then see the prompt the engine writes from it: your
-              profile, your brand kit and the platform&rsquo;s own limits, assembled. You can read
-              it, and change it, before anything is spent.
-            </p>
-          </div>
-        )}
-      </section>
+        </Dialog>
+      ) : null}
 
-      <aside className="flex flex-col gap-4 lg:sticky lg:top-20">
-        <section className="flex min-h-[360px] flex-col gap-4 rounded-2xl border border-line bg-surface p-5">
-          {job ? (
-            <>
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-ink">
-                    {LABEL[job.generatorKey] ?? job.generatorKey}
-                  </p>
-                  {shownIntent ? (
-                    <p className="truncate text-xs text-muted">{shownIntent}</p>
-                  ) : null}
-                </div>
-                <span
-                  className={cx('rounded-full border px-3 py-1 text-xs', STATUS[job.status].tone)}
-                >
-                  {checking && job.status !== 'QUEUED' ? 'Checking · ' : ''}
-                  {job.status === 'RUNNING' && job.generatorKey === 'video'
-                    ? 'Filming'
-                    : job.status === 'RUNNING' && DRAWN.has(job.generatorKey)
-                      ? 'Drawing'
-                      : STATUS[job.status].label}
-                </span>
-              </div>
-
-              <p className="text-xs text-muted">
-                {job.held.videoSeconds > 0
-                  ? job.status === 'COMPLETE'
-                    ? `${job.settled?.videoSeconds ?? job.held.videoSeconds}s of video charged.`
-                    : TERMINAL.has(job.status)
-                      ? `${job.held.videoSeconds}s refunded in full.`
-                      : `${job.held.videoSeconds}s held until it is done.`
-                  : job.status === 'COMPLETE'
-                    ? `${credit(job.settled?.credits ?? job.held.credits)} charged.`
-                    : TERMINAL.has(job.status)
-                      ? `${credit(job.held.credits)} refunded in full.`
-                      : `${credit(job.held.credits)} held until it is done.`}
-              </p>
-
-              {job.error ? (
-                <p className="rounded-lg border border-bad/40 bg-bad/10 px-3 py-2 text-sm text-ink">
-                  {job.status === 'BLOCKED'
-                    ? `Blocked by the safety check${job.error.category ? ` (${job.error.category})` : ''}. Nothing was charged.`
-                    : job.error.code === 'MODERATION_UNAVAILABLE'
-                      ? 'The safety check was unavailable, so this was not released. Nothing was charged; try again.'
-                      : 'This one did not work. Nothing was charged; try again.'}
-                </p>
-              ) : null}
-
-              {outputs.length > 0 ? (
-                outputs[0]?.storyboard ? (
-                  <Storyboard
-                    frames={outputs[0].storyboard}
-                    // What filming it would spend, from the same estimate the submit bar
-                    // uses: the price belongs next to the decision (WP46).
-                    {...(cost?.videoSeconds ? { videoSeconds: cost.videoSeconds } : {})}
-                    committed={storyboardId === outputs[0].id}
-                    onCommit={() => {
-                      const id = outputs[0]?.id;
-                      if (!id) return;
-                      setStoryboardId(id);
-                      void generate('video', { storyboardOutputId: id });
-                    }}
-                    redrawCredits={redrawCredits}
-                    redrawing={redrawing}
-                    onRedraw={(index, note) => {
-                      const output = outputs[0];
-                      if (!output) return;
-                      setRedrawing(index);
-                      // The storyboard's own prompt, not a fresh one: re-compiling would plan
-                      // the scenes again and quietly move the two frames nobody asked about.
-                      void generate('redraw_frame', {
-                        intentText: shownIntent || input.intentText || 'Redraw',
-                        storyboardOutputId: output.id,
-                        frameIndex: index,
-                        compiledPromptId: output.compiledPromptId,
-                        ...(note ? { note } : {}),
-                      }).finally(() => setRedrawing(null));
-                    }}
-                  />
-                ) : outputs[0]?.kind === 'video' && outputs[0].media ? (
-                  <VideoOutput
-                    {...outputs[0].media}
-                    scenes={outputs[0].scenes ?? []}
-                    refilmSeconds={SECONDS_PER_SCENE}
-                    refilming={refilming}
-                    onRefilm={(sceneId) => {
-                      const output = outputs[0];
-                      if (!output) return;
-                      setRefilming(sceneId);
-                      void generate('regenerate_scene', {
-                        intentText: shownIntent || input.intentText || 'Film this scene again',
-                        sceneId,
-                        compiledPromptId: output.compiledPromptId,
-                      }).finally(() => setRefilming(null));
-                    }}
-                  />
-                ) : outputs[0]?.media ? (
-                  <div className={cx('grid gap-3', outputs.length > 1 && 'sm:grid-cols-2')}>
-                    {outputs.map((output) =>
-                      output.media ? (
-                        <ImageOutput
-                          key={output.id}
-                          workspaceId={workspaceId}
-                          outputId={output.id}
-                          brandColours={brandColours}
-                          rendition={output.rendition}
-                          {...output.media}
-                        />
-                      ) : null,
-                    )}
-                  </div>
-                ) : (
-                  outputs.map((output) => (
-                    <OutputView
-                      key={output.id}
-                      kind={output.kind}
-                      text={output.text}
-                      locked={false}
-                      targetSeconds={shownDuration}
-                      workspaceId={workspaceId}
-                      outputId={output.id}
-                    />
-                  ))
-                )
-              ) : /* A blocked or failed job releases nothing: what streamed is replaced by
-                    the refusal above, never left on screen (plan section 14). */
-              streamed && (!TERMINAL.has(job.status) || job.status === 'COMPLETE') ? (
-                <div className="flex flex-col gap-2">
-                  <p className="text-xs text-muted">
-                    {job.status === 'COMPLETE'
-                      ? 'Loading the finished result…'
-                      : 'Writing… copy unlocks once it is checked.'}
-                  </p>
-                  <p className="whitespace-pre-wrap rounded-xl border border-line bg-raised px-4 py-3 text-[15px] leading-7 text-ink/80">
-                    {streamed}
-                  </p>
-                </div>
-              ) : checking ? (
-                // The work ledger where the blank wait used to be (WP44). It only appears once
-                // the worker has said something; until then the sentence below sets the
-                // expectation, which for a reel is minutes.
-                stages.length > 0 ? (
-                  <WorkLedger stages={stages} />
-                ) : (
-                  <p className="text-body text-muted">
-                    {job.generatorKey === 'video'
-                      ? 'Filming scene by scene, then joining them. Minutes, not seconds.'
-                      : DRAWN.has(job.generatorKey)
-                        ? 'Drawing it now; pictures arrive all at once.'
-                        : 'Waiting for the first words…'}
-                  </p>
-                )
-              ) : job.status === 'COMPLETE' ? (
-                <p className="text-sm text-muted">Loading the result…</p>
-              ) : null}
-            </>
-          ) : (
-            <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center">
-              <p className="text-sm font-medium text-ink">Nothing yet</p>
-              <p className="max-w-xs text-sm text-muted">
-                What you generate appears here as it is written. You can leave; it keeps going.
-              </p>
-            </div>
-          )}
-        </section>
-
-        {jobs.length > 0 ? (
-          <section className="rounded-2xl border border-line bg-surface p-5">
-            <h2 className="text-sm font-medium text-ink">Recent</h2>
-            <ul className="mt-3 flex flex-col gap-1.5">
-              {jobs.map((j) => (
-                <li key={j.id}>
-                  <button
-                    type="button"
-                    onClick={() => void openJob(j.id)}
-                    className={cx(
-                      'flex min-h-11 w-full cursor-pointer items-center gap-3 rounded-xl px-3 py-2 text-left transition hover:bg-raised',
-                      job?.id === j.id && 'bg-raised',
-                    )}
-                  >
-                    <span className="w-24 shrink-0 text-xs text-muted">
-                      {LABEL[j.generatorKey] ?? j.generatorKey}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate text-sm text-ink">
-                      {j.intentText || '—'}
-                    </span>
-                    <span
-                      className={cx(
-                        'rounded-full border px-2 py-0.5 text-[11px]',
-                        STATUS[j.status].tone,
-                      )}
-                    >
-                      {STATUS[j.status].label}
-                    </span>
-                    <span
-                      className="w-16 shrink-0 text-right text-[11px] text-muted"
-                      title={new Date(j.createdAt).toLocaleString('en-IN')}
-                      // "4 min ago" on the server is "5 min ago" by the time the browser
-                      // renders it, which React reports as a hydration mismatch. The clock is
-                      // the client's to read.
-                      suppressHydrationWarning
-                    >
-                      {ago(j.createdAt)}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : null}
-      </aside>
-    </div>
+      <TemplatesDialog
+        open={templatesOpen}
+        onClose={() => setTemplatesOpen(false)}
+        templates={kindTemplates}
+        selected={templateId}
+        onSelect={setTemplateId}
+      />
+    </>
   );
 }

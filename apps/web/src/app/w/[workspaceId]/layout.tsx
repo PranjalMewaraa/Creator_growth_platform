@@ -32,7 +32,7 @@ function Balance({
         <Icon width={16} height={16} />
       </span>
       <span className="sr-only">{label}: </span>
-      <span className="text-sm font-semibold tabular-nums text-ink">{value}</span>
+      <span className="text-sm font-semibold font-mono tabular-nums text-ink">{value}</span>
     </span>
   );
 }
@@ -70,7 +70,7 @@ export default async function WorkspaceLayout({
           <Link
             href={`/w/${workspace.id}`}
             aria-label="Home"
-            className="flex h-16 shrink-0 items-center justify-center pl-4 lg:w-24 lg:pl-0"
+            className="flex h-16 shrink-0 items-center justify-center pl-4 lg:w-18 lg:pl-0"
           >
             <Logo compact />
           </Link>
@@ -82,7 +82,7 @@ export default async function WorkspaceLayout({
               <Balance
                 label="Credits"
                 value={workspace.creditBalance.toLocaleString('en-IN')}
-                hue="#facc15"
+                hue="#38bdf8"
                 Icon={CoinsIcon}
               />
               <Balance
@@ -101,7 +101,7 @@ export default async function WorkspaceLayout({
         <main
           id="main"
           tabIndex={-1}
-          className="px-4 pb-24 pt-6 outline-none sm:px-6 lg:pb-8 lg:pl-30"
+          className="px-4 pb-24 pt-6 outline-none sm:px-6 lg:pb-8 lg:pl-24"
         >
           <div className="mx-auto max-w-[1400px]">{children}</div>
         </main>

@@ -7,6 +7,12 @@ import { getProviders } from '@/server/providers';
 
 type Context = { params: Promise<{ workspaceId: string; generator: string }> };
 
+// Same reasoning as the compile route (WP57): image/thumbnail/video briefs ask the rewrite
+// model for several labelled sections rather than one paragraph, so they get more than the
+// 1500ms invariant-11 default when this route compiles one itself (no compiledPromptId given).
+const RICH_REWRITE_OUTPUT_TYPES = new Set(['image', 'thumbnail', 'video']);
+const RICH_REWRITE_BUDGET_MS = 6000;
+
 /**
  * The one generate route, for every generator (FR-GN-02): the generator key comes from the
  * URL and everything specific to it comes from the registry. The body is the generator's
@@ -25,13 +31,17 @@ export const POST = withRequestContext(async (request: Request, { params }: Cont
       ? String(body.compiledPromptId)
       : undefined;
   const providers = getProviders();
+  const outputType = generators.get(generator)?.outputType;
+  const rewriteBudgetMs = outputType && RICH_REWRITE_OUTPUT_TYPES.has(outputType)
+    ? RICH_REWRITE_BUDGET_MS
+    : undefined;
   const result = await startGeneration(
     {
       db: getDb(),
       queues: getQueues(),
       log: getLogger(),
       registry: generators,
-      compile: { rewriters: providers.rewriters, log: getLogger() },
+      compile: { rewriters: providers.rewriters, log: getLogger(), rewriteBudgetMs },
       moderation: providers.moderation,
     },
     {

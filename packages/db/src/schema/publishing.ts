@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  boolean,
   check,
   index,
   integer,
@@ -31,6 +32,12 @@ export const socialAccounts = pgTable(
     tokenCiphertext: text('token_ciphertext').notNull(),
     tokenExpiresAt: timestamp('token_expires_at', { withTimezone: true }),
     health: text('health').notNull().default('ok'),
+    /**
+     * This row is the team's own account, made borrowable by other workspaces so a demo can
+     * show real publishing without every visitor needing their own tester access on a
+     * developer-mode app (WP52). False for everything connected through ordinary OAuth.
+     */
+    sharedDemo: boolean('shared_demo').notNull().default(false),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex('social_accounts_identity').on(t.workspaceId, t.platform, t.externalId)],

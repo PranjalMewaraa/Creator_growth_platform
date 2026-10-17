@@ -2,7 +2,7 @@ import type { ButtonHTMLAttributes } from 'react';
 import { cx } from './cx';
 
 const VARIANTS = {
-  /** The one action on a screen. Yellow with a soft glow. */
+  /** The one action on a screen. Accent-coloured with a soft glow. */
   primary:
     'bg-accent text-accent-ink shadow-[0_10px_30px_-12px_var(--color-accent)] hover:brightness-105 disabled:opacity-60 disabled:shadow-none',
   secondary: 'border border-line bg-raised text-ink hover:border-faint disabled:text-faint',

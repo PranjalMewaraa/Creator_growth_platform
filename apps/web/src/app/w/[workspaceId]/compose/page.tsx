@@ -32,7 +32,12 @@ export default async function ComposePage({
   return (
     <ComposerLoader
       workspaceId={workspaceId}
-      accounts={accounts.map(({ id, platform, displayName }) => ({ id, platform, displayName }))}
+      accounts={accounts.map(({ id, platform, displayName, sharedDemo }) => ({
+        id,
+        platform,
+        displayName,
+        sharedDemo,
+      }))}
       live={getEnv().PUBLISHING === 'real'}
       barColour={bars}
       hashtags={(profile?.pillars ?? []).map(hashtag).filter((t): t is string => t !== null)}

@@ -28,7 +28,7 @@ export function WorkLedger({ stages, className }: { stages: JobStage[]; classNam
       <header className="flex items-baseline justify-between gap-3">
         <h2 className="text-label font-medium uppercase tracking-wide text-muted">Working</h2>
         {active?.total ? (
-          <span className="text-caption tabular-nums text-faint">
+          <span className="text-caption font-mono tabular-nums text-faint">
             {active.index} of {active.total}
           </span>
         ) : null}

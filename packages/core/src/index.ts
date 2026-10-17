@@ -121,6 +121,7 @@ export {
   type UploadResult,
 } from './publishing';
 export { fitToFrame, INSTAGRAM_FRAME, INSTAGRAM_FRAMES, type InstagramFrame } from './media';
+export { storeReferenceImage, type ReferenceImageResult } from './references';
 export { ffmpeg, ffmpegAvailable, RenderFailed, type FfmpegOptions } from './render/ffmpeg';
 export { sampleFrames } from './render/frames';
 export { fontDir } from './render/fonts';

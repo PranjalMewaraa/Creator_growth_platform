@@ -36,11 +36,42 @@ function lookOption(key: LookKey) {
     .optional();
 }
 
+/**
+ * A picture the creator uploaded for the image model to stay consistent with (WP60): the key
+ * `storeReferenceImage` returned. Only the two generators whose provider accepts one take it —
+ * Veo has no equivalent, so neither `storyboard` nor `video` gets this field.
+ */
+const reference = {
+  referenceImageKey: z.string().min(1).optional(),
+};
+
 // Instructions the user did not give stay absent rather than defaulted here, so the template
 // and profile defaults can apply; only quantities that set the price take a default.
 
-/** Veo 3.1 Lite clips are 8 seconds; a reel is up to three of them (plan section 6). */
+/** Veo 3.1 Lite clips are 8 seconds; a reel is however many of them the scene planner uses to
+ *  fill the requested length (WP59). */
 export const SECONDS_PER_SCENE = 8;
+
+/** The shortest and longest a creator can ask for: one beat, and as many as the 1-a-minute
+ *  Veo render queue keeps to a reasonable wait (plan section 6, WP41). */
+export const MIN_VIDEO_SECONDS = SECONDS_PER_SCENE;
+export const MAX_VIDEO_SECONDS = SECONDS_PER_SCENE * 6;
+
+/** The exact beat count a non-flexible plan lands on for a given target (packages/orchestration
+ *  scenes.ts's sceneBounds in its non-flexible form, duplicated here since pricing has to hold
+ *  an exact number before any plan exists to measure). A storyboard is charged this flat, so it
+ *  asks the planner for exactly this many rather than the free-flowing range the final video
+ *  gets, where settlement is on seconds actually delivered instead of a held frame count. */
+function scenesFor(targetDurationSeconds: number): number {
+  return Math.max(1, Math.round(targetDurationSeconds / SECONDS_PER_SCENE));
+}
+
+/** The most beats a flexible plan could come back with for a given target (scenes.ts's
+ *  sceneBounds in its flexible form). The video hold is sized for this worst case; settling
+ *  on seconds actually delivered means holding generously here costs nothing extra. */
+function maxScenesFor(targetDurationSeconds: number): number {
+  return scenesFor(targetDurationSeconds) + 1;
+}
 
 /** A thumbnail is bought as a set to choose between, not as one picture (plan section 7). */
 export const THUMBNAIL_VARIANTS = 3;
@@ -103,7 +134,12 @@ const image = register({
   key: 'image',
   outputType: 'image',
   jobClass: 'inference',
-  inputSchema: z.object({ ...base, ...look, count: z.int().min(1).max(4).default(1) }),
+  inputSchema: z.object({
+    ...base,
+    ...look,
+    ...reference,
+    count: z.int().min(1).max(4).default(1),
+  }),
   compilerProfile: 'image',
   providerAdapter: IMAGE_ADAPTER,
   estimate: (input, rates) => {
@@ -124,7 +160,7 @@ const thumbnailSet = register({
   key: 'thumbnail_set',
   outputType: 'thumbnail',
   jobClass: 'inference',
-  inputSchema: z.object({ ...base, ...look }),
+  inputSchema: z.object({ ...base, ...look, ...reference }),
   compilerProfile: 'thumbnail',
   providerAdapter: IMAGE_ADAPTER,
   estimate: (_input, rates) => {
@@ -149,17 +185,25 @@ const storyboard = register({
   inputSchema: z.object({
     ...base,
     ...look,
-    sceneCount: z.int().min(1).max(3).default(3),
+    targetDurationSeconds: z
+      .int()
+      .min(MIN_VIDEO_SECONDS)
+      .max(MAX_VIDEO_SECONDS)
+      .multipleOf(SECONDS_PER_SCENE)
+      .default(24),
   }),
   compilerProfile: 'video',
   providerAdapter: IMAGE_ADAPTER,
   estimate: (input, rates) => {
-    // Priced as the images it is: no separate rate to keep in step with the image one.
+    // Priced as the images it is: no separate rate to keep in step with the image one. The
+    // hold is a flat charge (storyboard.ts settles on it, not on frames actually drawn), so
+    // the plan is asked for exactly this many frames rather than a free-flowing range (WP59).
     const each = rateFor(rates, 'image_standard');
-    const credits = each * input.sceneCount;
+    const frames = scenesFor(input.targetDurationSeconds);
+    const credits = each * frames;
     return {
       credits,
-      breakdown: [{ label: `Storyboard, ${input.sceneCount} frames`, credits }],
+      breakdown: [{ label: `Storyboard, ${frames} frames`, credits }],
     };
   },
 });
@@ -220,7 +264,14 @@ const video = register({
   inputSchema: z.object({
     ...base,
     ...look,
-    sceneCount: z.int().min(1).max(3).default(3),
+    // How many eight-second beats a free-flowing sequence needs is for the scene planner to
+    // decide, not the creator (WP59): a target length is asked for instead of a scene count.
+    targetDurationSeconds: z
+      .int()
+      .min(MIN_VIDEO_SECONDS)
+      .max(MAX_VIDEO_SECONDS)
+      .multipleOf(SECONDS_PER_SCENE)
+      .default(24),
     voiceover: z.boolean().default(true),
     /** The storyboard this reel was committed from, so it films what was approved. */
     storyboardOutputId: z.uuid().optional(),
@@ -228,10 +279,12 @@ const video = register({
   compilerProfile: 'video',
   providerAdapter: 'veo-3.1-lite',
   // Video is paid in its own currency, held on the requested length and settled on what is
-  // delivered (plan section 7).
+  // delivered (plan section 7). The hold covers the most beats the planner could choose for
+  // this target (WP59); settlement is on the seconds actually delivered regardless, so holding
+  // generously here costs nothing extra if the planner lands on fewer.
   estimate: (input) => ({
     credits: 0,
-    videoSeconds: input.sceneCount * SECONDS_PER_SCENE,
+    videoSeconds: maxScenesFor(input.targetDurationSeconds) * SECONDS_PER_SCENE,
     breakdown: [],
   }),
 });

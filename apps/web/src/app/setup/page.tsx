@@ -12,7 +12,7 @@ export default async function SetupPage() {
   const user = await requireUser();
   return (
     <AuthFrame>
-      <h1 className="text-3xl font-semibold tracking-tight text-ink">Create a workspace</h1>
+      <h1 className="text-display font-display font-semibold text-ink">Create a workspace</h1>
       <p className="mt-2 text-sm text-muted">
         Signed in as <span className="text-ink">{user.email}</span>. A workspace holds your profile,
         brand kit, calendar and credits.

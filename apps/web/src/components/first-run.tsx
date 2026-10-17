@@ -1,9 +1,9 @@
 'use client';
 
 import type { FirstRunKey, FirstRunState } from '@cgp/core';
-import { Badge, cx, Progress } from '@cgp/ui';
+import { Badge, ChevronDownIcon, cx, Progress } from '@cgp/ui';
 import Link from 'next/link';
-import { useCallback, useMemo, useSyncExternalStore } from 'react';
+import { useCallback, useMemo, useState, useSyncExternalStore } from 'react';
 
 /**
  * The thread through first run (WP48).
@@ -17,6 +17,12 @@ import { useCallback, useMemo, useSyncExternalStore } from 'react';
  * preference of this browser, kept out of the database on purpose, because a person putting a
  * step off this afternoon is not a fact about the workspace. Storage can be unavailable, in
  * which case the step simply stays offered.
+ *
+ * Collapsed is the resting state (WP55): the title and the progress bar are what Home shows
+ * every time, not remembered between visits, so the card never opens with four lines of text
+ * above everything else on a screen whose job is the next seven days. The card disappears
+ * outright once `state.complete` — not collapsed, gone — because a finished checklist earns
+ * no more room on Home than a step already put off earns a line here.
  */
 
 const KEY = (workspaceId: string) => `cgp:first-run:not-now:${workspaceId}`;
@@ -76,6 +82,8 @@ export function FirstRun({
     }
   }, [raw]);
 
+  const [expanded, setExpanded] = useState(false);
+
   if (state.complete) return null;
 
   const notNow = (key: FirstRunKey) => write(workspaceId, [...later, key]);
@@ -93,18 +101,39 @@ export function FirstRun({
       aria-labelledby="first-run-heading"
       className="flex flex-col gap-4 rounded-2xl border border-line bg-surface p-5 shadow-raised"
     >
-      <header className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <h2 id="first-run-heading" className="text-subtitle font-semibold text-ink">
-          Getting started
-        </h2>
-        <span className="text-caption tabular-nums text-muted">
-          {state.done} of {state.total} done
+      {/*
+        The header is the button: title and progress stay visible either way, and the whole
+        row is the hit target rather than a separate chevron fighting it for clicks.
+      */}
+      <button
+        type="button"
+        onClick={() => setExpanded((open) => !open)}
+        aria-expanded={expanded}
+        aria-controls="first-run-steps"
+        className="flex cursor-pointer flex-col gap-3 text-left"
+      >
+        <span className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+          <span className="flex items-center gap-1.5">
+            <h2 id="first-run-heading" className="text-subtitle font-semibold text-ink">
+              Getting started
+            </h2>
+            <ChevronDownIcon
+              aria-hidden
+              className={cx(
+                'text-faint transition-transform duration-base ease-standard',
+                expanded && 'rotate-180',
+              )}
+            />
+          </span>
+          <span className="text-caption font-mono tabular-nums text-muted">
+            {state.done} of {state.total} done
+          </span>
         </span>
-      </header>
 
-      <Progress label="Setup progress" value={state.done} max={state.total} />
+        <Progress label="Setup progress" value={state.done} max={state.total} />
+      </button>
 
-      <ol className="flex flex-col">
+      <ol id="first-run-steps" hidden={!expanded} className="flex flex-col">
         {state.steps.map((step, i) => {
           const putOff = !step.done && later.includes(step.key);
           const isOffered = offered?.key === step.key;

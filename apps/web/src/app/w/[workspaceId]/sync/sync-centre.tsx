@@ -177,7 +177,7 @@ export function SyncCentre({ workspaceId }: { workspaceId: string }) {
     <div className="flex max-w-3xl flex-col gap-6">
       <header className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight text-ink">Sync centre</h1>
+          <h1 className="text-title font-display font-semibold text-ink">Sync centre</h1>
           <p className="mt-1 text-sm text-muted">
             Every attempt to put a post on a platform, and what the platform said back.
           </p>
