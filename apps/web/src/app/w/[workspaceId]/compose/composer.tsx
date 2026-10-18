@@ -1,7 +1,8 @@
 'use client';
 
 import { PLATFORM_TEXT_LIMITS, type PostTargetStatus, type TargetPlatform } from '@cgp/contracts';
-import { Badge, Button, cx, SegmentedControl, SmileIcon, Tabs, useToast } from '@cgp/ui';
+import type { CaptionTrendFit } from '@cgp/core';
+import { Badge, Button, cx, SegmentedControl, SmileIcon, Tabs, TrendIcon, useToast } from '@cgp/ui';
 import Link from 'next/link';
 import {
   useEffect,
@@ -198,6 +199,10 @@ export function Composer({
   // the calendar sends its own time here as `?at=`, so the schedule is already filled in.
   const [when, setWhen] = useState(() => slotFromUrl());
   const [scheduledAt, setScheduledAt] = useState<string | null>(null);
+  // How well the caption echoes what Trend Radar has ingested (WP62), recomputed a moment
+  // after the last keystroke rather than on every one.
+  const [fit, setFit] = useState<CaptionTrendFit | null>(null);
+  const [fitLoading, setFitLoading] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const editor = useRef<HTMLTextAreaElement>(null);
   const previewRef = useRef<string | null>(null);
@@ -239,6 +244,30 @@ export function Composer({
     }, 700);
     return () => clearTimeout(timer);
   }, [workspaceId, text, chosen, frame, publicationId]);
+
+  // Trend Fit, scored against what Trend Radar has actually ingested — a short pause after
+  // typing, not on every keystroke, since it is a real request even though it costs no credits.
+  useEffect(() => {
+    if (text.trim().length < 10) {
+      setFit(null);
+      return;
+    }
+    setFitLoading(true);
+    const timer = setTimeout(() => {
+      void fetch(`${base}/trends/match`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ text }),
+      })
+        .then(async (r) => (r.ok ? ((await r.json()) as { fit: CaptionTrendFit }) : null))
+        .then((body) => setFit(body?.fit ?? null))
+        .catch(() => setFit(null))
+        .finally(() => setFitLoading(false));
+    }, 500);
+    return () => clearTimeout(timer);
+    // base is derived from workspaceId, which does not change within one composer session.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [text]);
 
   // Release the last preview's memory when the composer goes away.
   useEffect(
@@ -643,6 +672,80 @@ export function Composer({
                         {tag}
                       </button>
                     ))}
+                  </div>
+                ) : null}
+
+                {text.trim().length >= 10 ? (
+                  <div className="flex flex-col gap-2 rounded-xl border border-line bg-raised p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="flex items-center gap-1.5 text-xs font-medium text-muted">
+                        <TrendIcon width={14} height={14} aria-hidden className="text-faint" />
+                        Trend fit
+                      </span>
+                      {fitLoading ? (
+                        <span className="text-xs text-faint">Checking…</span>
+                      ) : fit ? (
+                        <span
+                          className={cx(
+                            'rounded-md px-2 py-0.5 text-xs font-semibold font-mono tabular-nums',
+                            fit.score >= 60
+                              ? 'bg-good/10 text-good'
+                              : fit.score >= 25
+                                ? 'bg-hot/10 text-hot'
+                                : 'bg-raised text-faint',
+                          )}
+                        >
+                          {fit.score}/100
+                        </span>
+                      ) : null}
+                    </div>
+
+                    {!fitLoading && fit && fit.matches.length > 0 ? (
+                      <>
+                        <p className="text-xs text-muted">
+                          Closest to{' '}
+                          <span className="text-ink">{fit.matches[0]!.topicTitle}</span> (
+                          {fit.matches[0]!.niche}, rising {fit.matches[0]!.velocityScore}/100).
+                          Not a virality score — just how much of that topic&apos;s own language
+                          this already uses.
+                        </p>
+                        {fit.suggestedKeywords.length > 0 ? (
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-xs text-muted">Keywords:</span>
+                            {fit.suggestedKeywords.map((k) => (
+                              <button
+                                key={k}
+                                type="button"
+                                onClick={() => insert(k)}
+                                className="tap-target cursor-pointer rounded-full border border-line px-2.5 py-1 text-xs text-ink transition hover:border-accent/60"
+                              >
+                                {k}
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
+                        {fit.suggestedHashtags.length > 0 ? (
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-xs text-muted">Hashtags:</span>
+                            {fit.suggestedHashtags.map((tag) => (
+                              <button
+                                key={tag}
+                                type="button"
+                                onClick={() => addHashtag(tag)}
+                                className="tap-target cursor-pointer rounded-full border border-line px-2.5 py-1 text-xs text-ink transition hover:border-accent/60"
+                              >
+                                {tag}
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
+                      </>
+                    ) : !fitLoading ? (
+                      <p className="text-xs text-faint">
+                        Nothing on Trend Radar overlaps with this yet. Check the Trends page for
+                        angles in your niche, or this may just not be a trend-driven post.
+                      </p>
+                    ) : null}
                   </div>
                 ) : null}
 

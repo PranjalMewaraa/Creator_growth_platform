@@ -41,6 +41,18 @@ export {
 } from './music';
 export { deleteTemplatePreview, saveTemplatePreview } from './template-previews';
 export {
+  bookmarkedTrendIds,
+  findTrend,
+  listTrendNiches,
+  listTrends,
+  removeTrendBookmark,
+  saveTrendBookmark,
+  upsertTrend,
+  type TrendBookmarkRow,
+  type TrendRow,
+  type UpsertTrend,
+} from './trends';
+export {
   createScenes,
   findScene,
   listScenes,

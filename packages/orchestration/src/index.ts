@@ -15,6 +15,12 @@ export { assembleBrief, briefOf, enforce, fill, MAX_BRIEF_CHARS } from './render
 export { deriveSettings, resolveSettings, settingValue } from './resolve';
 export { planScenes, SCENE_PLAN_BUDGET_MS, type ScenePlan, type ScenePlanRequest } from './scenes';
 export {
+  synthesizeTrends,
+  TREND_SYNTHESIS_BUDGET_MS,
+  type SynthesizedTrend,
+  type TrendSynthesisRequest,
+} from './trends';
+export {
   planVoiceover,
   VOICEOVER_BUDGET_MS,
   type VoiceoverPlan,

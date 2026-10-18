@@ -25,10 +25,17 @@ import {
   publishDelta,
   publishStage,
   startDispatcher,
+  startTrendIngestion,
   sweepOnBoot,
   waitForRedis,
 } from '@cgp/core';
-import { createProviders, warmProviders } from '@cgp/adapters';
+import {
+  createProviders,
+  fetchAutocompleteSignals,
+  fetchRedditSignals,
+  fetchYouTubeSignals,
+  warmProviders,
+} from '@cgp/adapters';
 import { brandKits, createDatabase, PUBLISH_TARGET, scoped } from '@cgp/db';
 import { Worker } from 'bullmq';
 import { createErrorThrottle } from './error-throttle';
@@ -57,6 +64,25 @@ await sweepOnBoot({ db, queues, log });
 const stopDispatcher = startDispatcher({ db, queues, log });
 
 const providers = createProviders({ ...env, log });
+
+// Trend Radar's own tick (WP61), independent of the job dispatcher above: nothing here is a
+// job a creator is waiting on, so it runs on its own clock rather than through the queue.
+const stopTrendIngestion = startTrendIngestion(
+  {
+    db,
+    youtubeApiKey: env.YOUTUBE_API_KEY,
+    // The same provider the compile rewrite and scene planner already use (WP57/59) — no new
+    // key, no new provider to stand up for this.
+    synthesisProvider: providers.rewriters[0],
+    moderation: providers.moderation,
+    log,
+    fetchYouTube: fetchYouTubeSignals,
+    fetchAutocomplete: fetchAutocompleteSignals,
+    fetchReddit: fetchRedditSignals,
+    niches: env.TRENDS_NICHES,
+  },
+  { everyMs: env.TRENDS_INGEST_EVERY_MS },
+);
 // Pays the connection and token cost before the first job does (D17). Best effort, in the
 // background: the worker takes work whether or not it finishes.
 void warmProviders(providers, log);
@@ -198,6 +224,7 @@ log.info(
 async function shutdown(signal: string) {
   log.info({ signal }, 'worker stopping');
   stopDispatcher();
+  stopTrendIngestion();
   await Promise.all(workers.map((w) => w.close()));
   await closeQueues(queues);
   await connection.quit();

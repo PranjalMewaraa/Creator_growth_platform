@@ -41,6 +41,20 @@ export const baseEnvSchema = z.object({
    * nothing else does.
    */
   FFMPEG_PATH: z.string().min(1).default('ffmpeg'),
+  /**
+   * Trend Radar's YouTube source (WP61), from Google Cloud Console — free tier, 10k units/day.
+   * Optional, same as the publishing OAuth pairs above: without it, ingestion simply skips
+   * YouTube and still runs on Autocomplete and Reddit.
+   */
+  YOUTUBE_API_KEY: z.string().min(1).optional(),
+  /** How often the worker re-ingests trends. Six hours by default, matching the plan. */
+  TRENDS_INGEST_EVERY_MS: z.coerce.number().int().positive().default(6 * 60 * 60 * 1000),
+  /** The niches ingested every tick, comma separated. */
+  TRENDS_NICHES: z
+    .string()
+    .min(1)
+    .default('creator economy,tech,ai,finance,fitness')
+    .transform((v) => v.split(',').map((s) => s.trim()).filter(Boolean)),
 });
 
 export type BaseEnv = z.infer<typeof baseEnvSchema>;

@@ -36,6 +36,7 @@ export {
   SmileIcon,
   SparklesIcon,
   SyncIcon,
+  TrendIcon,
   TypeIcon,
 } from './icons';
 export { Stat } from './stat';

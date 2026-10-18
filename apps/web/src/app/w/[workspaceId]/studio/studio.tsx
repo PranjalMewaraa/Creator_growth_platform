@@ -213,6 +213,7 @@ export function Studio({
   initialJobs,
   initialJobId,
   initialKind,
+  initialIntent,
   profileTone,
   brandColours,
   templates,
@@ -227,6 +228,8 @@ export function Studio({
   initialJobId: string | null;
   /** Arriving with a kind already decided skips the picker dialog (WP53/56). */
   initialKind: string | null;
+  /** A trend's hook, handed in from the Trend Radar's "Use this trend" (WP61). */
+  initialIntent: string | null;
   profileTone: string | null;
   /** The brand kit's colours, offered first when a text layer is coloured. */
   brandColours: string[];
@@ -245,7 +248,7 @@ export function Studio({
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [promptOpen, setPromptOpen] = useState(false);
 
-  const [intent, setIntent] = useState('');
+  const [intent, setIntent] = useState(initialIntent ?? '');
   const [platform, setPlatform] = useState<TargetPlatform | null>('instagram');
   const [captionFor, setCaptionFor] = useState<TargetPlatform[]>([]);
   const [length, setLength] = useState<number | null>(null);

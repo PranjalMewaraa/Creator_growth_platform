@@ -10,6 +10,7 @@ import {
   PaletteIcon,
   SparklesIcon,
   SyncIcon,
+  TrendIcon,
 } from '@cgp/ui';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -27,6 +28,7 @@ interface Destination {
 const DESTINATIONS: Destination[] = [
   { segment: '', label: 'Home', Icon: HomeIcon },
   { segment: 'studio', label: 'Studio', Icon: SparklesIcon },
+  { segment: 'trends', label: 'Trends', Icon: TrendIcon },
   { segment: 'calendar', label: 'Calendar', Icon: CalendarIcon },
   { segment: 'brand', label: 'Brand', Icon: PaletteIcon },
   { segment: 'accounts', label: 'Accounts', Icon: LinkIcon },

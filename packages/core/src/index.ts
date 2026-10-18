@@ -202,3 +202,18 @@ export {
   type FlattenedLayer,
   type SaveTextLayerResult,
 } from './text-layer';
+export {
+  ingestTrends,
+  ingestTrendsForNiche,
+  listTrendsView,
+  matchCaptionToTrends,
+  toggleTrendBookmark,
+  trendView,
+  type CaptionTrendFit,
+  type IngestionResult,
+  type SaveTrendResult,
+  type TrendIngestionDeps,
+  type TrendListView,
+  type TrendMatch,
+} from './trends';
+export { startTrendIngestion } from './trends-scheduler';

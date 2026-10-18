@@ -84,6 +84,8 @@ describe('migrations', () => {
       'template_previews',
       'template_versions',
       'templates',
+      'trend_bookmarks',
+      'trending_topics',
       'users',
       'verifications',
       'video_scenes',

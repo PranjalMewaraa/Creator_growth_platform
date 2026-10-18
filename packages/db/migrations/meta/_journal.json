@@ -78,6 +78,13 @@
       "when": 1792228254592,
       "tag": "0010_social_accounts_shared_demo",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792260036722,
+      "tag": "0011_trend_radar",
+      "breakpoints": true
     }
   ]
 }

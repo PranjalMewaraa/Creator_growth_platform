@@ -10,3 +10,4 @@ export * from './publishing';
 export * from './text-layer';
 export * from './workspace';
 export * from './orchestration';
+export * from './trends';

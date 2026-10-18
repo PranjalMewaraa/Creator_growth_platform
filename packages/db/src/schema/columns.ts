@@ -7,6 +7,8 @@ import {
   OUTPUT_TYPES,
   POST_TARGET_STATUSES,
   TARGET_PLATFORMS,
+  TREND_LIFECYCLE_STAGES,
+  TREND_SOURCES,
 } from '@cgp/contracts';
 import { pgEnum, timestamp, uuid } from 'drizzle-orm/pg-core';
 
@@ -19,6 +21,8 @@ export const outputTypeEnum = pgEnum('output_type', OUTPUT_TYPES);
 export const platformEnum = pgEnum('platform', TARGET_PLATFORMS);
 export const postTargetStatusEnum = pgEnum('post_target_status', POST_TARGET_STATUSES);
 export const membershipRoleEnum = pgEnum('membership_role', MEMBERSHIP_ROLES);
+export const trendLifecycleEnum = pgEnum('trend_lifecycle_stage', TREND_LIFECYCLE_STAGES);
+export const trendSourceEnum = pgEnum('trend_source', TREND_SOURCES);
 
 export const id = () => uuid('id').primaryKey().defaultRandom();
 

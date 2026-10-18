@@ -5,3 +5,4 @@ export * from './identity';
 export * from './jobs';
 export * from './publishing';
 export * from './tenancy';
+export * from './trends';

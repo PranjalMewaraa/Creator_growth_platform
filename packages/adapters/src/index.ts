@@ -41,6 +41,9 @@ export {
   type TextAdapters,
 } from './registry';
 export { warmProviders } from './warm';
+export { fetchYouTubeSignals } from './trends/youtube';
+export { fetchAutocompleteSignals } from './trends/autocomplete';
+export { fetchRedditSignals } from './trends/reddit';
 export { createGeminiImage, type GeminiImageOptions } from './image/gemini';
 export { createVeoVideo, veoFrame, type VeoOptions } from './video/veo';
 export { createStubVideo } from './video/stub';

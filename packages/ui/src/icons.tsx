@@ -232,3 +232,13 @@ export function CloseIcon(props: SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
+
+/** A rising line: the Trend Radar's own mark. */
+export function TrendIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M4 16l5-5 4 4 7-8" />
+      <path d="M15 6.5h5V11.5" />
+    </svg>
+  );
+}
