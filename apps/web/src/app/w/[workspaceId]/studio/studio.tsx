@@ -20,6 +20,7 @@ import {
   Dialog,
   EyeIcon,
   FilmIcon,
+  GearIcon,
   ImageIcon,
   LinkIcon,
   MicIcon,
@@ -42,9 +43,9 @@ import {
   type ReactNode,
   type SVGProps,
 } from 'react';
+import { GalleryFeed } from '@/components/gallery-feed';
 import { STUDIO_KINDS } from '@/lib/studio-kinds';
 import { GenerationStatus } from './generation-status';
-import { GalleryFeed } from './gallery-feed';
 import { KindPickerDialog } from './kind-picker-dialog';
 import { WorkLedger } from './work-ledger';
 import {
@@ -227,6 +228,43 @@ function Dropdown({
   );
 }
 
+/** A quick chip for the compose bar (WP65): the same Select as Dropdown, just round and
+ *  small enough to sit in a scrolling row of them rather than a form grid. */
+function ChipDropdown({
+  value,
+  onChange,
+  options,
+  'aria-label': ariaLabel,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  options: Array<{ value: string; label: string }>;
+  'aria-label': string;
+}) {
+  return (
+    <div className="relative shrink-0">
+      <Select
+        aria-label={ariaLabel}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-9 w-auto min-w-0 rounded-full border-line bg-raised pl-3.5 pr-8 text-xs font-medium"
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </Select>
+      <ChevronDownIcon
+        width={12}
+        height={12}
+        aria-hidden
+        className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-faint"
+      />
+    </div>
+  );
+}
+
 export function Studio({
   workspaceId,
   credits,
@@ -269,6 +307,10 @@ export function Studio({
   const [kindDialogOpen, setKindDialogOpen] = useState(startingKind === null);
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [promptOpen, setPromptOpen] = useState(false);
+  // The rest of the controls (WP65 reskin): everything that isn't one of the always-visible
+  // quick chips lives behind this one dialog instead of eating permanent page space — the
+  // Orbis-style bar stays a handful of pills and a text box, not a form.
+  const [moreOpen, setMoreOpen] = useState(false);
 
   const [intent, setIntent] = useState(initialIntent ?? '');
   const [platform, setPlatform] = useState<TargetPlatform | null>('instagram');
@@ -589,51 +631,33 @@ export function Studio({
     router.replace(`?kind=${picked}`, { scroll: false });
   }
 
+  /** Back to the gallery (WP65): a job stays reachable by its own URL, but closing it should
+   *  not lose the words already typed, only the result that was looking at them. */
+  function closeJob() {
+    setJob(null);
+    setOutputs([]);
+    setStreamed('');
+    setStages([]);
+    setError(null);
+    window.history.replaceState(null, '', `?kind=${kind}`);
+  }
+
   return (
     <>
       <KindPickerDialog open={kindDialogOpen} art={art} onPick={selectKind} />
 
       {/*
-        Two panes, left to right, roughly 2:3 (WP56): what you are asking for, and what came
-        back. The engine's own compiled-prompt disclosure used to be a third pane reserved
-        whether it had anything to show or not; it is a dialog now, opened from the prompt box
-        that made it, which is also why this grid needed only two tracks instead of three.
-        Grid items default to min-width:auto, so a pane refuses to shrink below its own
-        content — *:min-w-0 is what let the Studio overflow at phone and tablet width and
-        nowhere else when it was missing (WP49).
+        The reskin (WP65): the gallery is the page now, not a pane next to the form — a
+        fixed backdrop under the header and rail, scrolling on its own. A job in progress (or
+        just finished) takes that same backdrop over as a centred card; closing it goes back
+        to the gallery without losing what was typed. Everything you ask for lives in one
+        floating bar, docked to the bottom of that backdrop rather than claiming a column of
+        its own.
       */}
-      <div className="grid items-start gap-6 *:min-w-0 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-        {/* Left: the request. */}
-        <section className="flex flex-col rounded-2xl border border-line bg-surface">
-          <div className="flex items-center justify-between gap-3 px-6 pt-5">
-            <Tabs
-              label="Kind"
-              value={(PRIMARY_KINDS as readonly string[]).includes(kind) ? kind : 'script'}
-              onChange={(v) => selectKind(v)}
-              options={PRIMARY_KINDS.map((k) => ({
-                value: k,
-                label: LABEL[k] ?? k,
-              }))}
-            />
-            <button
-              type="button"
-              onClick={() => setKindDialogOpen(true)}
-              className="tap-target shrink-0 cursor-pointer rounded-lg px-2 py-1 text-caption text-muted transition-colors duration-base ease-standard hover:text-ink"
-            >
-              More
-            </button>
-          </div>
-          <header className="flex items-start justify-between gap-3 px-6 pt-3">
-            <div>
-              <h1 className="text-title font-display font-semibold text-ink">
-                {KINDS.find((k) => k.key === kind)?.label ?? 'Studio'}
-              </h1>
-              <p className="mt-1 text-sm text-muted">{KINDS.find((k) => k.key === kind)?.hint}</p>
-            </div>
-          </header>
-
+      <div className="fixed inset-x-0 bottom-0 top-16 z-0 overflow-y-auto lg:left-18">
+        <div className="mx-auto max-w-[1600px] px-4 pb-56 pt-6 sm:px-6 lg:pb-48">
           {blocked ? (
-            <div className="mx-6 mt-4 rounded-xl border border-accent/40 bg-accent/5 px-4 py-3 text-sm text-ink">
+            <div className="mb-4 rounded-xl border border-accent/40 bg-accent/10 px-4 py-3 text-sm text-ink backdrop-blur">
               {!ready.profile
                 ? 'Answer the profile questions first; every prompt is written from them.'
                 : 'Save a brand kit first; every prompt uses it.'}{' '}
@@ -646,387 +670,17 @@ export function Studio({
             </div>
           ) : null}
 
-          <div className="flex flex-col gap-4 px-6 py-5">
-            {/* The prompt box, with the two things it opens onto: the detailed compiled
-                prompt, and the template gallery, both dialogs rather than permanent panes
-                (WP56). */}
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between gap-3">
-                <label
-                  htmlFor="studio-intent"
-                  className="text-label font-medium uppercase tracking-wide text-muted"
-                >
-                  What do you want?
-                </label>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (!prompt || stale) await compile();
-                    setPromptOpen(true);
-                  }}
-                  disabled={busy === 'compiling'}
-                  className="tap-target flex cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1 text-caption text-muted transition-colors duration-base ease-standard hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <EyeIcon width={14} height={14} aria-hidden />
-                  {busy === 'compiling' ? 'Writing…' : 'See the detailed prompt'}
-                </button>
-              </div>
-              <textarea
-                id="studio-intent"
-                value={intent}
-                onChange={(event) => setIntent(event.target.value)}
-                rows={4}
-                maxLength={2000}
-                placeholder="e.g. Our cold brew now ships across Jaipur"
-                className="w-full resize-y rounded-xl border border-line bg-raised px-4 py-3 text-[15px] leading-6 text-ink outline-none transition placeholder:text-faint focus:border-accent/70 focus:ring-2 focus:ring-accent/15"
-              />
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setTemplatesOpen(true)}
-              className="tap-target flex h-11 cursor-pointer items-center justify-between gap-2 rounded-xl border border-line bg-raised px-4 text-left text-sm text-ink transition-colors duration-base ease-standard hover:border-faint"
-            >
-              <span className="flex items-center gap-2 truncate">
-                <PaletteIcon width={16} height={16} aria-hidden className="shrink-0 text-faint" />
-                <span className="truncate">
-                  Template: {selectedTemplate ? selectedTemplate.title : 'Default'}
-                </span>
-              </span>
-              <ChevronDownIcon aria-hidden className="shrink-0 -rotate-90 text-faint" />
-            </button>
-
-            {/* The model and its reference pictures (WP60/63). Every kind here has at least
-                one provider that reads references now, Omni having joined Nano Banana. */}
-            {REFERENCEABLE.has(kind) ? (
-              <div className="flex flex-col gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <ControlLabel icon={SparklesIcon}>Model</ControlLabel>
-                  <Dropdown
-                    aria-label="Model"
-                    value={kind === 'video' ? videoModel : imageModel}
-                    onChange={kind === 'video' ? setVideoModel : setImageModel}
-                    options={kind === 'video' ? VIDEO_MODEL_OPTIONS : IMAGE_MODEL_OPTIONS}
-                  />
-                  {kind === 'video' ? (
-                    <span className="text-caption text-faint">
-                      Omni generates its own sound; the voiceover toggle above still layers a
-                      spoken track over it if it&apos;s on.
-                    </span>
-                  ) : null}
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <ControlLabel icon={ImageIcon}>
-                    Reference images{' '}
-                    <span className="normal-case text-faint">
-                      (optional, up to {MAX_REFERENCE_IMAGES})
-                    </span>
-                  </ControlLabel>
-                  <div className="flex flex-wrap gap-2">
-                    {referenceImages.map((ref, index) => (
-                      <div
-                        key={ref.key}
-                        className="group relative size-16 shrink-0 overflow-hidden rounded-lg border border-line"
-                      >
-                        {/* A real uploaded picture: next/image cannot optimise it, and need not. */}
-                        <img src={ref.url} alt="" className="size-full object-cover" />
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setReferenceImages((current) =>
-                              current.filter((_, i) => i !== index),
-                            )
-                          }
-                          className="tap-target absolute inset-0 flex cursor-pointer items-center justify-center bg-black/60 text-canvas opacity-0 transition-opacity duration-base ease-standard group-hover:opacity-100 group-focus-visible:opacity-100"
-                          aria-label="Remove this reference image"
-                        >
-                          <CloseIcon width={18} height={18} />
-                        </button>
-                      </div>
-                    ))}
-                    {referenceImages.length < MAX_REFERENCE_IMAGES ? (
-                      <>
-                        <input
-                          ref={referenceInputRef}
-                          type="file"
-                          accept="image/png,image/jpeg"
-                          className="hidden"
-                          onChange={(event) => {
-                            const file = event.target.files?.[0];
-                            event.target.value = '';
-                            if (file) void uploadReference(file);
-                          }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => referenceInputRef.current?.click()}
-                          disabled={referenceUploading}
-                          aria-label="Add a reference image"
-                          className="tap-target flex size-16 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-dashed border-line bg-raised text-muted transition-colors duration-base ease-standard hover:border-faint hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          {referenceUploading ? (
-                            <span className="text-caption">…</span>
-                          ) : (
-                            <PlusIcon width={18} height={18} aria-hidden />
-                          )}
-                        </button>
-                      </>
-                    ) : null}
-                  </div>
-                  {referenceError ? (
-                    <span className="text-caption text-bad">{referenceError}</span>
-                  ) : null}
-                </div>
-              </div>
-            ) : null}
-
-            {/* Every control that applies to this kind, iconified, compact, a dropdown
-                wherever there are more than a couple of options to choose between (WP56). */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1.5">
-                <ControlLabel icon={LinkIcon}>For</ControlLabel>
-                <Dropdown
-                  aria-label="Platform"
-                  value={platform ?? ''}
-                  onChange={(v) => setPlatform(v === '' ? null : (v as TargetPlatform))}
-                  options={[{ value: '', label: 'Anywhere' }, ...PLATFORMS]}
-                />
-              </div>
-
-              {kind === 'script' ? (
-                <div className="flex flex-col gap-1.5">
-                  <ControlLabel icon={ClockIcon}>Length</ControlLabel>
-                  <Dropdown
-                    aria-label="Length"
-                    value={length === null ? '' : String(length)}
-                    onChange={(v) => setLength(v === '' ? null : Number(v))}
-                    options={[
-                      { value: '', label: 'Default' },
-                      ...LENGTHS.map((l) => ({ value: String(l), label: `${l}s` })),
-                    ]}
-                  />
-                </div>
-              ) : null}
-
-              {kind === 'image' ? (
-                <div className="flex flex-col gap-1.5">
-                  <ControlLabel icon={ImageIcon}>How many</ControlLabel>
-                  <Dropdown
-                    aria-label="How many"
-                    value={String(count)}
-                    onChange={(v) => setCount(Number(v))}
-                    options={COUNTS.map((n) => ({ value: String(n), label: String(n) }))}
-                  />
-                  <span className="text-caption text-faint">Each one costs its own credits.</span>
-                </div>
-              ) : null}
-
-              {kind === 'image' ? (
-                <div className="flex flex-col gap-1.5">
-                  <ControlLabel icon={PaletteIcon}>Aspect ratio</ControlLabel>
-                  <Dropdown
-                    aria-label="Aspect ratio"
-                    value={aspectRatio}
-                    onChange={setAspectRatio}
-                    options={[
-                      { value: '', label: "Platform decides" },
-                      ...ASPECT_RATIOS.map((r) => ({ value: r, label: r })),
-                    ]}
-                  />
-                </div>
-              ) : null}
-
-              {kind === 'video' ? (
-                <div className="flex flex-col gap-1.5">
-                  <ControlLabel icon={FilmIcon}>Length</ControlLabel>
-                  <Dropdown
-                    aria-label="Length"
-                    value={String(durationSeconds)}
-                    onChange={(v) => setDurationSeconds(Number(v))}
-                    options={VIDEO_DURATIONS.map((n) => ({ value: String(n), label: `${n}s` }))}
-                  />
-                  <span className="text-caption text-faint">
-                    However many eight-second beats best tell it, free-flowing, in about{' '}
-                    {durationSeconds}s.
-                    {durationSeconds > SECONDS_PER_SCENE
-                      ? ` The video model films one beat a minute, so a longer piece takes a few minutes.`
-                      : ''}
-                  </span>
-                </div>
-              ) : null}
-
-              {kind === 'video' ? (
-                <div className="col-span-2 flex items-center justify-between gap-3 rounded-xl border border-line bg-raised px-4 py-3">
-                  <div className="flex flex-col gap-0.5">
-                    <ControlLabel icon={MicIcon}>Voiceover</ControlLabel>
-                    <span className="text-caption text-faint">
-                      {voiceover
-                        ? 'A narrator speaks over it, and captions follow the voice.'
-                        : 'No narration: the reel plays on its footage alone, with no captions.'}
-                    </span>
-                  </div>
-                  <Toggle on={voiceover} onChange={setVoiceover} label="Voiceover" />
-                </div>
-              ) : null}
-
-              {kind === 'caption_set' ? (
-                <div className="flex flex-col gap-1.5">
-                  <ControlLabel icon={TypeIcon}>Captions for</ControlLabel>
-                  <div className="flex flex-wrap gap-1.5">
-                    {PLATFORMS.map((p) => {
-                      const on = captionFor.includes(p.value);
-                      return (
-                        <button
-                          key={p.value}
-                          type="button"
-                          aria-pressed={on}
-                          onClick={() =>
-                            setCaptionFor((list) =>
-                              on ? list.filter((v) => v !== p.value) : [...list, p.value],
-                            )
-                          }
-                          className={cx(
-                            'tap-target cursor-pointer rounded-full border px-3 py-1.5 text-sm transition',
-                            on
-                              ? 'border-accent bg-accent/10 text-ink'
-                              : 'border-line bg-raised text-muted hover:text-ink',
-                          )}
-                        >
-                          {p.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <span className="text-caption text-faint">None picked: the platform above.</span>
-                </div>
-              ) : null}
-
-              {VISUAL.has(kind)
-                ? LOOK_KEYS.map((key) => (
-                    <div key={key} className="flex flex-col gap-1.5">
-                      <ControlLabel icon={CameraIcon}>{LOOK_LABELS[key]}</ControlLabel>
-                      <Dropdown
-                        aria-label={LOOK_LABELS[key]}
-                        value={look[key] ?? ''}
-                        onChange={(v) =>
-                          setLook((current) => ({ ...current, [key]: v === '' ? undefined : v }))
-                        }
-                        options={[
-                          { value: '', label: 'Template decides' },
-                          ...LOOK_VOCABULARY[key].map((option) => ({
-                            value: option.id,
-                            label: option.label,
-                          })),
-                        ]}
-                      />
-                    </div>
-                  ))
-                : null}
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="studio-tone" className="flex items-center gap-1.5">
-                <ControlLabel icon={SparklesIcon}>
-                  Tone for this one <span className="normal-case text-faint">(optional)</span>
-                </ControlLabel>
-              </label>
-              <input
-                id="studio-tone"
-                value={tone}
-                onChange={(event) => setTone(event.target.value)}
-                maxLength={80}
-                placeholder={profileTone ? `Your usual: ${profileTone}` : 'Your profile tone'}
-                className="h-11 w-full rounded-xl border border-line bg-raised px-4 text-sm text-ink outline-none transition placeholder:text-faint focus:border-accent/70 focus:ring-2 focus:ring-accent/15"
-              />
-            </div>
-          </div>
-
-          <footer className="sticky bottom-0 flex flex-col gap-3 rounded-b-2xl border-t border-line bg-surface/95 px-6 py-4 backdrop-blur">
-            {error ? <p className="text-sm text-bad">{error}</p> : null}
-            <div className="flex items-center justify-between gap-3 text-sm">
-              <span className="text-muted">
-                {input.intentText && cost !== null ? (
-                  cost.videoSeconds > 0 ? (
-                    <>
-                      Holds up to{' '}
-                      <span className="font-semibold text-ink font-mono tabular-nums">
-                        {cost.videoSeconds}s of video
-                      </span>{' '}
-                      <span className="text-faint">settled on what&apos;s actually filmed</span>
-                    </>
-                  ) : (
-                    <>
-                      Costs <span className="font-semibold text-ink">{credit(cost.credits)}</span>
-                    </>
-                  )
-                ) : (
-                  'Cost shows once you describe it'
-                )}
-              </span>
-              <span className="text-muted">
-                {cost?.videoSeconds ? (
-                  <>
-                    Leaves{' '}
-                    <span className="font-mono tabular-nums text-ink">
-                      {Math.max(0, videoSeconds - cost.videoSeconds).toLocaleString('en-IN')}s
-                    </span>{' '}
-                    <span className="text-faint">of {videoSeconds.toLocaleString('en-IN')}s</span>
-                  </>
-                ) : (
-                  <>
-                    Balance{' '}
-                    <span className="font-mono tabular-nums text-ink">
-                      {credits.toLocaleString('en-IN')}
-                    </span>
-                  </>
-                )}
-              </span>
-            </div>
-            <div className="flex gap-2">
-              {kind === 'video' ? (
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    setStoryboardId(null);
-                    void generate('storyboard');
-                  }}
-                  disabled={!canGo}
-                  className="flex-1"
-                >
-                  {busy === 'starting'
-                    ? 'Starting…'
-                    : `Storyboard first${storyboardCost === null ? '' : ` · ${credit(storyboardCost)}`}`}
-                </Button>
-              ) : null}
-              <Button
-                onClick={() =>
-                  void generate(kind, storyboardId ? { storyboardOutputId: storyboardId } : {})
-                }
-                disabled={!canGo || (kind === 'video' && videoSeconds < (cost?.videoSeconds ?? 0))}
-                className="flex-1"
+          {job ? (
+            <div className="mx-auto max-w-2xl">
+              <button
+                type="button"
+                onClick={closeJob}
+                className="tap-target mb-3 flex cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1 text-sm text-muted transition-colors duration-base ease-standard hover:text-ink"
               >
-                {busy === 'starting'
-                  ? 'Starting…'
-                  : kind === 'video'
-                    ? storyboardId
-                      ? 'Film this storyboard'
-                      : 'Film it'
-                    : 'Generate'}
-              </Button>
-            </div>
-            <p className="text-caption text-muted">
-              Writing the prompt is free. Credits are held when you generate, charged when it is
-              done, and refunded in full if it fails or is blocked.
-            </p>
-          </footer>
-        </section>
-
-        {/* Right: the canvas. What came back, or what is coming. */}
-        <aside className="flex flex-col gap-4 lg:sticky lg:top-20">
-          <section className="flex min-h-[420px] flex-col gap-4 rounded-2xl border border-line bg-surface p-5">
-            {job ? (
-              <>
+                <CloseIcon width={16} height={16} aria-hidden />
+                Back to the gallery
+              </button>
+              <section className="flex flex-col gap-4 rounded-2xl border border-line bg-surface/95 p-5 shadow-floating backdrop-blur">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-ink">
@@ -1174,55 +828,479 @@ export function Studio({
                 ) : job.status === 'COMPLETE' ? (
                   <p className="text-sm text-muted">Loading the result…</p>
                 ) : null}
-              </>
-            ) : (
-              <GalleryFeed workspaceId={workspaceId} onOpen={(id) => void openJob(id)} />
-            )}
-          </section>
 
-          {jobs.length > 0 ? (
-            <section className="rounded-2xl border border-line bg-surface p-5">
-              <h2 className="text-sm font-medium text-ink">Recent</h2>
-              <ul className="mt-3 flex flex-col gap-1.5">
-                {jobs.map((j) => (
-                  <li key={j.id}>
+                {kind === 'video' && outputs[0]?.storyboard ? null : (
+                  <div className="flex gap-2 border-t border-line pt-4">
+                    {kind === 'video' ? (
+                      <Button
+                        variant="secondary"
+                        onClick={() => {
+                          setStoryboardId(null);
+                          void generate('storyboard');
+                        }}
+                        disabled={!canGo}
+                        className="flex-1"
+                      >
+                        {busy === 'starting'
+                          ? 'Starting…'
+                          : `Storyboard first${storyboardCost === null ? '' : ` · ${credit(storyboardCost)}`}`}
+                      </Button>
+                    ) : null}
+                    <Button
+                      onClick={() =>
+                        void generate(kind, storyboardId ? { storyboardOutputId: storyboardId } : {})
+                      }
+                      disabled={
+                        !canGo || (kind === 'video' && videoSeconds < (cost?.videoSeconds ?? 0))
+                      }
+                      className="flex-1"
+                    >
+                      {busy === 'starting'
+                        ? 'Starting…'
+                        : kind === 'video'
+                          ? storyboardId
+                            ? 'Film this storyboard'
+                            : 'Film it'
+                          : 'Generate another'}
+                    </Button>
+                  </div>
+                )}
+              </section>
+            </div>
+          ) : (
+            <>
+              {jobs.length > 0 ? (
+                <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
+                  {jobs.slice(0, 16).map((j) => (
                     <button
+                      key={j.id}
                       type="button"
                       onClick={() => void openJob(j.id)}
-                      className={cx(
-                        'flex min-h-11 w-full cursor-pointer items-center gap-3 rounded-xl px-3 py-2 text-left transition hover:bg-raised',
-                        job?.id === j.id && 'bg-raised',
-                      )}
+                      className="tap-target flex shrink-0 cursor-pointer items-center gap-2 rounded-full border border-line bg-surface/90 px-3 py-1.5 text-xs text-muted backdrop-blur transition-colors duration-base ease-standard hover:text-ink"
                     >
-                      <span className="w-24 shrink-0 text-xs text-muted">
-                        {LABEL[j.generatorKey] ?? j.generatorKey}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate text-sm text-ink">
-                        {j.intentText || '—'}
-                      </span>
                       <span
                         className={cx(
-                          'rounded-full border px-2 py-0.5 text-[11px]',
-                          STATUS[j.status].tone,
+                          'size-1.5 shrink-0 rounded-full',
+                          STATUS[j.status].tone.includes('good')
+                            ? 'bg-good'
+                            : STATUS[j.status].tone.includes('bad')
+                              ? 'bg-bad'
+                              : STATUS[j.status].tone.includes('accent')
+                                ? 'bg-accent'
+                                : 'bg-faint',
                         )}
-                      >
-                        {STATUS[j.status].label}
-                      </span>
-                      <span
-                        className="w-16 shrink-0 text-right text-[11px] text-muted"
-                        title={new Date(j.createdAt).toLocaleString('en-IN')}
-                        suppressHydrationWarning
-                      >
-                        {ago(j.createdAt)}
-                      </span>
+                        aria-hidden
+                      />
+                      <span className="max-w-32 truncate">{j.intentText || LABEL[j.generatorKey]}</span>
                     </button>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-        </aside>
+                  ))}
+                </div>
+              ) : null}
+              <GalleryFeed workspaceId={workspaceId} onOpen={(id) => void openJob(id)} />
+            </>
+          )}
+        </div>
       </div>
+
+      {/* The compose bar (WP65): a handful of quick chips, a text box, and what it costs —
+          docked to the bottom of the backdrop rather than a permanent form pane. Everything
+          that doesn't fit a chip lives behind "More". */}
+      <div className="fixed inset-x-0 bottom-20 z-20 flex justify-center px-3 sm:px-4 lg:bottom-6 lg:left-18">
+        <div className="flex w-full max-w-4xl flex-col gap-2.5 rounded-2xl border border-line bg-surface/95 p-3 shadow-floating backdrop-blur sm:p-4">
+          {error ? <p className="px-1 text-sm text-bad">{error}</p> : null}
+
+          {/* Quick chips: the look, for a picture or film; platform and length otherwise. */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+            <button
+              type="button"
+              onClick={() => setTemplatesOpen(true)}
+              className="tap-target flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-line bg-raised px-3 text-xs font-medium text-ink transition-colors duration-base ease-standard hover:border-faint"
+            >
+              <PaletteIcon width={13} height={13} aria-hidden className="text-faint" />
+              {selectedTemplate ? selectedTemplate.title : 'Default template'}
+            </button>
+
+            {VISUAL.has(kind) ? (
+              LOOK_KEYS.map((key) => (
+                <ChipDropdown
+                  key={key}
+                  aria-label={LOOK_LABELS[key]}
+                  value={look[key] ?? ''}
+                  onChange={(v) =>
+                    setLook((current) => ({ ...current, [key]: v === '' ? undefined : v }))
+                  }
+                  options={[
+                    { value: '', label: LOOK_LABELS[key] },
+                    ...LOOK_VOCABULARY[key].map((option) => ({
+                      value: option.id,
+                      label: option.label,
+                    })),
+                  ]}
+                />
+              ))
+            ) : (
+              <>
+                <ChipDropdown
+                  aria-label="Platform"
+                  value={platform ?? ''}
+                  onChange={(v) => setPlatform(v === '' ? null : (v as TargetPlatform))}
+                  options={[{ value: '', label: 'Anywhere' }, ...PLATFORMS]}
+                />
+                {kind === 'script' ? (
+                  <ChipDropdown
+                    aria-label="Length"
+                    value={length === null ? '' : String(length)}
+                    onChange={(v) => setLength(v === '' ? null : Number(v))}
+                    options={[
+                      { value: '', label: 'Default length' },
+                      ...LENGTHS.map((l) => ({ value: String(l), label: `${l}s` })),
+                    ]}
+                  />
+                ) : null}
+              </>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setMoreOpen(true)}
+              className="tap-target flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-line bg-raised px-3 text-xs font-medium text-muted transition-colors duration-base ease-standard hover:text-ink"
+            >
+              <GearIcon width={13} height={13} aria-hidden />
+              More
+            </button>
+          </div>
+
+          {/* The prompt. */}
+          <div className="flex items-center gap-2">
+            {REFERENCEABLE.has(kind) ? (
+              <>
+                <input
+                  ref={referenceInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg"
+                  className="hidden"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = '';
+                    if (file) void uploadReference(file);
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => referenceInputRef.current?.click()}
+                  disabled={referenceUploading || referenceImages.length >= MAX_REFERENCE_IMAGES}
+                  aria-label="Add a reference image"
+                  className="tap-target flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-dashed border-line bg-raised text-muted transition-colors duration-base ease-standard hover:border-faint hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {referenceUploading ? (
+                    <span className="text-caption">…</span>
+                  ) : (
+                    <PlusIcon width={18} height={18} aria-hidden />
+                  )}
+                </button>
+              </>
+            ) : null}
+            <input
+              id="studio-intent"
+              value={intent}
+              onChange={(event) => setIntent(event.target.value)}
+              maxLength={2000}
+              placeholder={
+                kind === 'video'
+                  ? 'Describe the video you want to create…'
+                  : kind === 'image' || kind === 'thumbnail_set'
+                    ? 'Describe the image you want to create…'
+                    : 'e.g. Our cold brew now ships across Jaipur'
+              }
+              className="h-11 w-full rounded-xl border border-line bg-raised px-4 text-[15px] text-ink outline-none transition placeholder:text-faint focus:border-accent/70 focus:ring-2 focus:ring-accent/15"
+            />
+            <button
+              type="button"
+              onClick={async () => {
+                if (!prompt || stale) await compile();
+                setPromptOpen(true);
+              }}
+              disabled={busy === 'compiling'}
+              aria-label="See the detailed prompt"
+              title="See the detailed prompt"
+              className="tap-target flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-line bg-raised text-muted transition-colors duration-base ease-standard hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <EyeIcon width={16} height={16} aria-hidden />
+            </button>
+          </div>
+
+          {referenceImages.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {referenceImages.map((ref, index) => (
+                <div
+                  key={ref.key}
+                  className="group relative size-11 shrink-0 overflow-hidden rounded-lg border border-line"
+                >
+                  {/* A real uploaded picture: next/image cannot optimise it, and need not. */}
+                  <img src={ref.url} alt="" className="size-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setReferenceImages((current) => current.filter((_, i) => i !== index))
+                    }
+                    className="tap-target absolute inset-0 flex cursor-pointer items-center justify-center bg-black/60 text-canvas opacity-0 transition-opacity duration-base ease-standard group-hover:opacity-100 group-focus-visible:opacity-100"
+                    aria-label="Remove this reference image"
+                  >
+                    <CloseIcon width={14} height={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : null}
+          {referenceError ? <p className="px-1 text-caption text-bad">{referenceError}</p> : null}
+
+          {/* The toolbar: what it's made with, and what it costs. */}
+          <div className="flex flex-wrap items-center gap-2">
+            <Tabs
+              label="Kind"
+              value={(PRIMARY_KINDS as readonly string[]).includes(kind) ? kind : 'script'}
+              onChange={(v) => selectKind(v)}
+              options={PRIMARY_KINDS.map((k) => ({ value: k, label: LABEL[k] ?? k }))}
+            />
+            <button
+              type="button"
+              onClick={() => setKindDialogOpen(true)}
+              className="tap-target shrink-0 cursor-pointer rounded-lg px-2 py-1.5 text-caption text-muted transition-colors duration-base ease-standard hover:text-ink"
+            >
+              More kinds
+            </button>
+
+            {REFERENCEABLE.has(kind) ? (
+              <ChipDropdown
+                aria-label="Model"
+                value={kind === 'video' ? videoModel : imageModel}
+                onChange={kind === 'video' ? setVideoModel : setImageModel}
+                options={kind === 'video' ? VIDEO_MODEL_OPTIONS : IMAGE_MODEL_OPTIONS}
+              />
+            ) : null}
+            {kind === 'image' ? (
+              <ChipDropdown
+                aria-label="Aspect ratio"
+                value={aspectRatio}
+                onChange={setAspectRatio}
+                options={[
+                  { value: '', label: 'Platform decides' },
+                  ...ASPECT_RATIOS.map((r) => ({ value: r, label: r })),
+                ]}
+              />
+            ) : null}
+            {kind === 'image' ? (
+              <ChipDropdown
+                aria-label="How many"
+                value={String(count)}
+                onChange={(v) => setCount(Number(v))}
+                options={COUNTS.map((n) => ({ value: String(n), label: `${n} image${n > 1 ? 's' : ''}` }))}
+              />
+            ) : null}
+            {kind === 'video' ? (
+              <ChipDropdown
+                aria-label="Length"
+                value={String(durationSeconds)}
+                onChange={(v) => setDurationSeconds(Number(v))}
+                options={VIDEO_DURATIONS.map((n) => ({ value: String(n), label: `${n}s` }))}
+              />
+            ) : null}
+            {kind === 'video' ? (
+              <button
+                type="button"
+                aria-pressed={voiceover}
+                onClick={() => setVoiceover((v) => !v)}
+                title="Voiceover"
+                className={cx(
+                  'tap-target flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors duration-base ease-standard',
+                  voiceover
+                    ? 'border-accent bg-accent/10 text-ink'
+                    : 'border-line bg-raised text-muted hover:text-ink',
+                )}
+              >
+                <MicIcon width={13} height={13} aria-hidden />
+                Voiceover
+              </button>
+            ) : null}
+
+            <div className="ml-auto flex items-center gap-3">
+              <span className="hidden text-xs text-muted sm:block">
+                {input.intentText && cost !== null ? (
+                  cost.videoSeconds > 0 ? (
+                    <>
+                      Up to{' '}
+                      <span className="font-semibold text-ink font-mono tabular-nums">
+                        {cost.videoSeconds}s
+                      </span>
+                    </>
+                  ) : (
+                    <span className="font-semibold text-ink">{credit(cost.credits)}</span>
+                  )
+                ) : (
+                  'Cost shows once you describe it'
+                )}
+              </span>
+              {kind === 'video' ? (
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setStoryboardId(null);
+                    void generate('storyboard');
+                  }}
+                  disabled={!canGo}
+                >
+                  {busy === 'starting' ? 'Starting…' : 'Storyboard first'}
+                </Button>
+              ) : null}
+              <Button
+                onClick={() =>
+                  void generate(kind, storyboardId ? { storyboardOutputId: storyboardId } : {})
+                }
+                disabled={!canGo || (kind === 'video' && videoSeconds < (cost?.videoSeconds ?? 0))}
+              >
+                {busy === 'starting'
+                  ? 'Starting…'
+                  : kind === 'video'
+                    ? storyboardId
+                      ? 'Film this storyboard'
+                      : 'Film it'
+                    : 'Generate'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <Dialog
+        open={moreOpen}
+        onClose={() => setMoreOpen(false)}
+        title="More controls"
+        className="max-w-lg"
+      >
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="studio-tone" className="flex items-center gap-1.5">
+              <ControlLabel icon={SparklesIcon}>
+                Tone for this one <span className="normal-case text-faint">(optional)</span>
+              </ControlLabel>
+            </label>
+            <input
+              id="studio-tone"
+              value={tone}
+              onChange={(event) => setTone(event.target.value)}
+              maxLength={80}
+              placeholder={profileTone ? `Your usual: ${profileTone}` : 'Your profile tone'}
+              className="h-11 w-full rounded-xl border border-line bg-raised px-4 text-sm text-ink outline-none transition placeholder:text-faint focus:border-accent/70 focus:ring-2 focus:ring-accent/15"
+            />
+          </div>
+
+          {!VISUAL.has(kind) ? (
+            <div className="flex flex-col gap-1.5">
+              <ControlLabel icon={LinkIcon}>For</ControlLabel>
+              <Dropdown
+                aria-label="Platform"
+                value={platform ?? ''}
+                onChange={(v) => setPlatform(v === '' ? null : (v as TargetPlatform))}
+                options={[{ value: '', label: 'Anywhere' }, ...PLATFORMS]}
+              />
+            </div>
+          ) : null}
+
+          {kind === 'caption_set' ? (
+            <div className="flex flex-col gap-1.5">
+              <ControlLabel icon={TypeIcon}>Captions for</ControlLabel>
+              <div className="flex flex-wrap gap-1.5">
+                {PLATFORMS.map((p) => {
+                  const on = captionFor.includes(p.value);
+                  return (
+                    <button
+                      key={p.value}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() =>
+                        setCaptionFor((list) =>
+                          on ? list.filter((v) => v !== p.value) : [...list, p.value],
+                        )
+                      }
+                      className={cx(
+                        'tap-target cursor-pointer rounded-full border px-3 py-1.5 text-sm transition',
+                        on
+                          ? 'border-accent bg-accent/10 text-ink'
+                          : 'border-line bg-raised text-muted hover:text-ink',
+                      )}
+                    >
+                      {p.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <span className="text-caption text-faint">None picked: the platform above.</span>
+            </div>
+          ) : null}
+
+          {REFERENCEABLE.has(kind) ? (
+            <div className="flex flex-col gap-1.5">
+              <ControlLabel icon={ImageIcon}>
+                Reference images{' '}
+                <span className="normal-case text-faint">
+                  (optional, up to {MAX_REFERENCE_IMAGES})
+                </span>
+              </ControlLabel>
+              <div className="flex flex-wrap gap-2">
+                {referenceImages.map((ref, index) => (
+                  <div
+                    key={ref.key}
+                    className="group relative size-16 shrink-0 overflow-hidden rounded-lg border border-line"
+                  >
+                    <img src={ref.url} alt="" className="size-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setReferenceImages((current) => current.filter((_, i) => i !== index))
+                      }
+                      className="tap-target absolute inset-0 flex cursor-pointer items-center justify-center bg-black/60 text-canvas opacity-0 transition-opacity duration-base ease-standard group-hover:opacity-100 group-focus-visible:opacity-100"
+                      aria-label="Remove this reference image"
+                    >
+                      <CloseIcon width={18} height={18} />
+                    </button>
+                  </div>
+                ))}
+                {referenceImages.length < MAX_REFERENCE_IMAGES ? (
+                  <button
+                    type="button"
+                    onClick={() => referenceInputRef.current?.click()}
+                    disabled={referenceUploading}
+                    aria-label="Add a reference image"
+                    className="tap-target flex size-16 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-dashed border-line bg-raised text-muted transition-colors duration-base ease-standard hover:border-faint hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {referenceUploading ? (
+                      <span className="text-caption">…</span>
+                    ) : (
+                      <PlusIcon width={18} height={18} aria-hidden />
+                    )}
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
+          {kind === 'video' ? (
+            <p className="text-caption text-faint">
+              However many eight-second beats best tell it, free-flowing, in about{' '}
+              {durationSeconds}s.
+              {durationSeconds > SECONDS_PER_SCENE
+                ? ' The video model films one beat a minute, so a longer piece takes a few minutes.'
+                : ''}{' '}
+              {kind === 'video' ? 'Omni generates its own sound; voiceover still layers a spoken track over it if it is on.' : ''}
+            </p>
+          ) : null}
+
+          <p className="text-caption text-muted">
+            Writing the prompt is free. Credits are held when you generate, charged when it is
+            done, and refunded in full if it fails or is blocked.
+          </p>
+        </div>
+      </Dialog>
 
       {prompt ? (
         <Dialog

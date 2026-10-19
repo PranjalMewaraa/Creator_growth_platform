@@ -1,23 +1,15 @@
 'use client';
 
-import {
-  CalendarIcon,
-  ChartIcon,
-  cx,
-  GearIcon,
-  HomeIcon,
-  LinkIcon,
-  PaletteIcon,
-  SparklesIcon,
-  SyncIcon,
-  TrendIcon,
-} from '@cgp/ui';
+import { CalendarIcon, cx, GridIcon, SparklesIcon, StoryboardIcon, TrendIcon } from '@cgp/ui';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { ComponentType, SVGProps } from 'react';
 
-// The destinations (plan section 13): a vertical rail on wide screens, a bottom bar on
-// phones. Composer is a layer, reached from New post, not a destination.
+// The destinations (WP64 reskin, plan section 13): a vertical rail on wide screens, a bottom
+// bar on phones. Composer is a layer, reached from New post, not a destination. Home is the
+// logo in the header, not a rail stop — this rail is only the five everyday work surfaces;
+// Brand, Accounts, Sync centre, Insights and Settings moved into the account menu (UserMenu)
+// so they stay reachable without crowding the rail down to icons nobody recognises.
 
 interface Destination {
   segment: string;
@@ -26,15 +18,11 @@ interface Destination {
 }
 
 const DESTINATIONS: Destination[] = [
-  { segment: '', label: 'Home', Icon: HomeIcon },
+  { segment: 'assets', label: 'Assets', Icon: GridIcon },
   { segment: 'studio', label: 'Studio', Icon: SparklesIcon },
+  { segment: 'storyboard', label: 'Storyboard', Icon: StoryboardIcon },
+  { segment: 'calendar', label: 'Scheduler', Icon: CalendarIcon },
   { segment: 'trends', label: 'Trends', Icon: TrendIcon },
-  { segment: 'calendar', label: 'Calendar', Icon: CalendarIcon },
-  { segment: 'brand', label: 'Brand', Icon: PaletteIcon },
-  { segment: 'accounts', label: 'Accounts', Icon: LinkIcon },
-  { segment: 'sync', label: 'Sync centre', Icon: SyncIcon },
-  { segment: 'insights', label: 'Insights', Icon: ChartIcon },
-  { segment: 'settings', label: 'Settings', Icon: GearIcon },
 ];
 
 /**

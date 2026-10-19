@@ -242,3 +242,26 @@ export function TrendIcon(props: SVGProps<SVGSVGElement>) {
     </svg>
   );
 }
+
+/** A masonry grid of uneven tiles: the Assets library's own mark. */
+export function GridIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <rect x="3.5" y="3.5" width="8" height="7" rx="1.5" />
+      <rect x="13.5" y="3.5" width="7" height="11" rx="1.5" />
+      <rect x="3.5" y="13" width="8" height="7.5" rx="1.5" />
+      <rect x="13.5" y="17" width="7" height="3.5" rx="1.5" />
+    </svg>
+  );
+}
+
+/** Two linked frames in sequence: the Storyboard's own mark. */
+export function StoryboardIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base} {...props}>
+      <rect x="2.5" y="6" width="8" height="12" rx="1.5" />
+      <rect x="13.5" y="6" width="8" height="12" rx="1.5" />
+      <path d="M10.5 12h3" />
+    </svg>
+  );
+}

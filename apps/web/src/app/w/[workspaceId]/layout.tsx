@@ -92,7 +92,7 @@ export default async function WorkspaceLayout({
                 Icon={FilmIcon}
               />
             </span>
-            <UserMenu email={user.email} name={user.name} />
+            <UserMenu workspaceId={workspace.id} email={user.email} name={user.name} />
           </div>
         </header>
 
