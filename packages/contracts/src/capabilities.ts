@@ -37,7 +37,15 @@ export interface VideoCapability {
   durationSeconds: { min: number; max: number; step: number };
   /** Whether a clip can start from a still, which is what filming a storyboard needs (WP38). */
   acceptsStartImage: boolean;
-  /** Whether the model makes its own sound. Ours does not; the voice is ours to add. */
+  /** Whether it can be shown pictures to stay consistent with, the same idea as the image
+   *  models' (WP63) — distinct from `acceptsStartImage`, which is one literal first frame to
+   *  animate from, not a style or subject to stay consistent with. */
+  acceptsReferenceImages: boolean;
+  /** How many it will look at. Zero when it looks at none. */
+  maxReferenceImages: number;
+  /** Whether the model makes its own sound. Veo does not; the voice is ours to add. A model
+   *  that does still gets the voiceover toggle, which layers a spoken track over whatever the
+   *  model produced — nothing here mutes the model's own audio automatically (WP63). */
   generatesAudio: boolean;
   /**
    * Submissions a minute the provider allows (WP40). For Veo this is one, which is why three
@@ -81,6 +89,7 @@ export interface VideoCapabilityRequest {
   resolution?: string;
   durationSeconds?: number;
   startImage?: boolean;
+  references?: number;
 }
 
 /** Everything wrong with a video request, so one answer lists them all rather than the first. */
@@ -122,6 +131,19 @@ export function checkVideo(
       path: 'startImage',
       message: 'This model films from a description, not from a picture',
     });
+  }
+  if (request.references) {
+    if (!capability.acceptsReferenceImages) {
+      issues.push({
+        path: 'references',
+        message: 'This model films from a description, not from other pictures',
+      });
+    } else if (request.references > capability.maxReferenceImages) {
+      issues.push({
+        path: 'references',
+        message: `At most ${capability.maxReferenceImages} pictures to stay consistent with`,
+      });
+    }
   }
   return issues;
 }

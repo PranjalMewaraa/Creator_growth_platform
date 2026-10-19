@@ -46,6 +46,7 @@ export { fetchAutocompleteSignals } from './trends/autocomplete';
 export { fetchRedditSignals } from './trends/reddit';
 export { createGeminiImage, type GeminiImageOptions } from './image/gemini';
 export { createVeoVideo, veoFrame, type VeoOptions } from './video/veo';
+export { createOmniVideo, type OmniVideoOptions } from './video/omni';
 export { createStubVideo } from './video/stub';
 export { createGoogleVoice, segmentsToSsml, type GoogleVoiceOptions } from './voice/google';
 export { mp4Info, type Mp4Info } from './video/mp4';

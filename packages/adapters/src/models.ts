@@ -57,6 +57,10 @@ export const IMAGE_MODELS = {
   /**
    * Imagen is the plan's image model, but no Imagen id is served to this project (D18), so
    * images run on Gemini's image model. Checked 2026-09-24 across five Vertex regions.
+   *
+   * Publicly this is "Nano Banana 2 Lite" — the id was already this before that name meant
+   * anything to a creator (WP63); the key stays as it was rather than being renamed out from
+   * under every compiled prompt and template version that already points at it by key.
    */
   'gemini-flash-lite-image': {
     model: 'gemini-3.1-flash-lite-image',
@@ -77,6 +81,37 @@ export const IMAGE_MODELS = {
       requestsPerMinute: 2,
     },
   },
+  /**
+   * "Nano Banana 2.1" (WP63), Google's own public name for it — confirmed against
+   * ai.google.dev and docs.cloud.google.com on 2026-10-19: model id `gemini-nano-banana-2.1`,
+   * global only, up to 14 reference images, pricing at $1.50/$7.50/$30 per million input/text-
+   * output/image-output tokens (image-output lands at the same per-token rate as the Lite
+   * model above; the cost difference is in the input and thinking tokens, not the picture
+   * itself, at the 1K resolution this app asks for).
+   *
+   * The request quota below is NOT measured against this project the way the Lite model's is
+   * — Vertex quotas are granted per base model and a newly-added one is not guaranteed the
+   * same allowance. Treat this as a placeholder until it is checked against this project's own
+   * quota page; a wrong guess here means either needless throttling or a 429 this project is
+   * not set up to retry past.
+   */
+  'gemini-nano-banana-2-1': {
+    model: 'gemini-nano-banana-2.1',
+    location: 'global',
+    usdPerMillion: { input: 1.5, output: 30 },
+    capability: {
+      aspectRatios: ['1:1', '4:5', '9:16', '16:9'],
+      maxPerRequest: 4,
+      outputMimeTypes: ['image/png', 'image/jpeg'],
+      acceptsReferenceImages: true,
+      // The model allows up to 14; this app offers up to 3 in Studio regardless of model, so
+      // a creator moving between models never loses an upload the other one would have kept.
+      maxReferenceImages: 14,
+      // Unverified for this project — see the note above. Matches the Lite model's measured
+      // value as the conservative assumption, not a confirmed one.
+      requestsPerMinute: 2,
+    },
+  },
 } as const satisfies Record<string, ImageModel>;
 
 export type ImageModelKey = keyof typeof IMAGE_MODELS;
@@ -85,9 +120,16 @@ export const IMAGE_MODEL_KEYS = Object.keys(IMAGE_MODELS) as ImageModelKey[];
 
 export const TEXT_MODEL_KEYS = Object.keys(TEXT_MODELS) as TextModelKey[];
 
+/** Which constructor wires it (WP63): Veo's raw REST `predictLongRunning`/`fetchPredictOperation`
+ *  pair, or Omni's Interactions API (`client.interactions.create`/`.get`) — different enough
+ *  wire shapes that one generic constructor cannot serve both, the way createGeminiImage
+ *  serves every image model because they all share one shape. */
+export type VideoProvider = 'veo' | 'omni';
+
 export interface VideoModel {
+  provider: VideoProvider;
   model: string;
-  /** Veo is regional, unlike Gemini 3.x (D10). */
+  /** Veo is regional; Omni answers on `global` like the Gemini-family models (D10). */
   location: string;
   /** USD per second of delivered video, by resolution (plan section 6). */
   usdPerSecond: Record<'720p' | '1080p', number>;
@@ -101,6 +143,7 @@ export const VIDEO_MODELS = {
    * times (plan section 6). Video only, no generated audio.
    */
   'veo-3.1-lite': {
+    provider: 'veo',
     model: 'veo-3.1-lite-generate-001',
     location: 'us-central1',
     usdPerSecond: { '720p': 0.03, '1080p': 0.05 },
@@ -111,10 +154,52 @@ export const VIDEO_MODELS = {
       durationSeconds: { min: 8, max: 8, step: 8 },
       // It takes a still to start from, which is what WP38 films a storyboard frame with.
       acceptsStartImage: true,
+      acceptsReferenceImages: false,
+      maxReferenceImages: 0,
       generatesAudio: false,
       // Vertex: LongRunningPredictRequestsPerMinutePerProjectPerBaseModel, read from the
       // quota API 2026-10-12. One. Three scenes are therefore three minutes, and no amount
       // of concurrency changes that (WP41).
+      requestsPerMinute: 1,
+    },
+  },
+  /**
+   * "Gemini Omni 1.1 Flash" (WP63), Google's own public name — confirmed against
+   * docs.cloud.google.com on 2026-10-19: model id `gemini-omni-1.1-flash-preview`, global only,
+   * up to 10 reference images, 10 second clips, generates its own audio by default. Unlike Veo
+   * it answers through the Interactions API (`client.interactions.create`/`.get`), not
+   * `predictLongRunning`/`fetchPredictOperation` — a different wire shape, wired for the first
+   * time in this codebase in packages/adapters/src/video/omni.ts. That file's own comment says
+   * what is and is not empirically verified yet; read it before trusting this one blind.
+   *
+   * Treated as one 8 second beat, the same atomic unit Veo already uses, rather than taking
+   * advantage of its real 10s-per-call or 40s-with-extension ceiling: letting one model use a
+   * different clip length would mean two duration systems in Studio instead of one, which is a
+   * real feature, not a default to reach for silently.
+   */
+  'gemini-omni-1.1-flash': {
+    provider: 'omni',
+    model: 'gemini-omni-1.1-flash-preview',
+    location: 'global',
+    // Unverified: not found on a Google pricing page direct enough to quote (the pricing page
+    // was too large to fetch whole). These are a secondary source's figures, kept only because
+    // this number feeds cost telemetry, never a charge to a creator — confirm before trusting
+    // it for anything that is.
+    usdPerSecond: { '720p': 0.1, '1080p': 0.15 },
+    capability: {
+      aspectRatios: ['16:9', '9:16'],
+      resolutions: ['720p', '1080p'],
+      durationSeconds: { min: 8, max: 8, step: 8 },
+      // First/last frame control exists, but is a different feature (two reference images with
+      // a described transition) from Veo's "animate this one still" — not wired as
+      // acceptsStartImage here to avoid silently changing what that flag means for every
+      // caller that already checks it.
+      acceptsStartImage: false,
+      acceptsReferenceImages: true,
+      maxReferenceImages: 3,
+      generatesAudio: true,
+      // Unverified for this project, the same caveat as Nano Banana 2.1 above: Vertex quotas
+      // are granted per base model, and this is a newly added one.
       requestsPerMinute: 1,
     },
   },

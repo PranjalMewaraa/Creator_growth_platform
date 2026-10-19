@@ -13,6 +13,8 @@ const veo: VideoCapability = {
   resolutions: ['720p', '1080p'],
   durationSeconds: { min: 8, max: 8, step: 8 },
   acceptsStartImage: true,
+  acceptsReferenceImages: false,
+  maxReferenceImages: 0,
   generatesAudio: false,
   requestsPerMinute: 1,
 };

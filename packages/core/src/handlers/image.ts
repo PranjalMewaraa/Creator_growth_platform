@@ -48,8 +48,11 @@ export interface ImageHandlerDeps {
 interface ImageJobInput {
   compiledPromptId?: unknown;
   count?: unknown;
-  /** A picture the creator uploaded to stay consistent with, by its store key (WP60). */
-  referenceImageKey?: unknown;
+  /** Pictures the creator uploaded to stay consistent with, by their store keys (WP60/63). */
+  referenceImageKeys?: unknown;
+  /** Which model draws it (WP63). Falls back to the generator's own default when absent or
+   *  not a model this build knows, the same way an unknown look id is simply not applied. */
+  imageModel?: unknown;
 }
 
 /** Inferred from the extension `storeReferenceImage` chose; the store returns bytes alone. */
@@ -91,7 +94,13 @@ export function createImageHandlers(deps: ImageHandlerDeps): Record<string, JobH
       const prompt = await findCompiledPrompt(deps.db, job.workspaceId, input.compiledPromptId);
       if (!prompt) throw new Error('Compiled prompt not found');
 
-      const adapter = deps.adapters[generator.providerAdapter];
+      // The model is a choice now (WP63), not only ever the generator's own default — but a
+      // key this build does not have an adapter for falls back to that default rather than
+      // failing the job, the same tolerance an unrecognised look id already gets.
+      const requestedModel = typeof input.imageModel === 'string' ? input.imageModel : undefined;
+      const adapter =
+        (requestedModel ? deps.adapters[requestedModel] : undefined) ??
+        deps.adapters[generator.providerAdapter];
       if (!adapter) throw new Error(`No image adapter ${generator.providerAdapter}`);
 
       // A thumbnail is always a set of variants to choose between; an image is what was priced.
@@ -107,18 +116,30 @@ export function createImageHandlers(deps: ImageHandlerDeps): Record<string, JobH
           ? (resolved as AspectRatio)
           : UNTARGETED[kind];
 
-      // Only a model that says it reads them is given one (WP60, same reasoning as the
+      // Only a model that says it reads them is given any (WP60/63, same reasoning as the
       // storyboard's own anchor frame) — an uploaded reference is otherwise silently dropped
-      // rather than sent to a model that would ignore or reject it.
-      const acceptsReferences = deps.capabilityOf?.(adapter.key)?.acceptsReferenceImages ?? false;
+      // rather than sent to a model that would ignore or reject it. Trimmed to what the chosen
+      // model actually allows, so moving between models never sends more than it can take.
+      const capability = deps.capabilityOf?.(adapter.key);
+      const referenceKeys = Array.isArray(input.referenceImageKeys)
+        ? input.referenceImageKeys
+            .filter((k): k is string => typeof k === 'string')
+            .slice(0, capability?.maxReferenceImages ?? 0)
+        : [];
       let references: Array<{ data: Uint8Array; mimeType: string }> | undefined;
-      if (acceptsReferences && typeof input.referenceImageKey === 'string') {
-        try {
-          const data = await deps.store.get(input.referenceImageKey);
-          references = [{ data, mimeType: mimeTypeFor(input.referenceImageKey) }];
-        } catch (err) {
-          log.warn({ err, key: input.referenceImageKey }, 'reference image could not be read');
-        }
+      if (capability?.acceptsReferenceImages && referenceKeys.length > 0) {
+        const fetched = await Promise.all(
+          referenceKeys.map(async (key) => {
+            try {
+              return { data: await deps.store.get(key), mimeType: mimeTypeFor(key) };
+            } catch (err) {
+              log.warn({ err, key }, 'reference image could not be read');
+              return undefined;
+            }
+          }),
+        );
+        const usable = fetched.filter((f): f is NonNullable<typeof f> => f !== undefined);
+        if (usable.length > 0) references = usable;
       }
 
       let result;

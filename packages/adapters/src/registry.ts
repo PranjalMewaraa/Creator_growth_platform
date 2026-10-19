@@ -21,6 +21,7 @@ import {
 } from './fakes';
 import { createGeminiImage } from './image/gemini';
 import { createGoogleVoice } from './voice/google';
+import { createOmniVideo } from './video/omni';
 import { createStubVideo } from './video/stub';
 import { createVeoVideo } from './video/veo';
 import { createInstagramPublisher } from './publishers/instagram';
@@ -136,9 +137,10 @@ export function createVideoAdapters(mode: ProviderMode, real?: RealProviderOptio
     if (mode === 'fake') return [key, createFakeVideo(key)] as const;
     if (!real?.project) throw new Error('PROVIDERS=real needs a GCP project');
     const config = VIDEO_MODELS[key];
+    const create = config.provider === 'omni' ? createOmniVideo : createVeoVideo;
     return [
       key,
-      createVeoVideo({
+      create({
         key,
         project: real.project,
         location: config.location,

@@ -24,6 +24,7 @@ import {
   LinkIcon,
   MicIcon,
   PaletteIcon,
+  PlusIcon,
   Select,
   SparklesIcon,
   Toggle,
@@ -91,7 +92,10 @@ const LOOK_LABELS: Record<LookKey, string> = {
 /** The kinds that make a picture or film one, and so take a look (WP37). */
 const VISUAL = new Set(['image', 'thumbnail_set', 'video']);
 /** The kinds whose model reads a reference picture (WP60): Veo has no equivalent for video. */
-const REFERENCEABLE = new Set(['image', 'thumbnail_set']);
+// Veo has no reference-image feature of its own, but Omni does (WP63), so video joins this
+// set too now — the reference section just shows for one more kind, the model picker decides
+// which provider actually reads what gets uploaded.
+const REFERENCEABLE = new Set(['image', 'thumbnail_set', 'video']);
 
 // The six generators, named once in @/lib/studio-kinds so Home's cards, this dialog and the
 // picker never drift apart (WP53).
@@ -107,6 +111,17 @@ const COUNTS = [1, 2, 3, 4];
 // A length to ask for, not a scene count to pick: the planner decides how many eight-second
 // beats best fill it (WP59). Bounded to match packages/core's MIN/MAX_VIDEO_SECONDS.
 const VIDEO_DURATIONS = [8, 16, 24, 32, 40, 48];
+// The Lite model's own hard ceiling (packages/adapters/src/models.ts) — the 2.1 model allows
+// more, but a request moved between models should never lose an upload the other would keep.
+const MAX_REFERENCE_IMAGES = 3;
+const IMAGE_MODEL_OPTIONS = [
+  { value: 'gemini-flash-lite-image', label: 'Nano Banana 2 Lite (current)' },
+  { value: 'gemini-nano-banana-2-1', label: 'Nano Banana 2.1' },
+];
+const VIDEO_MODEL_OPTIONS = [
+  { value: 'veo-3.1-lite', label: 'Veo 3.1 Lite (current)' },
+  { value: 'gemini-omni-1.1-flash', label: 'Gemini Omni 1.1 Flash' },
+];
 
 /** Pictures are drawn, not written, so the running state says what is actually happening. */
 const DRAWN: ReadonlySet<string> = new Set(['image', 'thumbnail_set', 'video']);
@@ -264,11 +279,18 @@ export function Studio({
   // The look (WP37): the parts a creator picked, each outranking the template's (FR-PO-06).
   const [look, setLook] = useState<Partial<Record<LookKey, string>>>({});
   const [templateId, setTemplateId] = useState<string | null>(null);
-  // A picture to stay consistent with, for the one model that reads one (WP60).
-  const [referenceImage, setReferenceImage] = useState<{ key: string; url: string } | null>(null);
+  // Pictures to stay consistent with, for the models that read them (WP60/63). Capped at
+  // three — the Lite model's own hard ceiling, and more than that is a gallery, not a
+  // reference.
+  const [referenceImages, setReferenceImages] = useState<Array<{ key: string; url: string }>>([]);
   const [referenceUploading, setReferenceUploading] = useState(false);
   const [referenceError, setReferenceError] = useState<string | null>(null);
   const referenceInputRef = useRef<HTMLInputElement>(null);
+  // Which image model draws it (WP63): a picture a creator can see and change their mind
+  // about, kept per-kind-visit rather than defaulted away from what the generator itself
+  // already defaults to server side.
+  const [imageModel, setImageModel] = useState<string>('gemini-flash-lite-image');
+  const [videoModel, setVideoModel] = useState<string>('veo-3.1-lite');
   // The templates for what is being made, plain one first, since that is the default.
   const outputType = KINDS.find((k) => k.key === kind)?.outputType;
   const kindTemplates = templates
@@ -307,8 +329,13 @@ export function Studio({
     ...(kind === 'script' && length ? { durationSeconds: length } : {}),
     ...(kind === 'image' ? { count } : {}),
     ...(VISUAL.has(kind) ? look : {}),
-    ...(kind === 'video' ? { targetDurationSeconds: durationSeconds, voiceover } : {}),
-    ...(REFERENCEABLE.has(kind) && referenceImage ? { referenceImageKey: referenceImage.key } : {}),
+    ...(kind === 'video'
+      ? { targetDurationSeconds: durationSeconds, voiceover, videoModel }
+      : {}),
+    ...(REFERENCEABLE.has(kind) && referenceImages.length > 0
+      ? { referenceImageKeys: referenceImages.map((r) => r.key) }
+      : {}),
+    ...(kind === 'image' || kind === 'thumbnail_set' ? { imageModel } : {}),
     ...(templateId ? { templateId } : {}),
     ...(kind === 'caption_set' && captionFor.length ? { platforms: captionFor } : {}),
   };
@@ -474,7 +501,8 @@ export function Studio({
       setReferenceError(refusal(body ?? {}));
       return;
     }
-    setReferenceImage(body.reference);
+    const reference = body.reference;
+    setReferenceImages((current) => [...current, reference]);
   }
 
   async function compile() {
@@ -548,7 +576,7 @@ export function Studio({
         onPick={(picked) => {
           setKind(picked);
           setTemplateId(null);
-          setReferenceImage(null);
+          setReferenceImages([]);
           setKindDialogOpen(false);
           router.replace(`?kind=${picked}`, { scroll: false });
         }}
@@ -646,61 +674,88 @@ export function Studio({
               <ChevronDownIcon aria-hidden className="shrink-0 -rotate-90 text-faint" />
             </button>
 
-            {/* A picture the model reads alongside the prompt, for the result to stay
-                consistent with (WP60). Only offered where the provider reads one: Veo has
-                nothing like it, so video never sees this control. */}
+            {/* The model and its reference pictures (WP60/63). Every kind here has at least
+                one provider that reads references now, Omni having joined Nano Banana. */}
             {REFERENCEABLE.has(kind) ? (
-              <div className="flex flex-col gap-1.5">
-                <ControlLabel icon={ImageIcon}>
-                  Reference image <span className="normal-case text-faint">(optional)</span>
-                </ControlLabel>
-                {referenceImage ? (
-                  <div className="flex items-center gap-3 rounded-xl border border-line bg-raised px-3 py-2">
-                    {/* A real uploaded picture: next/image cannot optimise it, and need not. */}
-                    <img
-                      src={referenceImage.url}
-                      alt=""
-                      className="size-10 shrink-0 rounded-lg object-cover"
-                    />
-                    <span className="flex-1 truncate text-caption text-muted">
-                      Kept in frame alongside the prompt
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <ControlLabel icon={SparklesIcon}>Model</ControlLabel>
+                  <Dropdown
+                    aria-label="Model"
+                    value={kind === 'video' ? videoModel : imageModel}
+                    onChange={kind === 'video' ? setVideoModel : setImageModel}
+                    options={kind === 'video' ? VIDEO_MODEL_OPTIONS : IMAGE_MODEL_OPTIONS}
+                  />
+                  {kind === 'video' ? (
+                    <span className="text-caption text-faint">
+                      Omni generates its own sound; the voiceover toggle above still layers a
+                      spoken track over it if it&apos;s on.
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => setReferenceImage(null)}
-                      className="tap-target shrink-0 cursor-pointer rounded-lg p-1.5 text-faint transition-colors duration-base ease-standard hover:text-ink"
-                      aria-label="Remove the reference image"
-                    >
-                      <CloseIcon width={14} height={14} />
-                    </button>
+                  ) : null}
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <ControlLabel icon={ImageIcon}>
+                    Reference images{' '}
+                    <span className="normal-case text-faint">
+                      (optional, up to {MAX_REFERENCE_IMAGES})
+                    </span>
+                  </ControlLabel>
+                  <div className="flex flex-wrap gap-2">
+                    {referenceImages.map((ref, index) => (
+                      <div
+                        key={ref.key}
+                        className="group relative size-16 shrink-0 overflow-hidden rounded-lg border border-line"
+                      >
+                        {/* A real uploaded picture: next/image cannot optimise it, and need not. */}
+                        <img src={ref.url} alt="" className="size-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setReferenceImages((current) =>
+                              current.filter((_, i) => i !== index),
+                            )
+                          }
+                          className="tap-target absolute inset-0 flex cursor-pointer items-center justify-center bg-black/60 text-canvas opacity-0 transition-opacity duration-base ease-standard group-hover:opacity-100 group-focus-visible:opacity-100"
+                          aria-label="Remove this reference image"
+                        >
+                          <CloseIcon width={18} height={18} />
+                        </button>
+                      </div>
+                    ))}
+                    {referenceImages.length < MAX_REFERENCE_IMAGES ? (
+                      <>
+                        <input
+                          ref={referenceInputRef}
+                          type="file"
+                          accept="image/png,image/jpeg"
+                          className="hidden"
+                          onChange={(event) => {
+                            const file = event.target.files?.[0];
+                            event.target.value = '';
+                            if (file) void uploadReference(file);
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => referenceInputRef.current?.click()}
+                          disabled={referenceUploading}
+                          aria-label="Add a reference image"
+                          className="tap-target flex size-16 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-dashed border-line bg-raised text-muted transition-colors duration-base ease-standard hover:border-faint hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {referenceUploading ? (
+                            <span className="text-caption">…</span>
+                          ) : (
+                            <PlusIcon width={18} height={18} aria-hidden />
+                          )}
+                        </button>
+                      </>
+                    ) : null}
                   </div>
-                ) : (
-                  <>
-                    <input
-                      ref={referenceInputRef}
-                      type="file"
-                      accept="image/png,image/jpeg"
-                      className="hidden"
-                      onChange={(event) => {
-                        const file = event.target.files?.[0];
-                        event.target.value = '';
-                        if (file) void uploadReference(file);
-                      }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => referenceInputRef.current?.click()}
-                      disabled={referenceUploading}
-                      className="tap-target flex h-11 cursor-pointer items-center gap-2 rounded-xl border border-dashed border-line bg-raised px-4 text-left text-sm text-muted transition-colors duration-base ease-standard hover:border-faint hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <ImageIcon width={16} height={16} aria-hidden className="shrink-0 text-faint" />
-                      {referenceUploading ? 'Uploading…' : 'Upload a picture to match'}
-                    </button>
-                  </>
-                )}
-                {referenceError ? (
-                  <span className="text-caption text-bad">{referenceError}</span>
-                ) : null}
+                  {referenceError ? (
+                    <span className="text-caption text-bad">{referenceError}</span>
+                  ) : null}
+                </div>
               </div>
             ) : null}
 

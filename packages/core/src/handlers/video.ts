@@ -99,6 +99,12 @@ interface VideoJobInput {
   /** Off for a reel that should stay silent or carry only the scenes' own sound, not a spoken
    *  narration over it — not every video is explaining something (WP58). Defaults to on. */
   voiceover?: unknown;
+  /** Which model films it (WP63). Falls back to the generator's own default when absent, not
+   *  a model this build knows, or when committing from a storyboard. */
+  videoModel?: unknown;
+  /** Pictures the model should stay consistent with (WP63), by their store keys — only the
+   *  models whose capability says `acceptsReferenceImages` read any. */
+  referenceImageKeys?: unknown;
 }
 
 type Spoken = Awaited<ReturnType<typeof speak>>;
@@ -131,6 +137,7 @@ async function renderScene(
   prompt: string,
   log: Parameters<JobHandler>[1],
   startImage?: MediaBytes,
+  references?: MediaBytes[],
 ): Promise<{ ok: true; clip: GeneratedClip } | { ok: false; code: string; blocked: boolean }> {
   const ask = {
     aspectRatio: '9:16' as const,
@@ -143,7 +150,11 @@ async function renderScene(
   // film is refused here, where it costs nothing, rather than after the seconds are held.
   const capability = deps.capabilityOf?.(adapter.key);
   const issues = capability
-    ? checkVideo(capability, { ...ask, startImage: Boolean(startImage) })
+    ? checkVideo(capability, {
+        ...ask,
+        startImage: Boolean(startImage),
+        references: references?.length,
+      })
     : [];
   if (issues.length > 0) {
     const [first] = issues;
@@ -160,6 +171,7 @@ async function renderScene(
     negativePrompt: NEGATIVE_PROMPT,
     ...ask,
     ...(animate && startImage ? { startImage } : {}),
+    ...(references?.length ? { references } : {}),
   });
 
   const every = deps.pollEveryMs ?? POLL_EVERY_MS;
@@ -218,10 +230,20 @@ export function createVideoHandlers(deps: VideoHandlerDeps): Record<string, JobH
 
     handlers[generator.key] = async (job, log) => {
       const ws = scoped(deps.db, job.workspaceId);
-      const adapter = deps.adapters[generator.providerAdapter];
+      const input = job.input as VideoJobInput;
+
+      // The model is a choice now (WP63), except when committing from a storyboard: those
+      // frames are stills for Veo's startImage to animate, not a style reference, so that path
+      // is pinned to the generator's own default regardless of what videoModel asked for.
+      const requestedModel =
+        typeof input.videoModel === 'string' && typeof input.storyboardOutputId !== 'string'
+          ? input.videoModel
+          : undefined;
+      const adapter =
+        (requestedModel ? deps.adapters[requestedModel] : undefined) ??
+        deps.adapters[generator.providerAdapter];
       if (!adapter) throw new Error(`No video adapter ${generator.providerAdapter}`);
 
-      const input = job.input as VideoJobInput;
       if (typeof input.compiledPromptId !== 'string') throw new Error('Job has no compiled prompt');
       const prompt = await findCompiledPrompt(deps.db, job.workspaceId, input.compiledPromptId);
       if (!prompt) throw new Error('Compiled prompt not found');
@@ -247,6 +269,33 @@ export function createVideoHandlers(deps: VideoHandlerDeps): Record<string, JobH
           ? input.targetDurationSeconds
           : 24;
       const wantsVoiceover = input.voiceover !== false;
+
+      // Only a model that says it reads them is given any (WP63, same reasoning as the image
+      // handler's). The same pictures are offered to every scene's render call, the same way
+      // `look` stays the same across every scene already.
+      const videoCapability = deps.capabilityOf?.(adapter.key);
+      const referenceKeys = Array.isArray(input.referenceImageKeys)
+        ? input.referenceImageKeys
+            .filter((k): k is string => typeof k === 'string')
+            .slice(0, videoCapability?.maxReferenceImages ?? 0)
+        : [];
+      let references: MediaBytes[] | undefined;
+      if (videoCapability?.acceptsReferenceImages && referenceKeys.length > 0) {
+        const fetched = await Promise.all(
+          referenceKeys.map(async (key) => {
+            try {
+              const data = await deps.store.get(key);
+              return { data, mimeType: key.endsWith('.png') ? 'image/png' : 'image/jpeg' };
+            } catch (err) {
+              log.warn({ err, key }, 'reference image could not be read');
+              return undefined;
+            }
+          }),
+        );
+        const usable = fetched.filter((f): f is MediaBytes => f !== undefined);
+        if (usable.length > 0) references = usable;
+      }
+
       const config = await sceneConfig(
         deps.db,
         prompt.compilerProfileKey,
@@ -355,7 +404,7 @@ export function createVideoHandlers(deps: VideoHandlerDeps): Record<string, JobH
             ? { note: `the video model films ${perMinute} a minute, so this one waits its turn` }
             : {}),
         });
-        const result = await renderScene(deps, adapter, scene.prompt, log, startImage);
+        const result = await renderScene(deps, adapter, scene.prompt, log, startImage, references);
         if (!result.ok) {
           blocked ||= result.blocked;
           continue;

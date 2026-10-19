@@ -233,18 +233,24 @@ describe('reference image (WP60)', () => {
     return { adapter, seen };
   }
 
-  async function runWithReference(
-    acceptsReferenceImages: boolean,
+  async function runWithReferences(
+    keyCount: number,
+    capability: { acceptsReferenceImages: boolean; maxReferenceImages: number },
   ): Promise<Array<{ references: number }>> {
     const { adapter, seen } = watchingAdapter();
     const workspaceId = await workspace();
-    const key = `${workspaceId}/references/test.png`;
-    await store.put(key, new Uint8Array([1, 2, 3]), 'image/png');
+    const keys = await Promise.all(
+      Array.from({ length: keyCount }, async (_, i) => {
+        const key = `${workspaceId}/references/test-${i}.png`;
+        await store.put(key, new Uint8Array([1, 2, 3]), 'image/png');
+        return key;
+      }),
+    );
 
     const started = await startGeneration(deps(), {
       workspaceId,
       generatorKey: 'image',
-      input: { ...intent, referenceImageKey: key },
+      input: { ...intent, referenceImageKeys: keys },
     });
     if (!started.ok) throw new Error(started.reason);
     await processJob(
@@ -254,7 +260,7 @@ describe('reference image (WP60)', () => {
           { 'gemini-flash-lite-image': adapter },
           undefined,
           undefined,
-          () => ({ acceptsReferenceImages }) as ImageCapability,
+          () => capability as ImageCapability,
         ),
         log,
       },
@@ -264,10 +270,85 @@ describe('reference image (WP60)', () => {
   }
 
   it('sends an uploaded reference to a model whose capability accepts one', async () => {
-    expect(await runWithReference(true)).toEqual([{ references: 1 }]);
+    expect(
+      await runWithReferences(1, { acceptsReferenceImages: true, maxReferenceImages: 3 }),
+    ).toEqual([{ references: 1 }]);
   });
 
   it('never sends a reference to a model whose capability does not accept one', async () => {
-    expect(await runWithReference(false)).toEqual([{ references: 0 }]);
+    expect(
+      await runWithReferences(1, { acceptsReferenceImages: false, maxReferenceImages: 3 }),
+    ).toEqual([{ references: 0 }]);
+  });
+
+  it('sends more than one reference, up to the schema cap of three (WP63)', async () => {
+    expect(
+      await runWithReferences(3, { acceptsReferenceImages: true, maxReferenceImages: 3 }),
+    ).toEqual([{ references: 3 }]);
+  });
+
+  it('trims to what the model allows, not what was uploaded', async () => {
+    expect(
+      await runWithReferences(3, { acceptsReferenceImages: true, maxReferenceImages: 1 }),
+    ).toEqual([{ references: 1 }]);
+  });
+});
+
+describe('model choice (WP63)', () => {
+  function fakeAdapter(key: string): ImageAdapter {
+    return {
+      key,
+      generate: () =>
+        Promise.resolve({
+          images: [{ data: new Uint8Array([1]), mimeType: 'image/png', width: 1, height: 1 }],
+          usage: { inputTokens: 0, outputTokens: 0 },
+        }),
+    };
+  }
+
+  it('uses the model the request asked for', async () => {
+    const workspaceId = await workspace();
+    const started = await startGeneration(deps(), {
+      workspaceId,
+      generatorKey: 'image',
+      input: { ...intent, imageModel: 'gemini-nano-banana-2-1' },
+    });
+    if (!started.ok) throw new Error(started.reason);
+    await processJob(
+      {
+        db,
+        handlers: handlersWith({
+          'gemini-flash-lite-image': fakeAdapter('gemini-flash-lite-image'),
+          'gemini-nano-banana-2-1': fakeAdapter('gemini-nano-banana-2-1'),
+        }),
+        log,
+      },
+      { jobId: started.job.id, correlationId: started.job.id } satisfies QueuedJobData,
+    );
+    const [output] = await scoped(db, workspaceId).select(outputs);
+    expect(output?.metadata).toMatchObject({ adapter: 'gemini-nano-banana-2-1' });
+  });
+
+  it('falls back to the default model when none was asked for', async () => {
+    const workspaceId = await workspace();
+    const started = await startGeneration(deps(), {
+      workspaceId,
+      generatorKey: 'image',
+      input: intent,
+    });
+    if (!started.ok) throw new Error(started.reason);
+    await processJob(
+      {
+        db,
+        handlers: handlersWith({
+          'gemini-flash-lite-image': fakeAdapter('gemini-flash-lite-image'),
+          'gemini-nano-banana-2-1': fakeAdapter('gemini-nano-banana-2-1'),
+        }),
+        log,
+      },
+      { jobId: started.job.id, correlationId: started.job.id } satisfies QueuedJobData,
+    );
+    const [output] = await scoped(db, workspaceId).select(outputs);
+    expect(output?.metadata).toMatchObject({ adapter: 'gemini-flash-lite-image' });
   });
 });

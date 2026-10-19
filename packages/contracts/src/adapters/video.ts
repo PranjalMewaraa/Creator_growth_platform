@@ -15,6 +15,13 @@ export interface VideoRequest {
    * `acceptsStartImage` are given one.
    */
   startImage?: MediaBytes;
+  /**
+   * Pictures the model should stay consistent with (WP63), the video-model equivalent of
+   * `ImageRequest.references` — distinct from `startImage`, which is one literal first frame,
+   * not a style or subject reference. Only models whose capability says
+   * `acceptsReferenceImages` are given any.
+   */
+  references?: readonly MediaBytes[];
 }
 
 export type GeneratedClip = MediaBytes & { durationSeconds: number; width: number; height: number };

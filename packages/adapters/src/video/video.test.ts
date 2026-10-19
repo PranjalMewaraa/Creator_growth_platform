@@ -167,11 +167,11 @@ describe('the second provider', () => {
 describe('the video registry', () => {
   it('holds the generating provider and the stub, in both modes', () => {
     const fake = createVideoAdapters('fake');
-    expect(Object.keys(fake).sort()).toEqual(['second', 'veo-3.1-lite']);
+    expect(Object.keys(fake).sort()).toEqual(['gemini-omni-1.1-flash', 'second', 'veo-3.1-lite']);
     expect(fake.second.key).toBe('second-video-provider');
 
     const real = createVideoAdapters('real', { project: 'test-project' });
-    expect(Object.keys(real).sort()).toEqual(['second', 'veo-3.1-lite']);
+    expect(Object.keys(real).sort()).toEqual(['gemini-omni-1.1-flash', 'second', 'veo-3.1-lite']);
   });
 
   it('refuses to build real adapters without a project', () => {

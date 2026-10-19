@@ -37,12 +37,37 @@ function lookOption(key: LookKey) {
 }
 
 /**
- * A picture the creator uploaded for the image model to stay consistent with (WP60): the key
- * `storeReferenceImage` returned. Only the two generators whose provider accepts one take it —
- * Veo has no equivalent, so neither `storyboard` nor `video` gets this field.
+ * A picture the creator uploaded for the model to stay consistent with (WP60/63): the keys
+ * `storeReferenceImage` returned. Every generator that takes one has a provider that reads it
+ * — Veo does not, so `storyboard` and `redraw_frame` (pinned to Veo and Veo-shaped stills) are
+ * the two that never get this field. Capped at 3, the smallest ceiling any model this build
+ * offers actually has (packages/adapters/src/models.ts): a creator moving a request between
+ * models should never lose an upload the other one would have kept.
  */
 const reference = {
-  referenceImageKey: z.string().min(1).optional(),
+  referenceImageKeys: z.array(z.string().min(1)).max(3).optional(),
+};
+
+/**
+ * Which image model answers the request (WP63): a picture a creator can see and change their
+ * mind about, not a silent default. The keys have to match
+ * packages/adapters/src/models.ts IMAGE_MODELS exactly — core cannot import that package
+ * (adapters wires generators to real providers, never the other way), so they are named again
+ * here, the same way SECONDS_PER_SCENE is named again in packages/orchestration/src/scenes.ts.
+ */
+const IMAGE_MODEL_CHOICES = ['gemini-flash-lite-image', 'gemini-nano-banana-2-1'] as const;
+const imageModel = {
+  imageModel: z.enum(IMAGE_MODEL_CHOICES).default('gemini-flash-lite-image'),
+};
+
+/** Same reasoning as imageModel above, for the one video generator whose provider is a real
+ *  choice (WP63): storyboard, redraw and regenerate all stay pinned to Veo, since a reel
+ *  committed from a storyboard has to be filmed by something that understands the storyboard's
+ *  own frames the way Veo's `startImage` does — Omni's reference pictures are a style anchor,
+ *  not "animate this exact still". */
+const VIDEO_MODEL_CHOICES = ['veo-3.1-lite', 'gemini-omni-1.1-flash'] as const;
+const videoModel = {
+  videoModel: z.enum(VIDEO_MODEL_CHOICES).default('veo-3.1-lite'),
 };
 
 // Instructions the user did not give stay absent rather than defaulted here, so the template
@@ -138,6 +163,7 @@ const image = register({
     ...base,
     ...look,
     ...reference,
+    ...imageModel,
     count: z.int().min(1).max(4).default(1),
   }),
   compilerProfile: 'image',
@@ -160,7 +186,7 @@ const thumbnailSet = register({
   key: 'thumbnail_set',
   outputType: 'thumbnail',
   jobClass: 'inference',
-  inputSchema: z.object({ ...base, ...look, ...reference }),
+  inputSchema: z.object({ ...base, ...look, ...reference, ...imageModel }),
   compilerProfile: 'thumbnail',
   providerAdapter: IMAGE_ADAPTER,
   estimate: (_input, rates) => {
@@ -273,8 +299,12 @@ const video = register({
       .multipleOf(SECONDS_PER_SCENE)
       .default(24),
     voiceover: z.boolean().default(true),
-    /** The storyboard this reel was committed from, so it films what was approved. */
+    /** The storyboard this reel was committed from, so it films what was approved. Forces Veo
+     *  regardless of videoModel below (packages/core/src/handlers/video.ts): a storyboard's
+     *  frames are stills for Veo's `startImage` to animate, not Omni's style references. */
     storyboardOutputId: z.uuid().optional(),
+    ...reference,
+    ...videoModel,
   }),
   compilerProfile: 'video',
   providerAdapter: 'veo-3.1-lite',

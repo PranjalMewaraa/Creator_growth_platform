@@ -12,6 +12,7 @@ import {
   type ModerationAdapter,
   type QueuedJobData,
   type VideoAdapter,
+  type VideoCapability,
 } from '@cgp/contracts';
 import { listScenes, outputs, scoped, type Database } from '@cgp/db';
 import {
@@ -92,6 +93,7 @@ const intent = { intentText: 'A morning in the roastery, from beans to the first
 function handlersWith(
   adapters: Record<string, VideoAdapter>,
   moderation: ModerationAdapter = createFakeModeration(),
+  capabilityOf?: (adapterKey: string) => VideoCapability | undefined,
 ) {
   return createVideoHandlers({
     db,
@@ -103,6 +105,7 @@ function handlersWith(
     store,
     costInr: () => 0,
     providerLabel: 'fake',
+    capabilityOf,
     // A renderer that is not there: the scenes are kept and no reel is built, which is the
     // path a machine without ffmpeg takes.
     ffmpeg: { bin: process.env.FFMPEG_PATH ?? 'ffmpeg', preset: 'ultrafast' },
@@ -540,4 +543,184 @@ describe('filming the frame that was approved (WP38)', () => {
     expect(asks[0]?.hasStartImage).toBe(false);
     expect(result).toBe('settled');
   }, 60_000);
+});
+
+describe('model and reference images (WP63)', () => {
+  /** A video adapter that remembers what references it was given. */
+  function watchingVideoAdapter(key: string) {
+    const seen: Array<{ references: number }> = [];
+    const inner = createFakeVideo(key);
+    const adapter: VideoAdapter = {
+      key: inner.key,
+      submit: (request) => {
+        seen.push({ references: request.references?.length ?? 0 });
+        return inner.submit(request);
+      },
+      poll: (id) => inner.poll(id),
+    };
+    return { adapter, seen };
+  }
+
+  it('uses the model the request asked for', async () => {
+    const omni = createFakeVideo('gemini-omni-1.1-flash');
+    const { workspaceId, started } = await startVideo({ videoModel: 'gemini-omni-1.1-flash' });
+    await processJob(
+      {
+        db,
+        handlers: handlersWith({
+          'veo-3.1-lite': createFakeVideo('veo-3.1-lite'),
+          'gemini-omni-1.1-flash': omni,
+        }),
+        log,
+      },
+      { jobId: started.job.id, correlationId: 'c' },
+    );
+    const [output] = await scoped(db, workspaceId).select(outputs);
+    expect((output?.metadata as { adapter?: string })?.adapter).toBe('gemini-omni-1.1-flash');
+  }, 300_000);
+
+  it('sends uploaded references to a model whose capability accepts them', async () => {
+    const { adapter, seen } = watchingVideoAdapter('gemini-omni-1.1-flash');
+    const workspaceId0 = await createTestWorkspace(db, { credits: 100, videoSeconds: 120 });
+    await addTestProfile(db, workspaceId0);
+    const key = `${workspaceId0}/references/test.png`;
+    await store.put(key, new Uint8Array([1, 2, 3]), 'image/png');
+    const started = await startGeneration(
+      { db, queues: recordingQueues(), log, registry: generators, compile: { rewriters: [] }, moderation: createFakeModeration() },
+      {
+        workspaceId: workspaceId0,
+        generatorKey: 'video',
+        input: {
+          ...intent,
+          targetPlatform: 'instagram',
+          videoModel: 'gemini-omni-1.1-flash',
+          referenceImageKeys: [key],
+        },
+      },
+    );
+    if (!started.ok) throw new Error(started.reason);
+    await processJob(
+      {
+        db,
+        handlers: handlersWith(
+          { 'veo-3.1-lite': createFakeVideo('veo-3.1-lite'), 'gemini-omni-1.1-flash': adapter },
+          undefined,
+          (): VideoCapability => ({
+            aspectRatios: ['9:16', '16:9'],
+            resolutions: ['720p', '1080p'],
+            durationSeconds: { min: 8, max: 8, step: 8 },
+            acceptsStartImage: false,
+            acceptsReferenceImages: true,
+            maxReferenceImages: 3,
+            generatesAudio: true,
+            requestsPerMinute: 1,
+          }),
+        ),
+        log,
+      },
+      { jobId: started.job.id, correlationId: 'c' },
+    );
+    expect(seen.every((s) => s.references === 1)).toBe(true);
+    expect(seen.length).toBeGreaterThan(0);
+  }, 300_000);
+
+  it('never sends references to Veo, which has no capability for them', async () => {
+    const { adapter, seen } = watchingVideoAdapter('veo-3.1-lite');
+    const workspaceId0 = await createTestWorkspace(db, { credits: 100, videoSeconds: 120 });
+    await addTestProfile(db, workspaceId0);
+    const key = `${workspaceId0}/references/test.png`;
+    await store.put(key, new Uint8Array([1, 2, 3]), 'image/png');
+    const started = await startGeneration(
+      { db, queues: recordingQueues(), log, registry: generators, compile: { rewriters: [] }, moderation: createFakeModeration() },
+      {
+        workspaceId: workspaceId0,
+        generatorKey: 'video',
+        input: { ...intent, targetPlatform: 'instagram', referenceImageKeys: [key] },
+      },
+    );
+    if (!started.ok) throw new Error(started.reason);
+    await processJob(
+      {
+        db,
+        handlers: handlersWith(
+          { 'veo-3.1-lite': adapter },
+          undefined,
+          (): VideoCapability => ({
+            aspectRatios: ['9:16', '16:9'],
+            resolutions: ['720p', '1080p'],
+            durationSeconds: { min: 8, max: 8, step: 8 },
+            acceptsStartImage: true,
+            acceptsReferenceImages: false,
+            maxReferenceImages: 0,
+            generatesAudio: false,
+            requestsPerMinute: 1,
+          }),
+        ),
+        log,
+      },
+      { jobId: started.job.id, correlationId: 'c' },
+    );
+    expect(seen.every((s) => s.references === 0)).toBe(true);
+    expect(seen.length).toBeGreaterThan(0);
+  }, 300_000);
+
+  it('ignores videoModel and stays on Veo when committing from a storyboard', async () => {
+    const workspaceId0 = await createTestWorkspace(db, { credits: 200, videoSeconds: 120 });
+    await addTestProfile(db, workspaceId0);
+    const storyboardStarted = await startGeneration(
+      { db, queues: recordingQueues(), log, registry: generators, compile: { rewriters: [] }, moderation: createFakeModeration() },
+      {
+        workspaceId: workspaceId0,
+        generatorKey: 'storyboard',
+        input: { ...intent, targetPlatform: 'instagram', targetDurationSeconds: 8 },
+      },
+    );
+    if (!storyboardStarted.ok) throw new Error(storyboardStarted.reason);
+    const storyboardHandlers = createStoryboardHandler({
+      db,
+      registry: generators,
+      adapters: createImageAdapters('fake'),
+      planner: undefined,
+      moderation: createFakeModeration(),
+      store,
+      costInr: () => 0,
+      providerLabel: 'fake',
+    });
+    const drawn = await processJob(
+      { db, handlers: storyboardHandlers, log },
+      { jobId: storyboardStarted.job.id, correlationId: 'c' },
+    );
+    if (drawn !== 'settled') throw new Error(`storyboard ${drawn}`);
+    const [storyboardOutput] = await scoped(db, workspaceId0).select(outputs, {
+      where: (t, op) => op.eq(t.jobId, storyboardStarted.job.id),
+      limit: 1,
+    });
+    if (!storyboardOutput) throw new Error('no storyboard output');
+
+    const { adapter: veoAdapter, seen } = watchingVideoAdapter('veo-3.1-lite');
+    const omni = createFakeVideo('gemini-omni-1.1-flash');
+    const started = await startGeneration(
+      { db, queues: recordingQueues(), log, registry: generators, compile: { rewriters: [] }, moderation: createFakeModeration() },
+      {
+        workspaceId: workspaceId0,
+        generatorKey: 'video',
+        input: {
+          ...intent,
+          targetPlatform: 'instagram',
+          videoModel: 'gemini-omni-1.1-flash',
+          storyboardOutputId: storyboardOutput.id,
+        },
+      },
+    );
+    if (!started.ok) throw new Error(started.reason);
+    await processJob(
+      {
+        db,
+        handlers: handlersWith({ 'veo-3.1-lite': veoAdapter, 'gemini-omni-1.1-flash': omni }),
+        log,
+      },
+      { jobId: started.job.id, correlationId: 'c' },
+    );
+    expect(seen.length).toBeGreaterThan(0);
+  }, 300_000);
 });
