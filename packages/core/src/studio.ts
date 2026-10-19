@@ -108,6 +108,60 @@ function media(metadata: unknown): StudioOutput['media'] {
   };
 }
 
+export interface GalleryOutput {
+  id: string;
+  jobId: string;
+  kind: OutputType;
+  generatorKey: string;
+  /** What the user asked for, from the job's input — the feed's own caption. */
+  intentText: string;
+  /** Plain text, for the generators that answer in words rather than a picture. */
+  text: string;
+  media: { url: string; width: number; height: number } | null;
+  createdAt: string;
+}
+
+/**
+ * Every output across the workspace, newest first (WP64) — the Studio's gallery feed, not one
+ * job's outputs. Two queries, not a join: the house query layer (packages/db/src/scoped.ts)
+ * is deliberately single table, so a feed row's job (for its intent text and generator key) is
+ * fetched in a second pass and merged here rather than in SQL.
+ */
+export async function recentOutputsFeed(
+  db: Database,
+  workspaceId: string,
+  { limit = 24, before }: { limit?: number; before?: string } = {},
+): Promise<GalleryOutput[]> {
+  const beforeAt = before ? new Date(before) : undefined;
+  const rows = await scoped(db, workspaceId).select(outputs, {
+    where: (t, op) => (beforeAt ? op.lt(t.createdAt, beforeAt) : undefined),
+    orderBy: (t, order) => order.desc(t.createdAt),
+    limit,
+  });
+  if (rows.length === 0) return [];
+
+  const jobIds = [...new Set(rows.map((row) => row.jobId))];
+  const jobRows = await scoped(db, workspaceId).select(jobs, {
+    where: (t, op) => op.inArray(t.id, jobIds),
+  });
+  const jobById = new Map(jobRows.map((job) => [job.id, job]));
+
+  return rows.map((row) => {
+    const job = jobById.get(row.jobId);
+    const input = (job?.input ?? {}) as { intentText?: unknown };
+    return {
+      id: row.id,
+      jobId: row.jobId,
+      kind: row.kind,
+      generatorKey: job?.generatorKey ?? row.kind,
+      intentText: text(input.intentText),
+      text: text((row.metadata as { text?: unknown }).text),
+      media: media(row.metadata),
+      createdAt: row.createdAt.toISOString(),
+    };
+  });
+}
+
 /**
  * A job's outputs, or nothing when the job is not in this workspace or has none yet. The store
  * is needed only to say where a composited layer lives; renditions keep a key, not a URL.

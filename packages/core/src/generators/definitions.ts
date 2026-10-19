@@ -29,6 +29,19 @@ const look = {
   aperture: lookOption('aperture'),
 };
 
+/**
+ * An explicit frame (WP64), for the generators that make a picture or film one. Optional: left
+ * unset, the platform's own frame still wins, which is why there was no control for this
+ * before — a user directive already outranks a platform one in the resolver
+ * (packages/orchestration/src/resolve.ts), so this needed only a field, not a precedence
+ * change. image/thumbnail pick this up with no handler change at all, since both already read
+ * the resolved setting (packages/core/src/handlers/image.ts); video does not read settings for
+ * its frame today, so its handler reads this field directly instead.
+ */
+const aspectRatio = {
+  aspectRatio: z.enum(['1:1', '4:5', '9:16', '16:9']).optional(),
+};
+
 function lookOption(key: LookKey) {
   return z
     .string()
@@ -164,6 +177,7 @@ const image = register({
     ...look,
     ...reference,
     ...imageModel,
+    ...aspectRatio,
     count: z.int().min(1).max(4).default(1),
   }),
   compilerProfile: 'image',
@@ -305,6 +319,11 @@ const video = register({
     storyboardOutputId: z.uuid().optional(),
     ...reference,
     ...videoModel,
+    // Not offered here (WP64): packages/core/src/render/reel.ts's REEL_FRAMES, the caption
+    // layout and the per-scene frame maths are all built around one fixed vertical frame.
+    // Letting a creator ask for 16:9 would either silently crop a landscape clip into a
+    // portrait one or need that whole render path generalised first — a real piece of work,
+    // not a field. Image already supports a real choice, immediately below.
   }),
   compilerProfile: 'video',
   providerAdapter: 'veo-3.1-lite',

@@ -126,7 +126,7 @@ export function magicLinkEmail(input: { url: string; minutes: number }): Omit<Ma
       <p style="margin:0 0 6px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#a1a1aa">Creator Growth Platform</p>
       <h1 style="margin:0 0 16px;font-size:22px;font-weight:600">Your sign in link</h1>
       <p style="margin:0 0 20px;font-size:15px;line-height:1.6;color:#d4d4d8">Tap the button to sign in. It works once and expires in ${minutes} minutes.</p>
-      <p style="margin:0 0 24px"><a href="${safeUrl}" style="display:inline-block;background:#38bdf8;color:#0a1420;text-decoration:none;font-weight:600;padding:12px 20px;border-radius:12px">Sign in</a></p>
+      <p style="margin:0 0 24px"><a href="${safeUrl}" style="display:inline-block;background:#bf00ff;color:#050007;text-decoration:none;font-weight:600;padding:12px 20px;border-radius:12px">Sign in</a></p>
       <p style="margin:0;font-size:12px;line-height:1.6;color:#71717a">Or paste this into your browser:<br><span style="word-break:break-all;color:#a1a1aa">${safeUrl}</span></p>
       <p style="margin:20px 0 0;font-size:12px;line-height:1.6;color:#71717a">If you did not ask for this, ignore it and nothing happens.</p>
     </div>

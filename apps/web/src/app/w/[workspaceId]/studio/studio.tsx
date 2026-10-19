@@ -27,6 +27,7 @@ import {
   PlusIcon,
   Select,
   SparklesIcon,
+  Tabs,
   Toggle,
   TypeIcon,
 } from '@cgp/ui';
@@ -43,6 +44,7 @@ import {
 } from 'react';
 import { STUDIO_KINDS } from '@/lib/studio-kinds';
 import { GenerationStatus } from './generation-status';
+import { GalleryFeed } from './gallery-feed';
 import { KindPickerDialog } from './kind-picker-dialog';
 import { WorkLedger } from './work-ledger';
 import {
@@ -101,6 +103,9 @@ const REFERENCEABLE = new Set(['image', 'thumbnail_set', 'video']);
 // picker never drift apart (WP53).
 const KINDS = STUDIO_KINDS;
 const LABEL: Record<string, string> = Object.fromEntries(KINDS.map((k) => [k.key, k.label]));
+// The three kinds the gallery-feed Studio fronts with (WP64); the rest stay one tap away,
+// behind "More" and the kind picker dialog they always lived in.
+const PRIMARY_KINDS = ['script', 'image', 'video'] as const;
 
 const PLATFORMS: Array<{ value: TargetPlatform; label: string }> = [
   { value: 'instagram', label: 'Instagram' },
@@ -108,6 +113,8 @@ const PLATFORMS: Array<{ value: TargetPlatform; label: string }> = [
 ];
 const LENGTHS = [15, 30, 45, 60, 90];
 const COUNTS = [1, 2, 3, 4];
+// Image only (WP64): video's render pipeline is still vertical only, see definitions.ts.
+const ASPECT_RATIOS = ['1:1', '4:5', '9:16', '16:9'];
 // A length to ask for, not a scene count to pick: the planner decides how many eight-second
 // beats best fill it (WP59). Bounded to match packages/core's MIN/MAX_VIDEO_SECONDS.
 const VIDEO_DURATIONS = [8, 16, 24, 32, 40, 48];
@@ -268,6 +275,9 @@ export function Studio({
   const [captionFor, setCaptionFor] = useState<TargetPlatform[]>([]);
   const [length, setLength] = useState<number | null>(null);
   const [count, setCount] = useState(1);
+  // Empty means the platform decides, same as it always has (WP64) — this only ever sends a
+  // user override when there is one.
+  const [aspectRatio, setAspectRatio] = useState('');
   // How long the reel should run; how many eight-second beats fill that is for the engine's
   // scene planner to decide, not the creator (WP59) — a calm piece wants fewer, longer-held
   // beats, a fight wants several quick ones, both inside the same requested length.
@@ -328,6 +338,7 @@ export function Studio({
     ...(tone.trim() ? { tone: tone.trim() } : {}),
     ...(kind === 'script' && length ? { durationSeconds: length } : {}),
     ...(kind === 'image' ? { count } : {}),
+    ...(kind === 'image' && aspectRatio ? { aspectRatio } : {}),
     ...(VISUAL.has(kind) ? look : {}),
     ...(kind === 'video'
       ? { targetDurationSeconds: durationSeconds, voiceover, videoModel }
@@ -568,19 +579,19 @@ export function Studio({
   const shownDuration = openJobRow?.durationSeconds ?? null;
   const credit = (n: number) => `${n} ${n === 1 ? 'credit' : 'credits'}`;
 
+  /** Switching kind, from the dialog or from the tabs below (WP64) — one reset either way. */
+  function selectKind(picked: string) {
+    setKind(picked);
+    setTemplateId(null);
+    setReferenceImages([]);
+    setAspectRatio('');
+    setKindDialogOpen(false);
+    router.replace(`?kind=${picked}`, { scroll: false });
+  }
+
   return (
     <>
-      <KindPickerDialog
-        open={kindDialogOpen}
-        art={art}
-        onPick={(picked) => {
-          setKind(picked);
-          setTemplateId(null);
-          setReferenceImages([]);
-          setKindDialogOpen(false);
-          router.replace(`?kind=${picked}`, { scroll: false });
-        }}
-      />
+      <KindPickerDialog open={kindDialogOpen} art={art} onPick={selectKind} />
 
       {/*
         Two panes, left to right, roughly 2:3 (WP56): what you are asking for, and what came
@@ -594,20 +605,31 @@ export function Studio({
       <div className="grid items-start gap-6 *:min-w-0 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
         {/* Left: the request. */}
         <section className="flex flex-col rounded-2xl border border-line bg-surface">
-          <header className="flex items-start justify-between gap-3 px-6 pt-5">
+          <div className="flex items-center justify-between gap-3 px-6 pt-5">
+            <Tabs
+              label="Kind"
+              value={(PRIMARY_KINDS as readonly string[]).includes(kind) ? kind : 'script'}
+              onChange={(v) => selectKind(v)}
+              options={PRIMARY_KINDS.map((k) => ({
+                value: k,
+                label: LABEL[k] ?? k,
+              }))}
+            />
+            <button
+              type="button"
+              onClick={() => setKindDialogOpen(true)}
+              className="tap-target shrink-0 cursor-pointer rounded-lg px-2 py-1 text-caption text-muted transition-colors duration-base ease-standard hover:text-ink"
+            >
+              More
+            </button>
+          </div>
+          <header className="flex items-start justify-between gap-3 px-6 pt-3">
             <div>
               <h1 className="text-title font-display font-semibold text-ink">
                 {KINDS.find((k) => k.key === kind)?.label ?? 'Studio'}
               </h1>
               <p className="mt-1 text-sm text-muted">{KINDS.find((k) => k.key === kind)?.hint}</p>
             </div>
-            <button
-              type="button"
-              onClick={() => setKindDialogOpen(true)}
-              className="tap-target shrink-0 cursor-pointer rounded-lg px-2 py-1 text-caption text-muted transition-colors duration-base ease-standard hover:text-ink"
-            >
-              Change
-            </button>
           </header>
 
           {blocked ? (
@@ -797,6 +819,21 @@ export function Studio({
                     options={COUNTS.map((n) => ({ value: String(n), label: String(n) }))}
                   />
                   <span className="text-caption text-faint">Each one costs its own credits.</span>
+                </div>
+              ) : null}
+
+              {kind === 'image' ? (
+                <div className="flex flex-col gap-1.5">
+                  <ControlLabel icon={PaletteIcon}>Aspect ratio</ControlLabel>
+                  <Dropdown
+                    aria-label="Aspect ratio"
+                    value={aspectRatio}
+                    onChange={setAspectRatio}
+                    options={[
+                      { value: '', label: "Platform decides" },
+                      ...ASPECT_RATIOS.map((r) => ({ value: r, label: r })),
+                    ]}
+                  />
                 </div>
               ) : null}
 
@@ -1139,12 +1176,7 @@ export function Studio({
                 ) : null}
               </>
             ) : (
-              <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center">
-                <p className="text-sm font-medium text-ink">Nothing yet</p>
-                <p className="max-w-xs text-sm text-muted">
-                  What you generate appears here as it is written. You can leave; it keeps going.
-                </p>
-              </div>
+              <GalleryFeed workspaceId={workspaceId} onOpen={(id) => void openJob(id)} />
             )}
           </section>
 

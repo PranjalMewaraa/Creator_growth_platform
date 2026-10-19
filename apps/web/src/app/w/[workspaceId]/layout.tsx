@@ -82,7 +82,7 @@ export default async function WorkspaceLayout({
               <Balance
                 label="Credits"
                 value={workspace.creditBalance.toLocaleString('en-IN')}
-                hue="#38bdf8"
+                hue="#bf00ff"
                 Icon={CoinsIcon}
               />
               <Balance
