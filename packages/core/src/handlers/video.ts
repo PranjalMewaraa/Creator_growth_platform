@@ -11,6 +11,7 @@ import type {
   VideoRequest,
   VoiceAdapter,
 } from '@cgp/contracts';
+type VideoAspectRatio = VideoRequest['aspectRatio'];
 import { checkVideo } from '@cgp/contracts';
 import {
   catalog,
@@ -105,12 +106,17 @@ interface VideoJobInput {
   /** Pictures the model should stay consistent with (WP63), by their store keys — only the
    *  models whose capability says `acceptsReferenceImages` read any. */
   referenceImageKeys?: unknown;
+  /** Vertical by default; landscape when asked for (WP66). Ignored, like videoModel, when
+   *  committing from a storyboard — those frames were drawn at whatever aspect the storyboard
+   *  tool offers, not this one. */
+  aspectRatio?: unknown;
 }
 
 type Spoken = Awaited<ReturnType<typeof speak>>;
 
-/** One tier for both the provider and the render, so they cannot drift apart. */
-const RESOLUTION = '720p' as const satisfies ReelResolution;
+/** The pricing/quality tier, for both the provider and the cost calc — independent of aspect
+ *  ratio, which only changes the frame shape, not what the model is paid for (plan section 6). */
+const RESOLUTION_TIER = '720p' as const satisfies VideoRequest['resolution'];
 
 /**
  * The approved still, if it can still be read. A missing frame is not a reason to fail the
@@ -136,13 +142,14 @@ async function renderScene(
   adapter: VideoAdapter,
   prompt: string,
   log: Parameters<JobHandler>[1],
+  aspectRatio: VideoAspectRatio,
   startImage?: MediaBytes,
   references?: MediaBytes[],
 ): Promise<{ ok: true; clip: GeneratedClip } | { ok: false; code: string; blocked: boolean }> {
   const ask = {
-    aspectRatio: '9:16' as const,
+    aspectRatio,
     durationSeconds: SECONDS_PER_SCENE,
-    resolution: RESOLUTION,
+    resolution: RESOLUTION_TIER,
   };
   // Only a model that says it takes one is given one (WP36, WP38).
   const animate = startImage && deps.capabilityOf?.(adapter.key)?.acceptsStartImage !== false;
@@ -269,6 +276,14 @@ export function createVideoHandlers(deps: VideoHandlerDeps): Record<string, JobH
           ? input.targetDurationSeconds
           : 24;
       const wantsVoiceover = input.voiceover !== false;
+      // Vertical by default, same as videoModel's reasoning above: a storyboard commit is
+      // pinned regardless of what was asked, since those frames were drawn for a vertical
+      // reel (WP66).
+      const aspectRatio: VideoAspectRatio =
+        input.aspectRatio === '16:9' && typeof input.storyboardOutputId !== 'string'
+          ? '16:9'
+          : '9:16';
+      const reelFrame: ReelResolution = aspectRatio === '16:9' ? '720p-16:9' : RESOLUTION_TIER;
 
       // Only a model that says it reads them is given any (WP63, same reasoning as the image
       // handler's). The same pictures are offered to every scene's render call, the same way
@@ -363,7 +378,8 @@ export function createVideoHandlers(deps: VideoHandlerDeps): Record<string, JobH
         metadata: {
           sceneCount: plan.scenes.length,
           targetDurationSeconds,
-          resolution: RESOLUTION,
+          resolution: RESOLUTION_TIER,
+          aspectRatio,
           scenePlanFallback: plan.fallbackUsed,
           adapter: adapter.key,
         },
@@ -404,7 +420,15 @@ export function createVideoHandlers(deps: VideoHandlerDeps): Record<string, JobH
             ? { note: `the video model films ${perMinute} a minute, so this one waits its turn` }
             : {}),
         });
-        const result = await renderScene(deps, adapter, scene.prompt, log, startImage, references);
+        const result = await renderScene(
+          deps,
+          adapter,
+          scene.prompt,
+          log,
+          aspectRatio,
+          startImage,
+          references,
+        );
         if (!result.ok) {
           blocked ||= result.blocked;
           continue;
@@ -481,7 +505,7 @@ export function createVideoHandlers(deps: VideoHandlerDeps): Record<string, JobH
               spoken.startsSeconds,
               Math.min(spoken.durationSeconds, rendered.length * SECONDS_PER_SCENE),
             ),
-            REEL_FRAMES[RESOLUTION],
+            REEL_FRAMES[reelFrame],
             await captionStyle(deps.db, prompt.templateId, prompt.templateVersion),
           )
         : undefined;
@@ -490,7 +514,15 @@ export function createVideoHandlers(deps: VideoHandlerDeps): Record<string, JobH
       // (plan section 4.6). A render that cannot run leaves the scenes, already paid for.
       say({ key: 'reel', label: 'Cutting the reel', status: 'working' });
       const cuttingFrom = Date.now();
-      const reel = await renderReel(deps, job.workspaceId, rendered, spoken?.audio, captions, log);
+      const reel = await renderReel(
+        deps,
+        job.workspaceId,
+        rendered,
+        spoken?.audio,
+        captions,
+        reelFrame,
+        log,
+      );
       say({
         key: 'reel',
         label: reel ? 'Cut the reel' : 'The scenes are kept; the reel could not be cut',
@@ -519,7 +551,7 @@ export function createVideoHandlers(deps: VideoHandlerDeps): Record<string, JobH
         telemetry: {
           actionClass: generator.key,
           provider: `${deps.providerLabel}:${adapter.key}`,
-          realisedCostInr: deps.costInr(adapter.key, RESOLUTION, seconds),
+          realisedCostInr: deps.costInr(adapter.key, RESOLUTION_TIER, seconds),
         },
       };
     };
@@ -541,7 +573,16 @@ export function createVideoHandlers(deps: VideoHandlerDeps): Record<string, JobH
     const adapter = generator ? deps.adapters[generator.providerAdapter] : undefined;
     if (!adapter) throw new Error('No video adapter');
 
-    const result = await renderScene(deps, adapter, scene.prompt, log);
+    // The reel this scene belongs to already settled on an aspect ratio; redrawing one scene
+    // has to match it, not default back to vertical out from under the other scenes it joins.
+    const [owner] = await scoped(deps.db, job.workspaceId).select(outputs, {
+      where: (t, op) => op.eq(t.id, scene.outputId),
+      limit: 1,
+    });
+    const aspectRatio: VideoAspectRatio =
+      (owner?.metadata as { aspectRatio?: unknown })?.aspectRatio === '16:9' ? '16:9' : '9:16';
+
+    const result = await renderScene(deps, adapter, scene.prompt, log, aspectRatio);
     if (!result.ok) {
       if (result.blocked) throw new JobBlocked('other');
       throw new Error(`Scene could not be rendered (${result.code})`);
@@ -570,7 +611,7 @@ export function createVideoHandlers(deps: VideoHandlerDeps): Record<string, JobH
       telemetry: {
         actionClass: REGENERATE_SCENE,
         provider: `${deps.providerLabel}:${adapter.key}`,
-        realisedCostInr: deps.costInr(adapter.key, RESOLUTION, seconds),
+        realisedCostInr: deps.costInr(adapter.key, RESOLUTION_TIER, seconds),
       },
     };
   };
@@ -589,6 +630,7 @@ async function renderReel(
   scenes: ReelScene[],
   voice: { data: Uint8Array } | undefined,
   captions: string | undefined,
+  reelFrame: ReelResolution,
   log: Parameters<JobHandler>[1],
 ): Promise<{ key: string; view: Record<string, unknown> } | undefined> {
   if (scenes.length === 0) return undefined;
@@ -599,7 +641,7 @@ async function renderReel(
   try {
     const reel = await buildReel(deps.ffmpeg, {
       scenes,
-      resolution: RESOLUTION,
+      resolution: reelFrame,
       voice,
       captions,
       music: await deps.music?.(),

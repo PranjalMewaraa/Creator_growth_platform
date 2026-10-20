@@ -68,7 +68,11 @@ const reference = {
  * (adapters wires generators to real providers, never the other way), so they are named again
  * here, the same way SECONDS_PER_SCENE is named again in packages/orchestration/src/scenes.ts.
  */
-const IMAGE_MODEL_CHOICES = ['gemini-flash-lite-image', 'gemini-nano-banana-2-1'] as const;
+const IMAGE_MODEL_CHOICES = [
+  'gemini-flash-lite-image',
+  'gemini-nano-banana-2-1',
+  'gemini-3-pro-image',
+] as const;
 const imageModel = {
   imageModel: z.enum(IMAGE_MODEL_CHOICES).default('gemini-flash-lite-image'),
 };
@@ -319,11 +323,14 @@ const video = register({
     storyboardOutputId: z.uuid().optional(),
     ...reference,
     ...videoModel,
-    // Not offered here (WP64): packages/core/src/render/reel.ts's REEL_FRAMES, the caption
-    // layout and the per-scene frame maths are all built around one fixed vertical frame.
-    // Letting a creator ask for 16:9 would either silently crop a landscape clip into a
-    // portrait one or need that whole render path generalised first — a real piece of work,
-    // not a field. Image already supports a real choice, immediately below.
+    // The render path WP64's comment here called out as needing real work before this could
+    // be a field, rather than silently cropping a landscape clip into a portrait one, is now
+    // generalised (WP66): REEL_FRAMES carries a `-16:9` pair alongside the vertical sizes, and
+    // the caption/logo maths were already proportional to the frame rather than hardcoded to
+    // it. Unset, or anything other than '16:9', still means vertical — the model's own
+    // capability (checked in packages/core/src/handlers/video.ts) is what actually gates
+    // whether a request for 16:9 is honoured, same as every other model-dependent field here.
+    ...aspectRatio,
   }),
   compilerProfile: 'video',
   providerAdapter: 'veo-3.1-lite',

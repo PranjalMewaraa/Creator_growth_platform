@@ -8,7 +8,7 @@ import { CalendarLoader } from './calendar-loader';
  * S-07, calendar week view (WP34). The channels come from the server; the week itself is
  * fetched in the browser, because which week it is depends on the viewer's own clock.
  */
-export const metadata = { title: 'Scheduler' };
+export const metadata = { title: 'Timeline' };
 
 export default async function CalendarPage({
   params,

@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  CAMERAS,
   LOOK_KEYS,
   LOOK_VOCABULARY,
   type CompiledPromptView,
@@ -116,8 +115,6 @@ const PLATFORMS: Array<{ value: TargetPlatform; label: string }> = [
 ];
 const LENGTHS = [15, 30, 45, 60, 90];
 const COUNTS = [1, 2, 3, 4];
-// Image only (WP64): video's render pipeline is still vertical only, see definitions.ts.
-const ASPECT_RATIOS = ['1:1', '4:5', '9:16', '16:9'];
 // A length to ask for, not a scene count to pick: the planner decides how many eight-second
 // beats best fill it (WP59). Bounded to match packages/core's MIN/MAX_VIDEO_SECONDS.
 const VIDEO_DURATIONS = [8, 16, 24, 32, 40, 48];
@@ -127,6 +124,7 @@ const MAX_REFERENCE_IMAGES = 3;
 const IMAGE_MODEL_OPTIONS = [
   { value: 'gemini-flash-lite-image', label: 'Nano Banana 2 Lite (current)' },
   { value: 'gemini-nano-banana-2-1', label: 'Nano Banana 2.1' },
+  { value: 'gemini-3-pro-image', label: 'Nano Banana Pro' },
 ];
 const VIDEO_MODEL_OPTIONS = [
   { value: 'veo-3.1-lite', label: 'Veo 3.1 Lite (current)' },
@@ -321,7 +319,7 @@ export function Studio({
   const [count, setCount] = useState(1);
   // Empty means the platform decides, same as it always has (WP64) — this only ever sends a
   // user override when there is one.
-  const [aspectRatio, setAspectRatio] = useState('1:1');
+  const [aspectRatio, setAspectRatio] = useState('');
   // How long the reel should run; how many eight-second beats fill that is for the engine's
   // scene planner to decide, not the creator (WP59) — a calm piece wants fewer, longer-held
   // beats, a fight wants several quick ones, both inside the same requested length.
@@ -345,52 +343,6 @@ export function Studio({
   // already defaults to server side.
   const [imageModel, setImageModel] = useState<string>('gemini-flash-lite-image');
   const [videoModel, setVideoModel] = useState<string>('veo-3.1-lite');
-
-  // Control panel visual modifiers matching exact reference design
-  const [genre, setGenre] = useState('None');
-  const [style, setStyle] = useState('None');
-  const [lighting, setLighting] = useState('None');
-  const [camera, setCamera] = useState('Camera');
-  const [movement, setMovement] = useState('None');
-  const [resolution, setResolution] = useState('2K');
-  const [batchMode, setBatchMode] = useState(false);
-  const [cast, setCast] = useState('None');
-
-  function handleCameraChange(cam: string) {
-    setCamera(cam);
-    if (cam === 'Camera' || cam === 'None') {
-      setLook((current) => ({ ...current, camera: undefined }));
-    } else {
-      const match = CAMERAS.find(
-        (c) => c.label.toLowerCase() === cam.toLowerCase() || cam.toLowerCase().includes(c.id),
-      );
-      if (match) {
-        setLook((current) => ({ ...current, camera: match.id }));
-      }
-    }
-  }
-
-  function handleEnhancePrompt() {
-    const additions: string[] = [];
-    if (genre !== 'None') additions.push(`${genre} aesthetic`);
-    if (style !== 'None') additions.push(`${style}`);
-    if (lighting !== 'None') additions.push(`${lighting} lighting`);
-    if (camera !== 'Camera' && camera !== 'None') additions.push(`shot on ${camera}`);
-    if (movement !== 'None') additions.push(`${movement} motion`);
-
-    const descriptors = ['hyper-detailed', 'cinematic atmosphere', '8k resolution'];
-    const parts = [...additions, ...descriptors].filter(Boolean);
-
-    if (!intent.trim()) {
-      setIntent(
-        kind === 'video'
-          ? 'Cinematic camera tracking an explorer traversing a futuristic neon-lit metropolis, dramatic volumetric lighting, 8k resolution'
-          : 'High fashion editorial portrait of a model with delicate glass floral accessories, soft studio lighting, ultra sharp focus, 8k',
-      );
-    } else {
-      setIntent(`${intent.trim()}, ${parts.join(', ')}`);
-    }
-  }
 
   // The templates for what is being made, plain one first, since that is the default.
   const outputType = KINDS.find((k) => k.key === kind)?.outputType;
@@ -423,26 +375,13 @@ export function Studio({
   const [outputs, setOutputs] = useState<Output[]>([]);
   const opened = useRef(false);
 
-  // Active modifiers composed for the generation model
-  const activeClauses: string[] = [];
-  if (genre !== 'None') activeClauses.push(genre);
-  if (style !== 'None') activeClauses.push(style);
-  if (lighting !== 'None') activeClauses.push(lighting);
-  if (movement !== 'None') activeClauses.push(movement);
-  if (camera !== 'Camera' && camera !== 'None') activeClauses.push(camera);
-
-  const enrichedIntent =
-    activeClauses.length > 0 && intent.trim()
-      ? `${intent.trim()} (${activeClauses.join(', ')})`
-      : intent.trim();
-
   const input = {
-    intentText: enrichedIntent,
+    intentText: intent.trim(),
     targetPlatform: platform,
     ...(tone.trim() ? { tone: tone.trim() } : {}),
     ...(kind === 'script' && length ? { durationSeconds: length } : {}),
     ...(kind === 'image' ? { count } : {}),
-    ...(kind === 'image' && aspectRatio ? { aspectRatio } : {}),
+    ...((kind === 'image' || kind === 'video') && aspectRatio ? { aspectRatio } : {}),
     ...(VISUAL.has(kind) ? look : {}),
     ...(kind === 'video'
       ? { targetDurationSeconds: durationSeconds, voiceover, videoModel }
@@ -733,61 +672,17 @@ export function Studio({
           ) : null}
 
           {job ? (
-            <div className="mx-auto max-w-2xl">
-              <button
-                type="button"
-                onClick={closeJob}
-                className="tap-target mb-3 flex cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1 text-sm text-muted transition-colors duration-base ease-standard hover:text-ink"
-              >
-                <CloseIcon width={16} height={16} aria-hidden />
-                Back to the gallery
-              </button>
-              <section className="flex flex-col gap-4 rounded-2xl border border-line bg-surface/95 p-5 shadow-floating backdrop-blur">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-ink">
-                      {LABEL[job.generatorKey] ?? job.generatorKey}
-                    </p>
-                    {shownIntent ? (
-                      <p className="truncate text-xs text-muted">{shownIntent}</p>
-                    ) : null}
-                  </div>
-                  <span
-                    className={cx('rounded-full border px-3 py-1 text-xs', STATUS[job.status].tone)}
-                  >
-                    {checking && job.status !== 'QUEUED' ? 'Checking · ' : ''}
-                    {job.status === 'RUNNING' && job.generatorKey === 'video'
-                      ? 'Filming'
-                      : job.status === 'RUNNING' && DRAWN.has(job.generatorKey)
-                        ? 'Drawing'
-                        : STATUS[job.status].label}
-                  </span>
-                </div>
-
-                <p className="text-xs text-muted">
-                  {job.held.videoSeconds > 0
-                    ? job.status === 'COMPLETE'
-                      ? `${job.settled?.videoSeconds ?? job.held.videoSeconds}s of video charged.`
-                      : TERMINAL.has(job.status)
-                        ? `${job.held.videoSeconds}s refunded in full.`
-                        : `${job.held.videoSeconds}s held until it is done.`
-                    : job.status === 'COMPLETE'
-                      ? `${credit(job.settled?.credits ?? job.held.credits)} charged.`
-                      : TERMINAL.has(job.status)
-                        ? `${credit(job.held.credits)} refunded in full.`
-                        : `${credit(job.held.credits)} held until it is done.`}
-                </p>
-
-                {job.error ? (
-                  <p className="rounded-lg border border-bad/40 bg-bad/10 px-3 py-2 text-sm text-ink">
-                    {job.status === 'BLOCKED'
-                      ? `Blocked by the safety check${job.error.category ? ` (${job.error.category})` : ''}. Nothing was charged.`
-                      : job.error.code === 'MODERATION_UNAVAILABLE'
-                        ? 'The safety check was unavailable, so this was not released. Nothing was charged; try again.'
-                        : 'This one did not work. Nothing was charged; try again.'}
-                  </p>
-                ) : null}
-
+            <div className="mx-auto flex max-w-6xl flex-col gap-4 lg:flex-row lg:items-start">
+              <div className="min-w-0 flex-1">
+                <button
+                  type="button"
+                  onClick={closeJob}
+                  className="tap-target mb-3 flex cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1 text-sm text-muted transition-colors duration-base ease-standard hover:text-ink"
+                >
+                  <CloseIcon width={16} height={16} aria-hidden />
+                  Back to the gallery
+                </button>
+                <section className="flex flex-col gap-4 rounded-2xl border border-line bg-surface/95 p-5 shadow-floating backdrop-blur">
                 {outputs.length > 0 ? (
                   outputs[0]?.storyboard ? (
                     <Storyboard
@@ -890,9 +785,60 @@ export function Studio({
                 ) : job.status === 'COMPLETE' ? (
                   <p className="text-sm text-muted">Loading the result…</p>
                 ) : null}
+                </section>
+              </div>
+
+              {/* The details that used to sit above the output now live beside it, in the
+                  width a wide screen actually has free — a job's status, its cost and the
+                  next action, rather than a narrow column with empty canvas on either side. */}
+              <aside className="flex w-full flex-col gap-4 rounded-2xl border border-line bg-surface/95 p-5 shadow-floating backdrop-blur lg:w-80 lg:shrink-0">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-ink">
+                      {LABEL[job.generatorKey] ?? job.generatorKey}
+                    </p>
+                    {shownIntent ? (
+                      <p className="line-clamp-3 text-xs text-muted">{shownIntent}</p>
+                    ) : null}
+                  </div>
+                  <span
+                    className={cx('rounded-full border px-3 py-1 text-xs', STATUS[job.status].tone)}
+                  >
+                    {checking && job.status !== 'QUEUED' ? 'Checking · ' : ''}
+                    {job.status === 'RUNNING' && job.generatorKey === 'video'
+                      ? 'Filming'
+                      : job.status === 'RUNNING' && DRAWN.has(job.generatorKey)
+                        ? 'Drawing'
+                        : STATUS[job.status].label}
+                  </span>
+                </div>
+
+                <p className="text-xs text-muted">
+                  {job.held.videoSeconds > 0
+                    ? job.status === 'COMPLETE'
+                      ? `${job.settled?.videoSeconds ?? job.held.videoSeconds}s of video charged.`
+                      : TERMINAL.has(job.status)
+                        ? `${job.held.videoSeconds}s refunded in full.`
+                        : `${job.held.videoSeconds}s held until it is done.`
+                    : job.status === 'COMPLETE'
+                      ? `${credit(job.settled?.credits ?? job.held.credits)} charged.`
+                      : TERMINAL.has(job.status)
+                        ? `${credit(job.held.credits)} refunded in full.`
+                        : `${credit(job.held.credits)} held until it is done.`}
+                </p>
+
+                {job.error ? (
+                  <p className="rounded-lg border border-bad/40 bg-bad/10 px-3 py-2 text-sm text-ink">
+                    {job.status === 'BLOCKED'
+                      ? `Blocked by the safety check${job.error.category ? ` (${job.error.category})` : ''}. Nothing was charged.`
+                      : job.error.code === 'MODERATION_UNAVAILABLE'
+                        ? 'The safety check was unavailable, so this was not released. Nothing was charged; try again.'
+                        : 'This one did not work. Nothing was charged; try again.'}
+                  </p>
+                ) : null}
 
                 {kind === 'video' && outputs[0]?.storyboard ? null : (
-                  <div className="flex gap-2 border-t border-line pt-4">
+                  <div className="flex flex-col gap-2 border-t border-line pt-4">
                     {kind === 'video' ? (
                       <Button
                         variant="secondary"
@@ -901,7 +847,6 @@ export function Studio({
                           void generate('storyboard');
                         }}
                         disabled={!canGo}
-                        className="flex-1"
                       >
                         {busy === 'starting'
                           ? 'Starting…'
@@ -915,7 +860,6 @@ export function Studio({
                       disabled={
                         !canGo || (kind === 'video' && videoSeconds < (cost?.videoSeconds ?? 0))
                       }
-                      className="flex-1"
                     >
                       {busy === 'starting'
                         ? 'Starting…'
@@ -927,7 +871,7 @@ export function Studio({
                     </Button>
                   </div>
                 )}
-              </section>
+              </aside>
             </div>
           ) : (
             <>
@@ -1027,27 +971,12 @@ export function Studio({
                   }
                 : undefined
             }
-            genre={genre}
-            onGenreChange={setGenre}
-            style={style}
-            onStyleChange={setStyle}
-            movement={movement}
-            onMovementChange={setMovement}
-            lighting={lighting}
-            onLightingChange={setLighting}
-            resolution={resolution}
-            onResolutionChange={setResolution}
-            batchMode={batchMode}
-            onBatchModeChange={setBatchMode}
-            cast={cast}
-            onCastChange={setCast}
             onOpenPromptDisclosure={async () => {
               if (!prompt || stale) await compile();
               setPromptOpen(true);
             }}
             onOpenKindsDialog={() => setKindDialogOpen(true)}
             onOpenMoreDialog={() => setMoreOpen(true)}
-            onEnhancePrompt={handleEnhancePrompt}
           />
         </div>
       </div>

@@ -38,6 +38,7 @@ export {
   SparklesIcon,
   StoryboardIcon,
   SyncIcon,
+  TemplateIcon,
   TrendIcon,
   TypeIcon,
 } from './icons';

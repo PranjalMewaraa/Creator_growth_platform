@@ -14,10 +14,14 @@ import { fontDir } from './fonts';
  * video graph already filters, so a subtitles pass joins that.
  */
 
-/** Instagram Reels: vertical, 30fps, H.264 high, AAC. 720p is the tier the plan buys. */
+/** Reels and feed posts, 30fps, H.264 high, AAC. 720p/1080p is the tier the plan buys; the
+ *  `-16:9` keys are the same two tiers turned landscape, for a video asked to film that way
+ *  (WP66) — additive, so a reel already keyed by plain '720p'/'1080p' keeps meaning vertical. */
 export const REEL_FRAMES = {
   '720p': { width: 720, height: 1280 },
   '1080p': { width: 1080, height: 1920 },
+  '720p-16:9': { width: 1280, height: 720 },
+  '1080p-16:9': { width: 1920, height: 1080 },
 } as const;
 
 export type ReelResolution = keyof typeof REEL_FRAMES;

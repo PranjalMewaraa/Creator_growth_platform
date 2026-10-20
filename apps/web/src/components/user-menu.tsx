@@ -1,22 +1,21 @@
 'use client';
 
-import { ChartIcon, GearIcon, LinkIcon, LogOutIcon, PaletteIcon, SyncIcon } from '@cgp/ui';
+import { ChartIcon, LinkIcon, LogOutIcon, PaletteIcon, SyncIcon } from '@cgp/ui';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { authClient } from '@/lib/auth-client';
 import { Popover } from './popover';
 
-// The account menu (WP64 reskin): the rail only holds the five everyday work surfaces now
-// (Assets, Studio, Storyboard, Scheduler, Trends), so Brand, Accounts, Sync centre and
+// The account menu: the rail holds the seven named destinations (Studio, Marketing,
+// Templates, Storyboard, Timeline, Assets, Settings), so Brand, Accounts, Sync centre and
 // Insights live here instead of disappearing — still one tap away, just not competing with
-// daily work for rail space.
+// daily work for rail space. Settings itself is a rail stop now, so it isn't repeated here.
 const ACCOUNT_LINKS = [
   { segment: 'brand', label: 'Brand', Icon: PaletteIcon },
   { segment: 'accounts', label: 'Accounts', Icon: LinkIcon },
   { segment: 'sync', label: 'Sync centre', Icon: SyncIcon },
   { segment: 'insights', label: 'Insights', Icon: ChartIcon },
-  { segment: 'settings', label: 'Settings', Icon: GearIcon },
 ];
 
 export function UserMenu({

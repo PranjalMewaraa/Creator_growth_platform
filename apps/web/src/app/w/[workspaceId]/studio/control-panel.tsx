@@ -1,28 +1,13 @@
 'use client';
 
-import {
-  APERTURES,
-  CAMERAS,
-  FOCAL_LENGTHS,
-  LENSES,
-  LOOK_KEYS,
-  LOOK_VOCABULARY,
-  type LookKey,
-  type TargetPlatform,
-} from '@cgp/contracts';
-import { useEffect, useRef, useState } from 'react';
+import { LOOK_KEYS, LOOK_VOCABULARY, type LookKey, type TargetPlatform } from '@cgp/contracts';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import type { TemplateCard } from './template-picker';
 
-// Icons matching the reference UI
-function GenreIcon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="3" width="18" height="18" rx="3" />
-      <path d="M3 9h18" />
-      <path d="M9 21V9" />
-    </svg>
-  );
-}
+// Every control in this bar maps to a real field the backend reads — no decorative chip that
+// mutates nothing (WP66). A control that only exists to look full belongs in a mockup, not a
+// product people spend credits through.
 
 function StyleIcon() {
   return (
@@ -50,15 +35,6 @@ function CameraLookIcon() {
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
       <circle cx="12" cy="13" r="4" />
-    </svg>
-  );
-}
-
-function MovementIcon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3" />
-      <path d="M2 12h20M12 2v20" />
     </svg>
   );
 }
@@ -121,23 +97,6 @@ function GridIconSmall() {
   );
 }
 
-function UserIconSmall() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
-    </svg>
-  );
-}
-
-function BookmarkIconSmall() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z" />
-    </svg>
-  );
-}
-
 function EyeIconSmall() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -151,23 +110,6 @@ function AspectRatioIconSmall() {
   return (
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <rect x="4" y="4" width="16" height="16" rx="2" />
-    </svg>
-  );
-}
-
-function WandIconSmall() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="m15 4-2 2M15 4l2 2M15 4v-2M15 4h2M2 22l10-10M20 9l-1 1M18 13l-1-1" />
-    </svg>
-  );
-}
-
-function StopwatchIconSmall() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="13" r="8" />
-      <path d="M12 9v4l2.5 2.5M10 2h4M12 2v3" />
     </svg>
   );
 }
@@ -190,6 +132,43 @@ function SparkleStarIcon() {
   );
 }
 
+/**
+ * A dropdown's menu, portaled to the document body (WP66 bugfix): every trigger in this bar
+ * sits inside a horizontally-scrolling row (`overflow-x-auto`), and per the CSS overflow spec
+ * that also clips the *vertical* axis — so a plain `position: absolute` panel popping up via
+ * `bottom-full` was rendering, fully styled, completely invisible, clipped by its own row
+ * before it ever reached the screen. Escaping to the body via a portal, positioned with fixed
+ * coordinates computed from the trigger's own rect, sidesteps that clipping entirely.
+ */
+function Panel({
+  anchor,
+  className,
+  children,
+}: {
+  anchor: DOMRect;
+  className?: string;
+  children: ReactNode;
+}) {
+  return createPortal(
+    <div
+      data-chip-panel
+      style={{
+        position: 'fixed',
+        left: anchor.left,
+        bottom: Math.max(8, window.innerHeight - anchor.top + 4),
+        zIndex: 9999,
+      }}
+      className={
+        className ??
+        'min-w-44 rounded-xl border border-[#2d2e36] bg-[#16171b] p-1 shadow-2xl backdrop-blur-xl'
+      }
+    >
+      {children}
+    </div>,
+    document.body,
+  );
+}
+
 export interface ControlPanelProps {
   kind: string;
   onKindChange: (kind: string) => void;
@@ -203,11 +182,9 @@ export interface ControlPanelProps {
   storyboardId: string | null;
   videoSecondsBalance: number;
 
-  // Real Look controls
   look: Partial<Record<LookKey, string>>;
   onLookChange: (key: LookKey, value: string | undefined) => void;
 
-  // Real Script controls
   platform: TargetPlatform | null;
   onPlatformChange: (p: TargetPlatform | null) => void;
   scriptLength: number | null;
@@ -216,19 +193,16 @@ export interface ControlPanelProps {
   onToneChange: (t: string) => void;
   profileTone: string | null;
 
-  // Real Templates
   templates: TemplateCard[];
   selectedTemplateId: string | null;
   onSelectTemplate: (templateId: string | null) => void;
   onOpenTemplatesDialog: () => void;
 
-  // Real Reference uploads
   referenceImages: Array<{ key: string; url: string }>;
   onUploadReference: (file: File) => void;
   onRemoveReference: (index: number) => void;
   referenceUploading: boolean;
 
-  // Real Image controls
   aspectRatio: string;
   onAspectRatioChange: (ratio: string) => void;
   count: number;
@@ -236,7 +210,6 @@ export interface ControlPanelProps {
   imageModel: string;
   onImageModelChange: (model: string) => void;
 
-  // Real Video controls
   videoModel: string;
   onVideoModelChange: (model: string) => void;
   videoDuration: number;
@@ -245,75 +218,25 @@ export interface ControlPanelProps {
   onVoiceoverChange: (voiceover: boolean) => void;
   onStoryboardFirst?: () => void;
 
-  // Extra Visual Presets
-  genre: string;
-  onGenreChange: (v: string) => void;
-  style?: string;
-  onStyleChange?: (v: string) => void;
-  movement: string;
-  onMovementChange: (v: string) => void;
-  lighting: string;
-  onLightingChange: (v: string) => void;
-  resolution: string;
-  onResolutionChange: (v: string) => void;
-  batchMode: boolean;
-  onBatchModeChange: (v: boolean) => void;
-  cast: string;
-  onCastChange: (v: string) => void;
-
-  // Dialog openers & actions
   onOpenPromptDisclosure: () => void;
   onOpenKindsDialog: () => void;
   onOpenMoreDialog: () => void;
-  onEnhancePrompt?: () => void;
 }
 
-const GENRE_OPTIONS = [
-  'None',
-  'Cinematic',
-  'Anime',
-  'Photorealistic',
-  'Cyberpunk',
-  'Fantasy',
-  'Sci-Fi',
-  'Vintage',
-  'Minimalist',
-  'Editorial',
-  '3D Render',
-  'Horror',
-];
-
-const LIGHTING_OPTIONS = [
-  'None',
-  'Golden Hour',
-  'Dramatic',
-  'Studio Soft',
-  'Moody Neon',
-  'Volumetric',
-  'Rim Light',
-  'Cinematic Backlight',
-  'Natural Sunlight',
-  'Cyberpunk Glow',
-];
-
-const MOVEMENT_OPTIONS = [
-  'None',
-  'Static',
-  'Pan Left',
-  'Pan Right',
-  'Tilt Up',
-  'Tilt Down',
-  'Zoom In',
-  'Zoom Out',
-  'Tracking Shot',
-  '360 Orbit',
-  'Handheld Shake',
-];
+const LOOK_LABELS: Record<LookKey, string> = {
+  camera: 'Camera',
+  lens: 'Lens',
+  focalLength: 'Focal length',
+  aperture: 'Aperture',
+};
 
 const SCRIPT_LENGTHS = [15, 30, 45, 60, 90];
 const VIDEO_DURATIONS = [8, 16, 24, 32, 40, 48];
-const ASPECT_RATIOS = ['', '1:1', '4:5', '9:16', '16:9'];
-const RESOLUTION_OPTIONS = ['1K', '2K', '4K'];
+// Image draws any of these four (packages/core/src/generators/definitions.ts); video only
+// ever films vertical or landscape — that's what the real models and the render pipeline
+// support (packages/core/src/render/reel.ts), so its own list stays shorter (WP66).
+const IMAGE_ASPECT_RATIOS = ['', '1:1', '4:5', '9:16', '16:9'];
+const VIDEO_ASPECT_RATIOS = ['', '9:16', '16:9'];
 
 const SCRIPT_TONES = [
   'Default Profile Tone',
@@ -366,33 +289,23 @@ export function ControlPanel({
   voiceover,
   onVoiceoverChange,
   onStoryboardFirst,
-  genre,
-  onGenreChange,
-  style = 'None',
-  onStyleChange,
-  movement,
-  onMovementChange,
-  lighting,
-  onLightingChange,
-  resolution,
-  onResolutionChange,
-  batchMode,
-  onBatchModeChange,
-  cast,
-  onCastChange,
   onOpenPromptDisclosure,
   onOpenKindsDialog,
   onOpenMoreDialog,
-  onEnhancePrompt,
 }: ControlPanelProps) {
-  const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+  const [activeDropdown, setActiveDropdown] = useState<{ name: string; rect: DOMRect } | null>(
+    null,
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Close dropdown on outside click
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      // A click inside the portaled panel itself isn't "outside" even though it lives outside
+      // containerRef in the DOM now (that's the whole point of the portal).
+      if ((target as Element).closest?.('[data-chip-panel]')) return;
+      if (containerRef.current && !containerRef.current.contains(target)) {
         setActiveDropdown(null);
       }
     }
@@ -400,8 +313,10 @@ export function ControlPanel({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  function toggleDropdown(name: string) {
-    setActiveDropdown((prev) => (prev === name ? null : name));
+  function toggleDropdown(name: string, trigger: HTMLElement) {
+    setActiveDropdown((prev) =>
+      prev?.name === name ? null : { name, rect: trigger.getBoundingClientRect() },
+    );
   }
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -410,14 +325,11 @@ export function ControlPanel({
     if (file) onUploadReference(file);
   }
 
-  // Active Look labels from real contracts
-  const activeCameraOption = CAMERAS.find((c) => c.id === look.camera);
-  const cameraLabel = activeCameraOption ? activeCameraOption.label : 'Camera';
+  function lookLabel(key: LookKey): string {
+    const option = LOOK_VOCABULARY[key].find((o) => o.id === look[key]);
+    return option ? option.label : LOOK_LABELS[key];
+  }
 
-  const activeLensOption = LENSES.find((l) => l.id === look.lens);
-  const lensLabel = activeLensOption ? activeLensOption.label : 'Lens';
-
-  // Templates for current kind
   const activeKindTemplates = templates.filter((t) => {
     if (kind === 'script') return t.outputType === 'script';
     if (kind === 'image') return t.outputType === 'image' || t.outputType === 'thumbnail';
@@ -426,39 +338,37 @@ export function ControlPanel({
   });
   const selectedTemplate = templates.find((t) => t.id === selectedTemplateId);
 
-  // Models
-  const activeModel = kind === 'video' ? videoModel : imageModel;
   const currentModelLabel =
     kind === 'video'
       ? videoModel === 'gemini-omni-1.1-flash'
         ? 'Gemini Omni 1.1'
         : 'Veo 3.1 Lite'
-      : imageModel === 'gemini-nano-banana-2-1'
-        ? 'Nano Banana 2.1'
-        : 'Nano Banana Pro';
+      : imageModel === 'gemini-3-pro-image'
+        ? 'Nano Banana Pro'
+        : imageModel === 'gemini-nano-banana-2-1'
+          ? 'Nano Banana 2.1'
+          : 'Nano Banana 2 Lite';
 
-  // Dynamic cost display
-  let costDisplay = '$0.19';
-  if (kind === 'video') {
-    if (cost?.videoSeconds && cost.videoSeconds > 0) {
-      costDisplay = `${cost.videoSeconds}s`;
-    } else {
-      costDisplay = `${videoDuration}s`;
-    }
-  } else if (cost?.credits !== undefined && cost !== null) {
-    costDisplay = `${cost.credits} ${cost.credits === 1 ? 'credit' : 'credits'}`;
-  } else {
-    const multiplier = batchMode ? 0.5 : 1.0;
-    costDisplay = `$${(0.19 * count * multiplier).toFixed(2)}`;
-  }
+  // Honest, not a placeholder dollar figure: nothing is shown until the server has actually
+  // priced this request (WP66) — the debounced /estimate call studio.tsx already makes.
+  const costDisplay =
+    kind === 'video'
+      ? cost?.videoSeconds
+        ? `${cost.videoSeconds}s`
+        : '—'
+      : cost
+        ? `${cost.credits} ${cost.credits === 1 ? 'credit' : 'credits'}`
+        : '—';
 
-  // Placeholder based on active kind
   const placeholder =
     kind === 'video'
       ? 'Describe the video you want to create…'
       : kind === 'image' || kind === 'thumbnail_set'
         ? 'Describe the image you want to create…'
         : 'Describe the script you want to create… e.g. Our cold brew now ships across Jaipur';
+
+  const visual = kind === 'image' || kind === 'thumbnail_set' || kind === 'video';
+  const aspectRatioOptions = kind === 'video' ? VIDEO_ASPECT_RATIOS : IMAGE_ASPECT_RATIOS;
 
   return (
     <div
@@ -474,30 +384,25 @@ export function ControlPanel({
         onChange={handleFileSelect}
       />
 
-      {/* Main Left Content Column */}
       <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5 pl-1 pr-0.5">
-
-        {/* Top Row: Context-Aware Pills */}
+        {/* Top row: Template, then the real fields for this kind. */}
         <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
           {kind === 'script' ? (
-            /* Script Specific Top Controls */
             <>
-              {/* Platform */}
               <div className="relative shrink-0">
                 <button
                   type="button"
-                  onClick={() => toggleDropdown('scriptPlatform')}
+                  onClick={(e) => toggleDropdown('scriptPlatform', e.currentTarget)}
                   className="tap-target h-7 px-2.5 rounded-lg bg-[#1c1d22]/90 border border-[#282931] flex items-center gap-1.5 cursor-pointer hover:bg-[#23242b] hover:border-[#383944] transition-colors select-none text-[11px]"
                 >
-                  <span className="text-[#727480]"><GenreIcon /></span>
                   <span className="text-[#7a7c87] font-medium">Platform</span>
                   <span className={`font-medium ${platform ? 'text-white' : 'text-[#d4d4d8]'}`}>
                     {platform ? platform.charAt(0).toUpperCase() + platform.slice(1) : 'Anywhere'}
                   </span>
                   <ChevronDownSmall />
                 </button>
-                {activeDropdown === 'scriptPlatform' && (
-                  <div className="absolute bottom-full mb-1 left-0 z-50 min-w-36 rounded-xl border border-[#2d2e36] bg-[#16171b] p-1 shadow-2xl backdrop-blur-xl">
+                {activeDropdown?.name === 'scriptPlatform' ? (
+                  <Panel anchor={activeDropdown.rect} className="min-w-36 rounded-xl border border-[#2d2e36] bg-[#16171b] p-1 shadow-2xl backdrop-blur-xl">
                     <button
                       type="button"
                       onClick={() => { onPlatformChange(null); setActiveDropdown(null); }}
@@ -519,26 +424,24 @@ export function ControlPanel({
                     >
                       LinkedIn
                     </button>
-                  </div>
-                )}
+                  </Panel>
+                ) : null}
               </div>
 
-              {/* Script Length */}
               <div className="relative shrink-0">
                 <button
                   type="button"
-                  onClick={() => toggleDropdown('scriptLength')}
+                  onClick={(e) => toggleDropdown('scriptLength', e.currentTarget)}
                   className="tap-target h-7 px-2.5 rounded-lg bg-[#1c1d22]/90 border border-[#282931] flex items-center gap-1.5 cursor-pointer hover:bg-[#23242b] hover:border-[#383944] transition-colors select-none text-[11px]"
                 >
-                  <span className="text-[#727480]"><MovementIcon /></span>
                   <span className="text-[#7a7c87] font-medium">Length</span>
                   <span className={`font-medium ${scriptLength ? 'text-white' : 'text-[#d4d4d8]'}`}>
                     {scriptLength ? `${scriptLength}s` : 'Default'}
                   </span>
                   <ChevronDownSmall />
                 </button>
-                {activeDropdown === 'scriptLength' && (
-                  <div className="absolute bottom-full mb-1 left-0 z-50 min-w-32 rounded-xl border border-[#2d2e36] bg-[#16171b] p-1 shadow-2xl backdrop-blur-xl">
+                {activeDropdown?.name === 'scriptLength' ? (
+                  <Panel anchor={activeDropdown.rect} className="min-w-32 rounded-xl border border-[#2d2e36] bg-[#16171b] p-1 shadow-2xl backdrop-blur-xl">
                     <button
                       type="button"
                       onClick={() => { onScriptLengthChange(null); setActiveDropdown(null); }}
@@ -556,48 +459,39 @@ export function ControlPanel({
                         {len}s
                       </button>
                     ))}
-                  </div>
-                )}
+                  </Panel>
+                ) : null}
               </div>
 
-              {/* Script Tone */}
               <div className="relative shrink-0">
                 <button
                   type="button"
-                  onClick={() => toggleDropdown('scriptTone')}
+                  onClick={(e) => toggleDropdown('scriptTone', e.currentTarget)}
                   className="tap-target h-7 px-2.5 rounded-lg bg-[#1c1d22]/90 border border-[#282931] flex items-center gap-1.5 cursor-pointer hover:bg-[#23242b] hover:border-[#383944] transition-colors select-none text-[11px]"
                 >
-                  <span className="text-[#727480]"><LightingIcon /></span>
                   <span className="text-[#7a7c87] font-medium">Tone</span>
                   <span className={`font-medium truncate max-w-28 ${tone ? 'text-white' : 'text-[#d4d4d8]'}`}>
                     {tone || profileTone || 'Default Tone'}
                   </span>
                   <ChevronDownSmall />
                 </button>
-                {activeDropdown === 'scriptTone' && (
-                  <div className="absolute bottom-full mb-1 left-0 z-50 min-w-48 rounded-xl border border-[#2d2e36] bg-[#16171b] p-1 shadow-2xl backdrop-blur-xl">
-                    {SCRIPT_TONES.map((t) => (
-                      <button
-                        key={t}
-                        type="button"
-                        onClick={() => {
-                          onToneChange(t === 'Default Profile Tone' ? '' : t);
-                          setActiveDropdown(null);
-                        }}
-                        className="w-full px-2.5 py-1.5 rounded-lg text-left text-xs text-[#a1a1aa] hover:bg-[#1f2027] hover:text-white"
-                      >
-                        {t}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                {activeDropdown?.name === 'scriptTone' ? (
+                  <DropdownList
+                    anchor={activeDropdown.rect}
+                    options={SCRIPT_TONES}
+                    selected={tone || 'Default Profile Tone'}
+                    onSelect={(t) => {
+                      onToneChange(t === 'Default Profile Tone' ? '' : t);
+                      setActiveDropdown(null);
+                    }}
+                  />
+                ) : null}
               </div>
 
-              {/* Script Template */}
               <div className="relative shrink-0">
                 <button
                   type="button"
-                  onClick={() => toggleDropdown('scriptTemplate')}
+                  onClick={(e) => toggleDropdown('scriptTemplate', e.currentTarget)}
                   className="tap-target h-7 px-2.5 rounded-lg bg-[#1c1d22]/90 border border-[#282931] flex items-center gap-1.5 cursor-pointer hover:bg-[#23242b] hover:border-[#383944] transition-colors select-none text-[11px]"
                 >
                   <span className="text-[#727480]"><StyleIcon /></span>
@@ -607,14 +501,14 @@ export function ControlPanel({
                   </span>
                   <ChevronDownSmall />
                 </button>
-                {activeDropdown === 'scriptTemplate' && (
-                  <div className="absolute bottom-full mb-1 left-0 z-50 max-h-56 w-52 overflow-y-auto rounded-xl border border-[#2d2e36] bg-[#16171b] p-1 shadow-2xl backdrop-blur-xl no-scrollbar">
+                {activeDropdown?.name === 'scriptTemplate' ? (
+                  <Panel anchor={activeDropdown.rect} className="max-h-56 w-52 overflow-y-auto rounded-xl border border-[#2d2e36] bg-[#16171b] p-1 shadow-2xl backdrop-blur-xl no-scrollbar">
                     <button
                       type="button"
                       onClick={() => { onSelectTemplate(null); setActiveDropdown(null); }}
                       className={`w-full px-2.5 py-1.5 rounded-lg text-left text-xs ${!selectedTemplateId ? 'bg-[#25262f] text-white font-medium' : 'text-[#a1a1aa] hover:bg-[#1f2027] hover:text-white'}`}
                     >
-                      Default Script Template
+                      Default
                     </button>
                     {activeKindTemplates.map((tmpl) => (
                       <button
@@ -626,11 +520,10 @@ export function ControlPanel({
                         {tmpl.title}
                       </button>
                     ))}
-                  </div>
-                )}
+                  </Panel>
+                ) : null}
               </div>
 
-              {/* More settings dialog */}
               <button
                 type="button"
                 onClick={onOpenMoreDialog}
@@ -640,66 +533,34 @@ export function ControlPanel({
               </button>
             </>
           ) : (
-            /* Visual (Image & Video) Top Controls: Exact 5 Pills from UI */
             <>
-              {/* 1. Genre */}
               <div className="relative shrink-0">
                 <button
                   type="button"
-                  onClick={() => toggleDropdown('genre')}
-                  className="tap-target h-7 px-2.5 rounded-lg bg-[#1c1d22]/90 border border-[#282931] flex items-center gap-1.5 cursor-pointer hover:bg-[#23242b] hover:border-[#383944] transition-colors select-none text-[11px]"
-                >
-                  <span className="text-[#727480]"><GenreIcon /></span>
-                  <span className="text-[#7a7c87] font-medium">Genre</span>
-                  <span className={`font-medium ${genre !== 'None' ? 'text-white' : 'text-[#d4d4d8]'}`}>
-                    {genre}
-                  </span>
-                  <ChevronDownSmall />
-                </button>
-                {activeDropdown === 'genre' && (
-                  <DropdownList
-                    options={GENRE_OPTIONS}
-                    selected={genre}
-                    onSelect={(val) => { onGenreChange(val); setActiveDropdown(null); }}
-                  />
-                )}
-              </div>
-
-              {/* 2. Style (Connected to real templates & styles) */}
-              <div className="relative shrink-0">
-                <button
-                  type="button"
-                  onClick={() => toggleDropdown('style')}
+                  onClick={(e) => toggleDropdown('template', e.currentTarget)}
                   className="tap-target h-7 px-2.5 rounded-lg bg-[#1c1d22]/90 border border-[#282931] flex items-center gap-1.5 cursor-pointer hover:bg-[#23242b] hover:border-[#383944] transition-colors select-none text-[11px]"
                 >
                   <span className="text-[#727480]"><StyleIcon /></span>
-                  <span className="text-[#7a7c87] font-medium">Style</span>
-                  <span className={`font-medium truncate max-w-28 ${selectedTemplate ? 'text-white' : style !== 'None' ? 'text-white' : 'text-[#d4d4d8]'}`}>
-                    {selectedTemplate ? selectedTemplate.title : style}
+                  <span className="text-[#7a7c87] font-medium">Template</span>
+                  <span className={`font-medium truncate max-w-28 ${selectedTemplate ? 'text-white' : 'text-[#d4d4d8]'}`}>
+                    {selectedTemplate ? selectedTemplate.title : 'Default'}
                   </span>
                   <ChevronDownSmall />
                 </button>
-                {activeDropdown === 'style' && (
-                  <div className="absolute bottom-full mb-1 left-0 z-50 max-h-56 w-52 overflow-y-auto rounded-xl border border-[#2d2e36] bg-[#16171b] p-1 shadow-2xl backdrop-blur-xl no-scrollbar">
+                {activeDropdown?.name === 'template' ? (
+                  <Panel anchor={activeDropdown.rect} className="max-h-56 w-52 overflow-y-auto rounded-xl border border-[#2d2e36] bg-[#16171b] p-1 shadow-2xl backdrop-blur-xl no-scrollbar">
                     <button
                       type="button"
-                      onClick={() => {
-                        onSelectTemplate(null);
-                        onGenreChange('None');
-                        setActiveDropdown(null);
-                      }}
-                      className={`w-full px-2.5 py-1.5 rounded-lg text-left text-xs ${!selectedTemplateId && style === 'None' ? 'bg-[#25262f] text-white font-medium' : 'text-[#a1a1aa] hover:bg-[#1f2027] hover:text-white'}`}
+                      onClick={() => { onSelectTemplate(null); setActiveDropdown(null); }}
+                      className={`w-full px-2.5 py-1.5 rounded-lg text-left text-xs ${!selectedTemplateId ? 'bg-[#25262f] text-white font-medium' : 'text-[#a1a1aa] hover:bg-[#1f2027] hover:text-white'}`}
                     >
-                      None
+                      Default
                     </button>
                     {activeKindTemplates.map((t) => (
                       <button
                         key={t.id}
                         type="button"
-                        onClick={() => {
-                          onSelectTemplate(t.id);
-                          setActiveDropdown(null);
-                        }}
+                        onClick={() => { onSelectTemplate(t.id); setActiveDropdown(null); }}
                         className={`w-full px-2.5 py-1.5 rounded-lg text-left text-xs ${selectedTemplateId === t.id ? 'bg-[#25262f] text-white font-medium' : 'text-[#a1a1aa] hover:bg-[#1f2027] hover:text-white'}`}
                       >
                         {t.title}
@@ -709,125 +570,67 @@ export function ControlPanel({
                     <button
                       type="button"
                       onClick={() => { onOpenTemplatesDialog(); setActiveDropdown(null); }}
-                      className="w-full px-2.5 py-1.5 rounded-lg text-left text-xs text-[#2ef07a] hover:bg-[#1f2027]"
+                      className="w-full px-2.5 py-1.5 rounded-lg text-left text-xs text-accent hover:bg-[#1f2027]"
                     >
                       Browse all templates…
                     </button>
-                  </div>
-                )}
+                  </Panel>
+                ) : null}
               </div>
 
-              {/* 3. Lighting */}
-              <div className="relative shrink-0">
-                <button
-                  type="button"
-                  onClick={() => toggleDropdown('lighting')}
-                  className="tap-target h-7 px-2.5 rounded-lg bg-[#1c1d22]/90 border border-[#282931] flex items-center gap-1.5 cursor-pointer hover:bg-[#23242b] hover:border-[#383944] transition-colors select-none text-[11px]"
-                >
-                  <span className="text-[#727480]"><LightingIcon /></span>
-                  <span className="text-[#7a7c87] font-medium">Lighting</span>
-                  <span className={`font-medium ${lighting !== 'None' ? 'text-white' : 'text-[#d4d4d8]'}`}>
-                    {lighting}
-                  </span>
-                  <ChevronDownSmall />
-                </button>
-                {activeDropdown === 'lighting' && (
-                  <DropdownList
-                    options={LIGHTING_OPTIONS}
-                    selected={lighting}
-                    onSelect={(val) => { onLightingChange(val); setActiveDropdown(null); }}
-                  />
-                )}
-              </div>
-
-              {/* 4. Camera (Directly maps to look.camera in contracts) */}
-              <div className="relative shrink-0">
-                <button
-                  type="button"
-                  onClick={() => toggleDropdown('camera')}
-                  className="tap-target h-7 px-2.5 rounded-lg bg-[#1c1d22]/90 border border-[#282931] flex items-center gap-1.5 cursor-pointer hover:bg-[#23242b] hover:border-[#383944] transition-colors select-none text-[11px]"
-                >
-                  <span className="text-[#727480]"><CameraLookIcon /></span>
-                  <span className="text-[#7a7c87] font-medium">Camera</span>
-                  <span className={`font-medium truncate max-w-28 ${look.camera ? 'text-white' : 'text-[#d4d4d8]'}`}>
-                    {cameraLabel}
-                  </span>
-                  <ChevronDownSmall />
-                </button>
-                {activeDropdown === 'camera' && (
-                  <div className="absolute bottom-full mb-1 left-0 z-50 min-w-44 rounded-xl border border-[#2d2e36] bg-[#16171b] p-1 shadow-2xl backdrop-blur-xl">
-                    <button
-                      type="button"
-                      onClick={() => { onLookChange('camera', undefined); setActiveDropdown(null); }}
-                      className={`w-full px-2.5 py-1.5 rounded-lg text-left text-xs ${!look.camera ? 'bg-[#25262f] text-white font-medium' : 'text-[#a1a1aa] hover:bg-[#1f2027] hover:text-white'}`}
-                    >
-                      Camera (Default)
-                    </button>
-                    {CAMERAS.map((cam) => (
-                      <button
-                        key={cam.id}
-                        type="button"
-                        onClick={() => { onLookChange('camera', cam.id); setActiveDropdown(null); }}
-                        className={`w-full px-2.5 py-1.5 rounded-lg text-left text-xs ${look.camera === cam.id ? 'bg-[#25262f] text-white font-medium' : 'text-[#a1a1aa] hover:bg-[#1f2027] hover:text-white'}`}
-                      >
-                        {cam.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* 5. Movement (for video) OR Lens (for image) */}
-              <div className="relative shrink-0">
-                <button
-                  type="button"
-                  onClick={() => toggleDropdown('movementOrLens')}
-                  className="tap-target h-7 px-2.5 rounded-lg bg-[#1c1d22]/90 border border-[#282931] flex items-center gap-1.5 cursor-pointer hover:bg-[#23242b] hover:border-[#383944] transition-colors select-none text-[11px]"
-                >
-                  <span className="text-[#727480]"><MovementIcon /></span>
-                  <span className="text-[#7a7c87] font-medium">{kind === 'video' ? 'Movement' : 'Lens'}</span>
-                  <span className={`font-medium truncate max-w-28 ${(kind === 'video' ? movement !== 'None' : look.lens) ? 'text-white' : 'text-[#d4d4d8]'}`}>
-                    {kind === 'video' ? movement : lensLabel}
-                  </span>
-                  <ChevronDownSmall />
-                </button>
-                {activeDropdown === 'movementOrLens' && (
-                  kind === 'video' ? (
-                    <DropdownList
-                      options={MOVEMENT_OPTIONS}
-                      selected={movement}
-                      onSelect={(val) => { onMovementChange(val); setActiveDropdown(null); }}
-                    />
-                  ) : (
-                    <div className="absolute bottom-full mb-1 left-0 z-50 min-w-44 rounded-xl border border-[#2d2e36] bg-[#16171b] p-1 shadow-2xl backdrop-blur-xl">
+              {/* The real look (WP37/66): every visual kind, image or video, reads all four
+                  of these from the compiler the same way — nothing here is kind-specific. */}
+              {LOOK_KEYS.map((key) => (
+                <div key={key} className="relative shrink-0">
+                  <button
+                    type="button"
+                    onClick={(e) => toggleDropdown(`look-${key}`, e.currentTarget)}
+                    className="tap-target h-7 px-2.5 rounded-lg bg-[#1c1d22]/90 border border-[#282931] flex items-center gap-1.5 cursor-pointer hover:bg-[#23242b] hover:border-[#383944] transition-colors select-none text-[11px]"
+                  >
+                    <span className="text-[#727480]"><CameraLookIcon /></span>
+                    <span className="text-[#7a7c87] font-medium">{LOOK_LABELS[key]}</span>
+                    <span className={`font-medium truncate max-w-28 ${look[key] ? 'text-white' : 'text-[#d4d4d8]'}`}>
+                      {look[key] ? lookLabel(key) : 'Template decides'}
+                    </span>
+                    <ChevronDownSmall />
+                  </button>
+                  {activeDropdown?.name === `look-${key}` ? (
+                    <Panel anchor={activeDropdown.rect} className="min-w-44 rounded-xl border border-[#2d2e36] bg-[#16171b] p-1 shadow-2xl backdrop-blur-xl">
                       <button
                         type="button"
-                        onClick={() => { onLookChange('lens', undefined); setActiveDropdown(null); }}
-                        className={`w-full px-2.5 py-1.5 rounded-lg text-left text-xs ${!look.lens ? 'bg-[#25262f] text-white font-medium' : 'text-[#a1a1aa] hover:bg-[#1f2027] hover:text-white'}`}
+                        onClick={() => { onLookChange(key, undefined); setActiveDropdown(null); }}
+                        className={`w-full px-2.5 py-1.5 rounded-lg text-left text-xs ${!look[key] ? 'bg-[#25262f] text-white font-medium' : 'text-[#a1a1aa] hover:bg-[#1f2027] hover:text-white'}`}
                       >
-                        None
+                        Template decides
                       </button>
-                      {LENSES.map((l) => (
+                      {LOOK_VOCABULARY[key].map((option) => (
                         <button
-                          key={l.id}
+                          key={option.id}
                           type="button"
-                          onClick={() => { onLookChange('lens', l.id); setActiveDropdown(null); }}
-                          className={`w-full px-2.5 py-1.5 rounded-lg text-left text-xs ${look.lens === l.id ? 'bg-[#25262f] text-white font-medium' : 'text-[#a1a1aa] hover:bg-[#1f2027] hover:text-white'}`}
+                          onClick={() => { onLookChange(key, option.id); setActiveDropdown(null); }}
+                          className={`w-full px-2.5 py-1.5 rounded-lg text-left text-xs ${look[key] === option.id ? 'bg-[#25262f] text-white font-medium' : 'text-[#a1a1aa] hover:bg-[#1f2027] hover:text-white'}`}
                         >
-                          {l.label}
+                          {option.label}
                         </button>
                       ))}
-                    </div>
-                  )
-                )}
-              </div>
+                    </Panel>
+                  ) : null}
+                </div>
+              ))}
+
+              <button
+                type="button"
+                onClick={onOpenMoreDialog}
+                className="tap-target h-7 px-2.5 rounded-lg bg-[#1c1d22]/90 border border-[#282931] flex items-center gap-1.5 cursor-pointer hover:bg-[#23242b] hover:border-[#383944] transition-colors select-none text-[11px] text-[#7a7c87] hover:text-white"
+              >
+                More
+              </button>
             </>
           )}
         </div>
 
-        {/* Middle Prompt Input Area */}
+        {/* The prompt. */}
         <div className="flex items-center gap-3 my-1.5 min-h-[46px]">
-          {/* Reference Image Button */}
           <div className="flex items-center gap-1.5 shrink-0">
             <button
               type="button"
@@ -843,7 +646,6 @@ export function ControlPanel({
               )}
             </button>
 
-            {/* Real uploaded reference thumbnails */}
             {referenceImages.map((ref, idx) => (
               <div
                 key={ref.key}
@@ -862,7 +664,6 @@ export function ControlPanel({
             ))}
           </div>
 
-          {/* Text input */}
           <input
             id="studio-intent"
             value={intent}
@@ -878,7 +679,6 @@ export function ControlPanel({
             className="flex-1 min-w-0 bg-transparent text-[14px] sm:text-[15px] text-[#f4f4f5] placeholder:text-[#52545f] outline-none border-none py-1.5 focus:ring-0 leading-relaxed font-normal"
           />
 
-          {/* Eye Icon Button for Full Prompt Disclosure */}
           <button
             type="button"
             onClick={onOpenPromptDisclosure}
@@ -889,9 +689,8 @@ export function ControlPanel({
           </button>
         </div>
 
-        {/* Bottom Toolbar Row: Mode Switcher & Real Controls */}
+        {/* Toolbar: what it's made with. */}
         <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-0.5">
-          {/* Segmented Mode Switcher (Script, Image, Video) */}
           <div className="flex items-center rounded-lg bg-[#18191e] border border-[#26272f] p-0.5 shrink-0">
             <button
               type="button"
@@ -928,7 +727,6 @@ export function ControlPanel({
             </button>
           </div>
 
-          {/* More Kinds / Templates Button [ ⊞ ] */}
           <button
             type="button"
             onClick={onOpenKindsDialog}
@@ -938,58 +736,19 @@ export function ControlPanel({
             <GridIconSmall />
           </button>
 
-          {/* Cast / Profile Persona Selector */}
-          <div className="relative shrink-0">
-            <button
-              type="button"
-              onClick={() => toggleDropdown('cast')}
-              title="Cast / Character consistency"
-              className={`tap-target h-7 sm:h-7.5 px-2.5 rounded-lg bg-[#1c1d22] border border-[#282931] flex items-center gap-1.5 text-xs font-medium transition-colors ${cast !== 'None' ? 'text-white border-[#383944]' : 'text-[#787a86] hover:text-[#e4e4e7]'
-                }`}
-            >
-              <UserIconSmall />
-              <span>Cast</span>
-            </button>
-            {activeDropdown === 'cast' && (
-              <div className="absolute bottom-full mb-1 left-0 z-50 min-w-44 rounded-xl border border-[#2d2e36] bg-[#16171b] p-1 shadow-2xl backdrop-blur-xl">
-                {['None', 'Default Profile', 'Brand Persona A', 'Actor Studio', '+ Custom Cast'].map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => { onCastChange(c); setActiveDropdown(null); }}
-                    className={`w-full px-2.5 py-1.5 rounded-lg text-left text-xs ${cast === c ? 'bg-[#25262f] text-white font-medium' : 'text-[#a1a1aa] hover:bg-[#1f2027] hover:text-white'}`}
-                  >
-                    {c}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Prompt Disclosure Bookmark [ 🔖 ] */}
-          <button
-            type="button"
-            onClick={onOpenPromptDisclosure}
-            title="Open compiled prompt disclosure & rules"
-            className="tap-target size-7 sm:size-7.5 rounded-lg bg-[#1c1d22] border border-[#282931] flex items-center justify-center text-[#787a86] hover:text-white hover:border-[#383944] transition-colors shrink-0"
-          >
-            <BookmarkIconSmall />
-          </button>
-
-          {/* Model Selector (Real Image and Video Models) */}
-          {kind !== 'script' && (
+          {visual ? (
             <div className="relative shrink-0">
               <button
                 type="button"
-                onClick={() => toggleDropdown('model')}
+                onClick={(e) => toggleDropdown('model', e.currentTarget)}
                 className="tap-target h-7 sm:h-7.5 px-2.5 rounded-lg bg-[#1c1d22] border border-[#282931] flex items-center gap-1.5 text-xs font-medium text-[#e4e4e7] hover:border-[#383944] transition-colors cursor-pointer select-none"
               >
                 <span className="size-2 rounded-full bg-[#22c55e] shadow-[0_0_8px_rgba(34,197,94,0.7)] shrink-0" />
                 <span>{currentModelLabel}</span>
                 <ChevronDownSmall />
               </button>
-              {activeDropdown === 'model' && (
-                <div className="absolute bottom-full mb-1 left-0 z-50 min-w-48 rounded-xl border border-[#2d2e36] bg-[#16171b] p-1 shadow-2xl backdrop-blur-xl">
+              {activeDropdown?.name === 'model' ? (
+                <Panel anchor={activeDropdown.rect} className="min-w-48 rounded-xl border border-[#2d2e36] bg-[#16171b] p-1 shadow-2xl backdrop-blur-xl">
                   {kind === 'video' ? (
                     <>
                       <button
@@ -1011,10 +770,10 @@ export function ControlPanel({
                     <>
                       <button
                         type="button"
-                        onClick={() => { onImageModelChange('gemini-flash-lite-image'); setActiveDropdown(null); }}
-                        className={`w-full px-2.5 py-1.5 rounded-lg text-left text-xs ${imageModel === 'gemini-flash-lite-image' ? 'bg-[#25262f] text-white font-medium' : 'text-[#a1a1aa] hover:bg-[#1f2027] hover:text-white'}`}
+                        onClick={() => { onImageModelChange('gemini-3-pro-image'); setActiveDropdown(null); }}
+                        className={`w-full px-2.5 py-1.5 rounded-lg text-left text-xs ${imageModel === 'gemini-3-pro-image' ? 'bg-[#25262f] text-white font-medium' : 'text-[#a1a1aa] hover:bg-[#1f2027] hover:text-white'}`}
                       >
-                        <span>Nano Banana Pro (Lite)</span>
+                        <span>Nano Banana Pro</span>
                       </button>
                       <button
                         type="button"
@@ -1023,28 +782,36 @@ export function ControlPanel({
                       >
                         <span>Nano Banana 2.1</span>
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => { onImageModelChange('gemini-flash-lite-image'); setActiveDropdown(null); }}
+                        className={`w-full px-2.5 py-1.5 rounded-lg text-left text-xs ${imageModel === 'gemini-flash-lite-image' ? 'bg-[#25262f] text-white font-medium' : 'text-[#a1a1aa] hover:bg-[#1f2027] hover:text-white'}`}
+                      >
+                        <span>Nano Banana 2 Lite</span>
+                      </button>
                     </>
                   )}
-                </div>
-              )}
+                </Panel>
+              ) : null}
             </div>
-          )}
+          ) : null}
 
-          {/* Aspect Ratio Selector (for Image) */}
-          {kind === 'image' && (
+          {/* Aspect ratio, for image and video alike — each offers the shapes its own render
+              path can actually produce (WP66). */}
+          {kind === 'image' || kind === 'video' ? (
             <div className="relative shrink-0">
               <button
                 type="button"
-                onClick={() => toggleDropdown('ratio')}
+                onClick={(e) => toggleDropdown('ratio', e.currentTarget)}
                 className="tap-target h-7 sm:h-7.5 px-2.5 rounded-lg bg-[#1c1d22] border border-[#282931] flex items-center gap-1.5 text-xs font-medium text-[#e4e4e7] hover:border-[#383944] transition-colors cursor-pointer select-none"
               >
                 <AspectRatioIconSmall />
                 <span>{aspectRatio || 'Platform decides'}</span>
                 <ChevronDownSmall />
               </button>
-              {activeDropdown === 'ratio' && (
-                <div className="absolute bottom-full mb-1 left-0 z-50 min-w-36 rounded-xl border border-[#2d2e36] bg-[#16171b] p-1 shadow-2xl backdrop-blur-xl">
-                  {ASPECT_RATIOS.map((r) => (
+              {activeDropdown?.name === 'ratio' ? (
+                <Panel anchor={activeDropdown.rect} className="min-w-36 rounded-xl border border-[#2d2e36] bg-[#16171b] p-1 shadow-2xl backdrop-blur-xl">
+                  {aspectRatioOptions.map((r) => (
                     <button
                       key={r}
                       type="button"
@@ -1054,24 +821,23 @@ export function ControlPanel({
                       {r || 'Platform decides'}
                     </button>
                   ))}
-                </div>
-              )}
+                </Panel>
+              ) : null}
             </div>
-          )}
+          ) : null}
 
-          {/* Duration (Video/Script) OR Resolution (Image) */}
           {kind === 'video' ? (
             <div className="relative shrink-0">
               <button
                 type="button"
-                onClick={() => toggleDropdown('videoDuration')}
+                onClick={(e) => toggleDropdown('videoDuration', e.currentTarget)}
                 className="tap-target h-7 sm:h-7.5 px-2 rounded-lg bg-[#1c1d22] border border-[#282931] flex items-center gap-1 text-xs font-medium text-[#e4e4e7] hover:border-[#383944] transition-colors cursor-pointer select-none"
               >
                 <span>{videoDuration}s</span>
                 <ChevronDownSmall />
               </button>
-              {activeDropdown === 'videoDuration' && (
-                <div className="absolute bottom-full mb-1 left-0 z-50 min-w-28 rounded-xl border border-[#2d2e36] bg-[#16171b] p-1 shadow-2xl backdrop-blur-xl">
+              {activeDropdown?.name === 'videoDuration' ? (
+                <Panel anchor={activeDropdown.rect} className="min-w-28 rounded-xl border border-[#2d2e36] bg-[#16171b] p-1 shadow-2xl backdrop-blur-xl">
                   {VIDEO_DURATIONS.map((d) => (
                     <button
                       key={d}
@@ -1082,31 +848,12 @@ export function ControlPanel({
                       {d}s
                     </button>
                   ))}
-                </div>
-              )}
-            </div>
-          ) : kind === 'image' ? (
-            <div className="relative shrink-0">
-              <button
-                type="button"
-                onClick={() => toggleDropdown('resolution')}
-                className="tap-target h-7 sm:h-7.5 px-2 rounded-lg bg-[#1c1d22] border border-[#282931] flex items-center gap-1 text-xs font-medium text-[#e4e4e7] hover:border-[#383944] transition-colors cursor-pointer select-none"
-              >
-                <span>{resolution}</span>
-                <ChevronDownSmall />
-              </button>
-              {activeDropdown === 'resolution' && (
-                <DropdownList
-                  options={RESOLUTION_OPTIONS}
-                  selected={resolution}
-                  onSelect={(val) => { onResolutionChange(val); setActiveDropdown(null); }}
-                />
-              )}
+                </Panel>
+              ) : null}
             </div>
           ) : null}
 
-          {/* Count Stepper (Image) */}
-          {kind === 'image' && (
+          {kind === 'image' ? (
             <div className="h-7 sm:h-7.5 px-1.5 rounded-lg bg-[#1c1d22] border border-[#282931] flex items-center gap-1 text-xs font-medium text-[#e4e4e7] shrink-0 select-none">
               <button
                 type="button"
@@ -1126,26 +873,24 @@ export function ControlPanel({
                 +
               </button>
             </div>
-          )}
+          ) : null}
 
-          {/* Voiceover Toggle (Video) */}
-          {kind === 'video' && (
+          {kind === 'video' ? (
             <button
               type="button"
               onClick={() => onVoiceoverChange(!voiceover)}
               title="Voiceover audio generation"
               className={`tap-target h-7 sm:h-7.5 px-2.5 rounded-lg border flex items-center gap-1.5 text-xs font-medium transition-all select-none shrink-0 ${voiceover
-                ? 'border-[#bf00ff] bg-[#bf00ff]/15 text-white'
+                ? 'border-accent bg-accent/15 text-white'
                 : 'border-[#282931] bg-[#1c1d22] text-[#787a86] hover:text-white'
                 }`}
             >
               <MicIconSmall />
               <span>Voiceover</span>
             </button>
-          )}
+          ) : null}
 
-          {/* Storyboard Button (Video) */}
-          {kind === 'video' && onStoryboardFirst && (
+          {kind === 'video' && onStoryboardFirst ? (
             <button
               type="button"
               onClick={onStoryboardFirst}
@@ -1156,39 +901,10 @@ export function ControlPanel({
               <span>Storyboard</span>
               {storyboardCost !== null && <span className="text-[#a1a1aa] font-mono text-[10px]">({storyboardCost}c)</span>}
             </button>
-          )}
-
-          {/* Magic Wand / AI Prompt Enhancer */}
-          <button
-            type="button"
-            onClick={() => {
-              if (onEnhancePrompt) onEnhancePrompt();
-              else onOpenPromptDisclosure();
-            }}
-            title="Enhance prompt with AI"
-            className="tap-target size-7 sm:size-7.5 rounded-lg bg-[#1c1d22] border border-[#282931] flex items-center justify-center text-[#787a86] hover:text-white hover:border-[#383944] transition-colors shrink-0"
-          >
-            <WandIconSmall />
-          </button>
-
-          {/* Batch Discount Mode */}
-          <button
-            type="button"
-            onClick={() => onBatchModeChange(!batchMode)}
-            title="Toggle Batch Mode for 50% discount"
-            className={`tap-target h-7 sm:h-7.5 px-2.5 rounded-lg border flex items-center gap-1.5 text-xs font-medium transition-all select-none shrink-0 ${batchMode
-              ? 'bg-[#182a1f] border-[#22c55e]/50 text-white'
-              : 'bg-[#1c1d22] border-[#282931] text-[#787a86] hover:text-[#e4e4e7]'
-              }`}
-          >
-            <StopwatchIconSmall />
-            <span>Batch</span>
-            <span className="text-[#2ef07a] font-semibold text-[11px]">-50%</span>
-          </button>
+          ) : null}
         </div>
       </div>
 
-      {/* Right Giant Action Button: Generate / Write / Film */}
       <button
         type="button"
         onClick={() => onGenerate()}
@@ -1227,18 +943,19 @@ export function ControlPanel({
   );
 }
 
-// Reusable Dropdown List
 function DropdownList({
+  anchor,
   options,
   selected,
   onSelect,
 }: {
+  anchor: DOMRect;
   options: string[];
   selected: string;
   onSelect: (option: string) => void;
 }) {
   return (
-    <div className="absolute bottom-full mb-1 left-0 z-50 max-h-56 w-44 overflow-y-auto rounded-xl border border-[#2d2e36] bg-[#16171b] p-1 shadow-2xl backdrop-blur-xl no-scrollbar">
+    <Panel anchor={anchor} className="max-h-56 w-44 overflow-y-auto rounded-xl border border-[#2d2e36] bg-[#16171b] p-1 shadow-2xl backdrop-blur-xl no-scrollbar">
       {options.map((option) => {
         const isSelected = selected === option;
         return (
@@ -1256,6 +973,6 @@ function DropdownList({
           </button>
         );
       })}
-    </div>
+    </Panel>
   );
 }

@@ -30,31 +30,29 @@ interface NavTab {
   isActive: (pathname: string, searchParams: URLSearchParams) => boolean;
 }
 
+// Exactly this list, in this order (requested directly, overriding whatever the Orbis
+// reference showed): Studio, Marketing, Templates, Storyboard, Timeline, Assets, Settings.
+// Video, Audio and Canvas were never asked for — Video lives inside Studio's own kind
+// switcher, Audio has no feature behind it yet, and Canvas duplicated Brand (already in the
+// account menu below).
 const NAV_TABS: NavTab[] = [
   {
     key: 'studio',
     label: 'Studio',
     getHref: (id) => `/w/${id}/studio`,
-    isActive: (pathname, searchParams) =>
-      pathname.includes('/studio') && searchParams.get('kind') !== 'video' && searchParams.get('dialog') !== 'templates',
+    isActive: (pathname) => pathname.includes('/studio'),
   },
   {
     key: 'marketing',
     label: 'Marketing',
-    getHref: (id) => `/w/${id}/compose`,
-    isActive: (pathname) => pathname.includes('/compose'),
-  },
-  {
-    key: 'video',
-    label: 'Video',
-    getHref: (id) => `/w/${id}/studio?kind=video`,
-    isActive: (pathname, searchParams) => pathname.includes('/studio') && searchParams.get('kind') === 'video',
+    getHref: (id) => `/w/${id}/trends`,
+    isActive: (pathname) => pathname.includes('/trends'),
   },
   {
     key: 'templates',
     label: 'Templates',
-    getHref: (id) => `/w/${id}/studio?dialog=templates`,
-    isActive: (pathname, searchParams) => searchParams.get('dialog') === 'templates',
+    getHref: (id) => `/w/${id}/templates`,
+    isActive: (pathname) => pathname.includes('/templates'),
   },
   {
     key: 'storyboard',
@@ -69,22 +67,10 @@ const NAV_TABS: NavTab[] = [
     isActive: (pathname) => pathname.includes('/calendar'),
   },
   {
-    key: 'audio',
-    label: 'Audio',
-    getHref: (id) => `/w/${id}/trends`,
-    isActive: (pathname) => pathname.includes('/trends'),
-  },
-  {
     key: 'assets',
     label: 'Assets',
     getHref: (id) => `/w/${id}/assets`,
     isActive: (pathname) => pathname.includes('/assets'),
-  },
-  {
-    key: 'canvas',
-    label: 'Canvas',
-    getHref: (id) => `/w/${id}/brand`,
-    isActive: (pathname) => pathname.includes('/brand'),
   },
   {
     key: 'settings',
@@ -145,8 +131,15 @@ export function TopShellNav({ workspace, workspaces, user }: TopShellNavProps) {
         Skip to content
       </a>
 
-      {/* LEFT: Orbis / Workspace Capsule Pill matching reference UI */}
+      {/* LEFT: app title, then the workspace switcher */}
       <div className="flex items-center gap-2 shrink-0">
+        <Link
+          href={`/w/${workspace.id}`}
+          aria-label="Home"
+          className="px-1 text-[13px] font-semibold tracking-tight text-white hover:text-white/80 transition-colors select-none"
+        >
+          Morphious
+        </Link>
         <Popover
           label="Switch workspace"
           trigger={
@@ -277,12 +270,6 @@ export function TopShellNav({ workspace, workspaces, user }: TopShellNavProps) {
             >
               Insights &amp; Analytics
             </Link>
-            <Link
-              href={`/w/${workspace.id}/settings`}
-              className="flex min-h-8 w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs text-[#9ea0ac] hover:bg-[#1c1d24] hover:text-white transition-colors"
-            >
-              Workspace Settings
-            </Link>
             <div className="my-1 h-px bg-[#26272f]" />
             <button
               type="button"
@@ -300,14 +287,14 @@ export function TopShellNav({ workspace, workspaces, user }: TopShellNavProps) {
       </div>
 
       {/* Mobile Nav Drawer Bar: Visible on small screens below header */}
-      <div className="fixed inset-x-0 bottom-0 z-30 flex md:hidden items-center justify-around border-t border-[#202128] bg-[#0e0f12]/95 px-2 py-1.5 backdrop-blur-xl">
-        {NAV_TABS.slice(0, 5).map((tab) => {
+      <div className="fixed inset-x-0 bottom-0 z-30 flex md:hidden items-center gap-1 overflow-x-auto no-scrollbar border-t border-[#202128] bg-[#0e0f12]/95 px-2 py-1.5 backdrop-blur-xl">
+        {NAV_TABS.map((tab) => {
           const href = tab.getHref(workspace.id);
           return (
             <Link
               key={tab.key}
               href={href}
-              className="px-2 py-1 text-[11px] font-normal text-[#8a8c98] hover:text-white"
+              className="shrink-0 px-2 py-1 text-[11px] font-normal text-[#8a8c98] hover:text-white"
             >
               {tab.label}
             </Link>

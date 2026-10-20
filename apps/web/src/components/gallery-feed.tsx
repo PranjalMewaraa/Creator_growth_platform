@@ -1,10 +1,5 @@
 'use client';
 
-import type { GalleryOutput } from '@cgp/core';
-import { useEffect, useState } from 'react';
-
-const VISUAL: ReadonlySet<string> = new Set(['image', 'thumbnail']);
-
 interface InspirationCard {
   id: string;
   kind: 'image' | 'video';
@@ -307,71 +302,21 @@ const INSPIRATION_CARDS: InspirationCard[] = [
 ];
 
 export function GalleryFeed({
-  workspaceId,
-  onOpen,
   onUsePrompt,
 }: {
   workspaceId: string;
   onOpen: (jobId: string) => void;
   onUsePrompt?: (prompt: string) => void;
 }) {
-  const [workspaceItems, setWorkspaceItems] = useState<GalleryOutput[] | null>(null);
-
-  useEffect(() => {
-    let stopped = false;
-    void fetch(`/api/w/${workspaceId}/studio/feed`)
-      .then((r) => (r.ok ? (r.json() as Promise<{ feed: GalleryOutput[] }>) : null))
-      .then((body) => {
-        if (stopped || !body) return;
-        setWorkspaceItems(body.feed);
-      })
-      .catch(() => {
-        if (!stopped) setWorkspaceItems([]);
-      });
-    return () => {
-      stopped = true;
-    };
-  }, [workspaceId]);
-
-  // Merge real workspace generations at the top, followed by inspiration cards to fill the bento grid
-  const allCards: Array<{
-    id: string;
-    jobId?: string;
-    kind: string;
-    url?: string;
-    text?: string;
-    intentText: string;
-    aspectRatio?: string;
-    isWorkspace?: boolean;
-  }> = [];
-
-  if (workspaceItems && workspaceItems.length > 0) {
-    for (const item of workspaceItems) {
-      if (!item.media?.url) continue;
-      allCards.push({
-        id: item.id,
-        jobId: item.jobId,
-        kind: item.kind,
-        url: item.media.url,
-        text: item.text,
-        intentText: item.intentText || item.text || 'Generated creation',
-        aspectRatio: item.kind === 'video' ? 'aspect-[9/16]' : 'aspect-[3/4]',
-        isWorkspace: true,
-      });
-    }
-  }
-
-  // Add inspiration cards so the grid is densely populated with cards in a Pinterest layout
-  for (const insp of INSPIRATION_CARDS) {
-    allCards.push({
-      id: insp.id,
-      kind: insp.kind,
-      url: insp.url,
-      intentText: insp.intentText,
-      aspectRatio: insp.aspectRatio,
-      isWorkspace: false,
-    });
-  }
+  // Inspiration only, on request — this grid shows the curated cards for ideas to riff on,
+  // not the workspace's own past generations (those live in the Recent strip and in Assets).
+  const allCards = INSPIRATION_CARDS.map((insp) => ({
+    id: insp.id,
+    kind: insp.kind,
+    url: insp.url,
+    intentText: insp.intentText,
+    aspectRatio: insp.aspectRatio,
+  }));
 
   return (
     <div className="w-full">
@@ -387,41 +332,17 @@ export function GalleryFeed({
           return (
             <div
               key={card.id}
-              onClick={() => {
-                if (card.isWorkspace && card.jobId) {
-                  onOpen(card.jobId);
-                } else if (onUsePrompt) {
-                  onUsePrompt(card.intentText);
-                }
-              }}
+              onClick={() => onUsePrompt?.(card.intentText)}
               className="group mb-2 sm:mb-2.5 block w-full cursor-pointer break-inside-avoid overflow-hidden rounded-[13px] border border-[#222329] bg-[#16171b] text-left transition-all duration-200 hover:border-[#383a44] hover:shadow-[0_12px_30px_rgba(0,0,0,0.85)] relative"
             >
               <div className={`relative w-full ${ratioClass} overflow-hidden bg-[#18191e]`}>
-                {card.url ? (
-                  card.kind === 'video' && card.isWorkspace ? (
-                    <video
-                      src={card.url}
-                      muted
-                      playsInline
-                      preload="metadata"
-                      className="size-full object-cover"
-                    />
-                  ) : (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={card.url}
-                      alt={card.intentText}
-                      loading="lazy"
-                      className="size-full object-cover transition-transform duration-300 ease-out group-hover:scale-[1.04]"
-                    />
-                  )
-                ) : (
-                  <div className="flex size-full flex-col justify-between p-3">
-                    <p className="line-clamp-4 text-xs leading-5 text-muted">
-                      {card.text || card.intentText}
-                    </p>
-                  </div>
-                )}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={card.url}
+                  alt={card.intentText}
+                  loading="lazy"
+                  className="size-full object-cover transition-transform duration-300 ease-out group-hover:scale-[1.04]"
+                />
 
                 {/* Refined hover overlay matching reference image */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 p-2 flex flex-col justify-between select-none">
@@ -479,7 +400,7 @@ export function GalleryFeed({
                         {card.kind}
                       </span>
                       <span className="px-2 py-0.5 rounded bg-white/20 hover:bg-white/30 backdrop-blur-md text-[9px] font-normal text-white transition-colors">
-                        {card.isWorkspace ? 'Open Job' : 'Save to Assets'}
+                        Use prompt
                       </span>
                     </div>
                   </div>

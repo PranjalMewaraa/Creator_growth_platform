@@ -112,6 +112,41 @@ export const IMAGE_MODELS = {
       requestsPerMinute: 2,
     },
   },
+  /**
+   * "Nano Banana Pro" — Google's actual premium tier (Gemini 3 Pro Image), not a bigger
+   * number tacked onto the 2.x line above: a distinct, more expensive model with its own
+   * reasoning pass over the prompt and references before it draws, which is what this app's
+   * "Nano Banana Pro" chip was previously mislabeling the Lite model as (WP66) — this entry
+   * is the model that label should have pointed at.
+   *
+   * Confirmed against docs.cloud.google.com (Vertex AI's Gemini 3 Pro Image page) and
+   * ai.google.dev's pricing page on 2026-10-20: GA model id `gemini-3-pro-image` (not the
+   * `-preview` suffix some aggregators still show), global location, standard-tier pricing of
+   * $0.134/image at 1K/2K (1,120 output tokens) and $0.24/image at 4K (2,000 output tokens) —
+   * both land at ~$120 per million output tokens, used below. Input images cost $0.0011 each
+   * (560 tokens), i.e. ~$2 per million input tokens, the same rate Google lists for text
+   * input on this model. Real docs supports up to 14 reference images and far more aspect
+   * ratios than listed here; this app only ever asks for the same four it offers the other
+   * image models, to keep the UI consistent across a model switch.
+   */
+  'gemini-3-pro-image': {
+    model: 'gemini-3-pro-image',
+    location: 'global',
+    usdPerMillion: { input: 2, output: 120 },
+    capability: {
+      aspectRatios: ['1:1', '4:5', '9:16', '16:9'],
+      // Unverified for this project: the docs don't state a per-request image count the way
+      // the Lite model's measurement did. Kept at the same ceiling as the other two models
+      // rather than guessing higher.
+      maxPerRequest: 4,
+      outputMimeTypes: ['image/png', 'image/jpeg'],
+      acceptsReferenceImages: true,
+      maxReferenceImages: 14,
+      // Unverified for this project, same caveat as 2.1 above — Vertex quotas are granted per
+      // base model, and a newly added one is not guaranteed the same allowance.
+      requestsPerMinute: 2,
+    },
+  },
 } as const satisfies Record<string, ImageModel>;
 
 export type ImageModelKey = keyof typeof IMAGE_MODELS;

@@ -207,6 +207,18 @@ body {
   color: var(--color-ink);
 }
 
+/* No visible scrollbars anywhere (on request): the track still scrolls, it just doesn't draw
+ * one. Applied globally rather than per-element, since the product's own floating panels and
+ * fixed backdrops scroll independently all over the page. */
+html,
+* {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+*::-webkit-scrollbar {
+  display: none;
+}
+
 ::selection {
   background-color: color-mix(in oklab, var(--color-accent) 35%, transparent);
 }
