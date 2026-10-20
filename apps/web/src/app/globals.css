@@ -148,6 +148,14 @@
   }
 }
 
+@utility no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 /*
  * A 44px finger on a 34px chip (WP49). Growing every chip to 44 would make the Studio's
  * control cluster twice as tall for a problem that is only about where a thumb lands, so the

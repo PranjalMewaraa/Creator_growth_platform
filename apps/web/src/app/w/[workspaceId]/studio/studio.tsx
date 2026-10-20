@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  CAMERAS,
   LOOK_KEYS,
   LOOK_VOCABULARY,
   type CompiledPromptView,
@@ -60,6 +61,7 @@ import {
 import { TemplatesDialog } from './templates-dialog';
 import type { TemplateCard } from './template-picker';
 import { PromptDisclosure } from './prompt-disclosure';
+import { ControlPanel } from './control-panel';
 
 // Studio (plan section 13, WP14, redone WP56): plain intent in, compiled prompt visible and
 // editable, cost before submit, output streamed, and the job carries on if you leave.
@@ -302,9 +304,9 @@ export function Studio({
   const base = `/api/w/${workspaceId}`;
 
   const startingKind = KINDS.find((k) => k.key === initialKind)?.key ?? null;
-  const [kind, setKind] = useState(startingKind ?? 'script');
+  const [kind, setKind] = useState(startingKind ?? 'image');
   // Only asked when nobody said yet (WP56): a link from Home already knows, so it never opens.
-  const [kindDialogOpen, setKindDialogOpen] = useState(startingKind === null);
+  const [kindDialogOpen, setKindDialogOpen] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [promptOpen, setPromptOpen] = useState(false);
   // The rest of the controls (WP65 reskin): everything that isn't one of the always-visible
@@ -319,7 +321,7 @@ export function Studio({
   const [count, setCount] = useState(1);
   // Empty means the platform decides, same as it always has (WP64) — this only ever sends a
   // user override when there is one.
-  const [aspectRatio, setAspectRatio] = useState('');
+  const [aspectRatio, setAspectRatio] = useState('1:1');
   // How long the reel should run; how many eight-second beats fill that is for the engine's
   // scene planner to decide, not the creator (WP59) — a calm piece wants fewer, longer-held
   // beats, a fight wants several quick ones, both inside the same requested length.
@@ -343,6 +345,53 @@ export function Studio({
   // already defaults to server side.
   const [imageModel, setImageModel] = useState<string>('gemini-flash-lite-image');
   const [videoModel, setVideoModel] = useState<string>('veo-3.1-lite');
+
+  // Control panel visual modifiers matching exact reference design
+  const [genre, setGenre] = useState('None');
+  const [style, setStyle] = useState('None');
+  const [lighting, setLighting] = useState('None');
+  const [camera, setCamera] = useState('Camera');
+  const [movement, setMovement] = useState('None');
+  const [resolution, setResolution] = useState('2K');
+  const [batchMode, setBatchMode] = useState(false);
+  const [cast, setCast] = useState('None');
+
+  function handleCameraChange(cam: string) {
+    setCamera(cam);
+    if (cam === 'Camera' || cam === 'None') {
+      setLook((current) => ({ ...current, camera: undefined }));
+    } else {
+      const match = CAMERAS.find(
+        (c) => c.label.toLowerCase() === cam.toLowerCase() || cam.toLowerCase().includes(c.id),
+      );
+      if (match) {
+        setLook((current) => ({ ...current, camera: match.id }));
+      }
+    }
+  }
+
+  function handleEnhancePrompt() {
+    const additions: string[] = [];
+    if (genre !== 'None') additions.push(`${genre} aesthetic`);
+    if (style !== 'None') additions.push(`${style}`);
+    if (lighting !== 'None') additions.push(`${lighting} lighting`);
+    if (camera !== 'Camera' && camera !== 'None') additions.push(`shot on ${camera}`);
+    if (movement !== 'None') additions.push(`${movement} motion`);
+
+    const descriptors = ['hyper-detailed', 'cinematic atmosphere', '8k resolution'];
+    const parts = [...additions, ...descriptors].filter(Boolean);
+
+    if (!intent.trim()) {
+      setIntent(
+        kind === 'video'
+          ? 'Cinematic camera tracking an explorer traversing a futuristic neon-lit metropolis, dramatic volumetric lighting, 8k resolution'
+          : 'High fashion editorial portrait of a model with delicate glass floral accessories, soft studio lighting, ultra sharp focus, 8k',
+      );
+    } else {
+      setIntent(`${intent.trim()}, ${parts.join(', ')}`);
+    }
+  }
+
   // The templates for what is being made, plain one first, since that is the default.
   const outputType = KINDS.find((k) => k.key === kind)?.outputType;
   const kindTemplates = templates
@@ -374,8 +423,21 @@ export function Studio({
   const [outputs, setOutputs] = useState<Output[]>([]);
   const opened = useRef(false);
 
+  // Active modifiers composed for the generation model
+  const activeClauses: string[] = [];
+  if (genre !== 'None') activeClauses.push(genre);
+  if (style !== 'None') activeClauses.push(style);
+  if (lighting !== 'None') activeClauses.push(lighting);
+  if (movement !== 'None') activeClauses.push(movement);
+  if (camera !== 'Camera' && camera !== 'None') activeClauses.push(camera);
+
+  const enrichedIntent =
+    activeClauses.length > 0 && intent.trim()
+      ? `${intent.trim()} (${activeClauses.join(', ')})`
+      : intent.trim();
+
   const input = {
-    intentText: intent.trim(),
+    intentText: enrichedIntent,
     targetPlatform: platform,
     ...(tone.trim() ? { tone: tone.trim() } : {}),
     ...(kind === 'script' && length ? { durationSeconds: length } : {}),
@@ -395,7 +457,7 @@ export function Studio({
   const requestKey = JSON.stringify({ kind, input });
   const stale = prompt !== null && promptFor !== requestKey && !prompt.userEdited;
   const blocked = !ready.profile || !ready.brandKit;
-  const canGo = busy === null && input.intentText.length > 0 && !blocked;
+  const canGo = busy === null && intent.trim().length > 0 && !blocked;
 
   // Cost before submit: priced by the server against the rates in force.
   useEffect(() => {
@@ -654,8 +716,8 @@ export function Studio({
         floating bar, docked to the bottom of that backdrop rather than claiming a column of
         its own.
       */}
-      <div className="fixed inset-x-0 bottom-0 top-16 z-0 overflow-y-auto lg:left-18">
-        <div className="mx-auto max-w-[1600px] px-4 pb-56 pt-6 sm:px-6 lg:pb-48">
+      <div className="fixed inset-x-0 bottom-0 top-14 z-0 overflow-y-auto">
+        <div className="w-full px-2 sm:px-4 pb-56 pt-2">
           {blocked ? (
             <div className="mb-4 rounded-xl border border-accent/40 bg-accent/10 px-4 py-3 text-sm text-ink backdrop-blur">
               {!ready.profile
@@ -869,305 +931,124 @@ export function Studio({
             </div>
           ) : (
             <>
-              {jobs.length > 0 ? (
-                <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
-                  {jobs.slice(0, 16).map((j) => (
-                    <button
-                      key={j.id}
-                      type="button"
-                      onClick={() => void openJob(j.id)}
-                      className="tap-target flex shrink-0 cursor-pointer items-center gap-2 rounded-full border border-line bg-surface/90 px-3 py-1.5 text-xs text-muted backdrop-blur transition-colors duration-base ease-standard hover:text-ink"
-                    >
-                      <span
-                        className={cx(
-                          'size-1.5 shrink-0 rounded-full',
-                          STATUS[j.status].tone.includes('good')
-                            ? 'bg-good'
-                            : STATUS[j.status].tone.includes('bad')
-                              ? 'bg-bad'
-                              : STATUS[j.status].tone.includes('accent')
-                                ? 'bg-accent'
-                                : 'bg-faint',
-                        )}
-                        aria-hidden
-                      />
-                      <span className="max-w-32 truncate">{j.intentText || LABEL[j.generatorKey]}</span>
-                    </button>
-                  ))}
+              {jobs.some((j) => !TERMINAL.has(j.status)) ? (
+                <div className="mb-2.5 flex gap-1.5 overflow-x-auto pb-1 no-scrollbar select-none">
+                  {jobs
+                    .filter((j) => !TERMINAL.has(j.status))
+                    .map((j) => (
+                      <button
+                        key={j.id}
+                        type="button"
+                        onClick={() => void openJob(j.id)}
+                        className="tap-target flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-line bg-surface/90 px-2.5 py-1 text-xs text-muted backdrop-blur transition-colors duration-base ease-standard hover:text-ink hover:border-faint"
+                      >
+                        <span
+                          className={cx(
+                            'size-1.5 shrink-0 rounded-full',
+                            STATUS[j.status].tone.includes('good')
+                              ? 'bg-good'
+                              : STATUS[j.status].tone.includes('bad')
+                                ? 'bg-bad'
+                                : STATUS[j.status].tone.includes('accent')
+                                  ? 'bg-accent'
+                                  : 'bg-faint',
+                          )}
+                          aria-hidden
+                        />
+                        <span className="max-w-32 truncate">{j.intentText || LABEL[j.generatorKey]}</span>
+                      </button>
+                    ))}
                 </div>
               ) : null}
-              <GalleryFeed workspaceId={workspaceId} onOpen={(id) => void openJob(id)} />
+              <GalleryFeed
+                workspaceId={workspaceId}
+                onOpen={(id) => void openJob(id)}
+                onUsePrompt={(prompt) => setIntent(prompt)}
+              />
             </>
           )}
         </div>
       </div>
 
-      {/* The compose bar (WP65): a handful of quick chips, a text box, and what it costs —
-          docked to the bottom of the backdrop rather than a permanent form pane. Everything
-          that doesn't fit a chip lives behind "More". */}
-      <div className="fixed inset-x-0 bottom-20 z-20 flex justify-center px-3 sm:px-4 lg:bottom-6 lg:left-18">
-        <div className="flex w-full max-w-4xl flex-col gap-2.5 rounded-2xl border border-line bg-surface/95 p-3 shadow-floating backdrop-blur sm:p-4">
-          {error ? <p className="px-1 text-sm text-bad">{error}</p> : null}
-
-          {/* Quick chips: the look, for a picture or film; platform and length otherwise. */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
-            <button
-              type="button"
-              onClick={() => setTemplatesOpen(true)}
-              className="tap-target flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-line bg-raised px-3 text-xs font-medium text-ink transition-colors duration-base ease-standard hover:border-faint"
-            >
-              <PaletteIcon width={13} height={13} aria-hidden className="text-faint" />
-              {selectedTemplate ? selectedTemplate.title : 'Default template'}
-            </button>
-
-            {VISUAL.has(kind) ? (
-              LOOK_KEYS.map((key) => (
-                <ChipDropdown
-                  key={key}
-                  aria-label={LOOK_LABELS[key]}
-                  value={look[key] ?? ''}
-                  onChange={(v) =>
-                    setLook((current) => ({ ...current, [key]: v === '' ? undefined : v }))
-                  }
-                  options={[
-                    { value: '', label: LOOK_LABELS[key] },
-                    ...LOOK_VOCABULARY[key].map((option) => ({
-                      value: option.id,
-                      label: option.label,
-                    })),
-                  ]}
-                />
-              ))
-            ) : (
-              <>
-                <ChipDropdown
-                  aria-label="Platform"
-                  value={platform ?? ''}
-                  onChange={(v) => setPlatform(v === '' ? null : (v as TargetPlatform))}
-                  options={[{ value: '', label: 'Anywhere' }, ...PLATFORMS]}
-                />
-                {kind === 'script' ? (
-                  <ChipDropdown
-                    aria-label="Length"
-                    value={length === null ? '' : String(length)}
-                    onChange={(v) => setLength(v === '' ? null : Number(v))}
-                    options={[
-                      { value: '', label: 'Default length' },
-                      ...LENGTHS.map((l) => ({ value: String(l), label: `${l}s` })),
-                    ]}
-                  />
-                ) : null}
-              </>
-            )}
-
-            <button
-              type="button"
-              onClick={() => setMoreOpen(true)}
-              className="tap-target flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-line bg-raised px-3 text-xs font-medium text-muted transition-colors duration-base ease-standard hover:text-ink"
-            >
-              <GearIcon width={13} height={13} aria-hidden />
-              More
-            </button>
-          </div>
-
-          {/* The prompt. */}
-          <div className="flex items-center gap-2">
-            {REFERENCEABLE.has(kind) ? (
-              <>
-                <input
-                  ref={referenceInputRef}
-                  type="file"
-                  accept="image/png,image/jpeg"
-                  className="hidden"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    event.target.value = '';
-                    if (file) void uploadReference(file);
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => referenceInputRef.current?.click()}
-                  disabled={referenceUploading || referenceImages.length >= MAX_REFERENCE_IMAGES}
-                  aria-label="Add a reference image"
-                  className="tap-target flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-dashed border-line bg-raised text-muted transition-colors duration-base ease-standard hover:border-faint hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {referenceUploading ? (
-                    <span className="text-caption">…</span>
-                  ) : (
-                    <PlusIcon width={18} height={18} aria-hidden />
-                  )}
-                </button>
-              </>
-            ) : null}
-            <input
-              id="studio-intent"
-              value={intent}
-              onChange={(event) => setIntent(event.target.value)}
-              maxLength={2000}
-              placeholder={
-                kind === 'video'
-                  ? 'Describe the video you want to create…'
-                  : kind === 'image' || kind === 'thumbnail_set'
-                    ? 'Describe the image you want to create…'
-                    : 'e.g. Our cold brew now ships across Jaipur'
-              }
-              className="h-11 w-full rounded-xl border border-line bg-raised px-4 text-[15px] text-ink outline-none transition placeholder:text-faint focus:border-accent/70 focus:ring-2 focus:ring-accent/15"
-            />
-            <button
-              type="button"
-              onClick={async () => {
-                if (!prompt || stale) await compile();
-                setPromptOpen(true);
-              }}
-              disabled={busy === 'compiling'}
-              aria-label="See the detailed prompt"
-              title="See the detailed prompt"
-              className="tap-target flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-line bg-raised text-muted transition-colors duration-base ease-standard hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <EyeIcon width={16} height={16} aria-hidden />
-            </button>
-          </div>
-
-          {referenceImages.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
-              {referenceImages.map((ref, index) => (
-                <div
-                  key={ref.key}
-                  className="group relative size-11 shrink-0 overflow-hidden rounded-lg border border-line"
-                >
-                  {/* A real uploaded picture: next/image cannot optimise it, and need not. */}
-                  <img src={ref.url} alt="" className="size-full object-cover" />
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setReferenceImages((current) => current.filter((_, i) => i !== index))
-                    }
-                    className="tap-target absolute inset-0 flex cursor-pointer items-center justify-center bg-black/60 text-canvas opacity-0 transition-opacity duration-base ease-standard group-hover:opacity-100 group-focus-visible:opacity-100"
-                    aria-label="Remove this reference image"
-                  >
-                    <CloseIcon width={14} height={14} />
-                  </button>
-                </div>
-              ))}
+      {/* Floating Control Panel matching exact reference design */}
+      <div className="fixed inset-x-0 bottom-6 z-20 flex flex-col items-center justify-center px-3 sm:px-4 pointer-events-none">
+        <div className="pointer-events-auto w-full max-w-[980px] flex flex-col items-center">
+          {error ? (
+            <div className="mb-2 max-w-[980px] w-full rounded-xl border border-bad/30 bg-surface/95 px-3 py-1.5 text-xs text-bad shadow-md backdrop-blur">
+              {error}
             </div>
           ) : null}
-          {referenceError ? <p className="px-1 text-caption text-bad">{referenceError}</p> : null}
-
-          {/* The toolbar: what it's made with, and what it costs. */}
-          <div className="flex flex-wrap items-center gap-2">
-            <Tabs
-              label="Kind"
-              value={(PRIMARY_KINDS as readonly string[]).includes(kind) ? kind : 'script'}
-              onChange={(v) => selectKind(v)}
-              options={PRIMARY_KINDS.map((k) => ({ value: k, label: LABEL[k] ?? k }))}
-            />
-            <button
-              type="button"
-              onClick={() => setKindDialogOpen(true)}
-              className="tap-target shrink-0 cursor-pointer rounded-lg px-2 py-1.5 text-caption text-muted transition-colors duration-base ease-standard hover:text-ink"
-            >
-              More kinds
-            </button>
-
-            {REFERENCEABLE.has(kind) ? (
-              <ChipDropdown
-                aria-label="Model"
-                value={kind === 'video' ? videoModel : imageModel}
-                onChange={kind === 'video' ? setVideoModel : setImageModel}
-                options={kind === 'video' ? VIDEO_MODEL_OPTIONS : IMAGE_MODEL_OPTIONS}
-              />
-            ) : null}
-            {kind === 'image' ? (
-              <ChipDropdown
-                aria-label="Aspect ratio"
-                value={aspectRatio}
-                onChange={setAspectRatio}
-                options={[
-                  { value: '', label: 'Platform decides' },
-                  ...ASPECT_RATIOS.map((r) => ({ value: r, label: r })),
-                ]}
-              />
-            ) : null}
-            {kind === 'image' ? (
-              <ChipDropdown
-                aria-label="How many"
-                value={String(count)}
-                onChange={(v) => setCount(Number(v))}
-                options={COUNTS.map((n) => ({ value: String(n), label: `${n} image${n > 1 ? 's' : ''}` }))}
-              />
-            ) : null}
-            {kind === 'video' ? (
-              <ChipDropdown
-                aria-label="Length"
-                value={String(durationSeconds)}
-                onChange={(v) => setDurationSeconds(Number(v))}
-                options={VIDEO_DURATIONS.map((n) => ({ value: String(n), label: `${n}s` }))}
-              />
-            ) : null}
-            {kind === 'video' ? (
-              <button
-                type="button"
-                aria-pressed={voiceover}
-                onClick={() => setVoiceover((v) => !v)}
-                title="Voiceover"
-                className={cx(
-                  'tap-target flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors duration-base ease-standard',
-                  voiceover
-                    ? 'border-accent bg-accent/10 text-ink'
-                    : 'border-line bg-raised text-muted hover:text-ink',
-                )}
-              >
-                <MicIcon width={13} height={13} aria-hidden />
-                Voiceover
-              </button>
-            ) : null}
-
-            <div className="ml-auto flex items-center gap-3">
-              <span className="hidden text-xs text-muted sm:block">
-                {input.intentText && cost !== null ? (
-                  cost.videoSeconds > 0 ? (
-                    <>
-                      Up to{' '}
-                      <span className="font-semibold text-ink font-mono tabular-nums">
-                        {cost.videoSeconds}s
-                      </span>
-                    </>
-                  ) : (
-                    <span className="font-semibold text-ink">{credit(cost.credits)}</span>
-                  )
-                ) : (
-                  'Cost shows once you describe it'
-                )}
-              </span>
-              {kind === 'video' ? (
-                <Button
-                  variant="secondary"
-                  onClick={() => {
+          <ControlPanel
+            kind={kind}
+            onKindChange={selectKind}
+            intent={intent}
+            onIntentChange={setIntent}
+            onGenerate={(as) => void generate(as ?? kind, storyboardId ? { storyboardOutputId: storyboardId } : {})}
+            busy={busy}
+            canGo={canGo}
+            cost={cost}
+            storyboardCost={storyboardCost}
+            storyboardId={storyboardId}
+            videoSecondsBalance={videoSeconds}
+            look={look}
+            onLookChange={(key, val) => setLook((current) => ({ ...current, [key]: val }))}
+            platform={platform}
+            onPlatformChange={setPlatform}
+            scriptLength={length}
+            onScriptLengthChange={setLength}
+            tone={tone}
+            onToneChange={setTone}
+            profileTone={profileTone}
+            templates={templates}
+            selectedTemplateId={templateId}
+            onSelectTemplate={setTemplateId}
+            onOpenTemplatesDialog={() => setTemplatesOpen(true)}
+            referenceImages={referenceImages}
+            onUploadReference={(file) => void uploadReference(file)}
+            onRemoveReference={(idx) => setReferenceImages((curr) => curr.filter((_, i) => i !== idx))}
+            referenceUploading={referenceUploading}
+            aspectRatio={aspectRatio}
+            onAspectRatioChange={setAspectRatio}
+            count={count}
+            onCountChange={setCount}
+            imageModel={imageModel}
+            onImageModelChange={setImageModel}
+            videoModel={videoModel}
+            onVideoModelChange={setVideoModel}
+            videoDuration={durationSeconds}
+            onVideoDurationChange={setDurationSeconds}
+            voiceover={voiceover}
+            onVoiceoverChange={setVoiceover}
+            onStoryboardFirst={
+              kind === 'video'
+                ? () => {
                     setStoryboardId(null);
                     void generate('storyboard');
-                  }}
-                  disabled={!canGo}
-                >
-                  {busy === 'starting' ? 'Starting…' : 'Storyboard first'}
-                </Button>
-              ) : null}
-              <Button
-                onClick={() =>
-                  void generate(kind, storyboardId ? { storyboardOutputId: storyboardId } : {})
-                }
-                disabled={!canGo || (kind === 'video' && videoSeconds < (cost?.videoSeconds ?? 0))}
-              >
-                {busy === 'starting'
-                  ? 'Starting…'
-                  : kind === 'video'
-                    ? storyboardId
-                      ? 'Film this storyboard'
-                      : 'Film it'
-                    : 'Generate'}
-              </Button>
-            </div>
-          </div>
+                  }
+                : undefined
+            }
+            genre={genre}
+            onGenreChange={setGenre}
+            style={style}
+            onStyleChange={setStyle}
+            movement={movement}
+            onMovementChange={setMovement}
+            lighting={lighting}
+            onLightingChange={setLighting}
+            resolution={resolution}
+            onResolutionChange={setResolution}
+            batchMode={batchMode}
+            onBatchModeChange={setBatchMode}
+            cast={cast}
+            onCastChange={setCast}
+            onOpenPromptDisclosure={async () => {
+              if (!prompt || stale) await compile();
+              setPromptOpen(true);
+            }}
+            onOpenKindsDialog={() => setKindDialogOpen(true)}
+            onOpenMoreDialog={() => setMoreOpen(true)}
+            onEnhancePrompt={handleEnhancePrompt}
+          />
         </div>
       </div>
 
