@@ -40,4 +40,11 @@ ENV FFMPEG_PATH=ffmpeg
 
 # No port: the worker consumes queues. Hosts that insist on a health check can use the log
 # line "worker started", which it writes once it is consuming.
-CMD ["pnpm", "--filter", "@cgp/worker", "start"]
+#
+# Google credentials, decoded here rather than relied on as a host-side "start command"
+# override: several PaaS dashboards (Render among them) only apply a custom start command to
+# a native-runtime service, not a Docker one — a Docker service always runs the image's own
+# CMD, so a decode step set as a dashboard override silently never runs. Baking it into CMD
+# means one env var (GCP_KEY_B64, a base64'd service-account JSON key) is all a host needs to
+# set; with nothing set, this is a no-op and the process starts exactly as it did before.
+CMD ["sh", "-c", "if [ -n \"$GCP_KEY_B64\" ]; then echo \"$GCP_KEY_B64\" | base64 -d > /tmp/gcp.json && export GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp.json; fi; exec pnpm --filter @cgp/worker start"]
