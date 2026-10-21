@@ -86,6 +86,15 @@ function VideoIconSmall() {
   );
 }
 
+function ThumbnailIconSmall() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="4" width="20" height="14" rx="2" />
+      <path d="M12.5 7.5 11 9.8h2.3L11.8 12" strokeWidth="1.6" />
+    </svg>
+  );
+}
+
 function GridIconSmall() {
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -363,9 +372,11 @@ export function ControlPanel({
   const placeholder =
     kind === 'video'
       ? 'Describe the video you want to create…'
-      : kind === 'image' || kind === 'thumbnail_set'
-        ? 'Describe the image you want to create…'
-        : 'Describe the script you want to create… e.g. Our cold brew now ships across Jaipur';
+      : kind === 'thumbnail_set'
+        ? 'Describe the thumbnail — who’s in it, the reaction, what it’s about…'
+        : kind === 'image'
+          ? 'Describe the image you want to create…'
+          : 'Describe the script you want to create… e.g. Our cold brew now ships across Jaipur';
 
   const visual = kind === 'image' || kind === 'thumbnail_set' || kind === 'video';
   const aspectRatioOptions = kind === 'video' ? VIDEO_ASPECT_RATIOS : IMAGE_ASPECT_RATIOS;
@@ -713,6 +724,17 @@ export function ControlPanel({
             >
               <ImageIconSmall />
               <span>Image</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onKindChange('thumbnail_set')}
+              className={`tap-target px-2.5 py-1 rounded-md text-xs font-medium flex items-center gap-1.5 transition-all ${kind === 'thumbnail_set'
+                ? 'bg-[#2c2d36] text-white shadow-sm'
+                : 'text-[#787a86] hover:text-[#e4e4e7]'
+                }`}
+            >
+              <ThumbnailIconSmall />
+              <span>Thumbnail</span>
             </button>
             <button
               type="button"

@@ -8,6 +8,15 @@ import type { NextConfig } from 'next';
 for (let dir = process.cwd(); ;) {
   if (existsSync(join(dir, 'pnpm-workspace.yaml'))) {
     if (existsSync(join(dir, '.env'))) process.loadEnvFile(join(dir, '.env'));
+    // @cgp/core is transpiled (below), not external, so it is bundled into the server chunk —
+    // which means its own `fontDir()` helper can no longer find itself by calling
+    // `require.resolve('@cgp/core/package.json')`: Turbopack rewrites a bundled module's own
+    // `require.resolve` into its internal module-id lookup, so that call returns a number, not
+    // a path, and `dirname()` on it throws (caught live: "The 'path' argument must be of type
+    // string. Received type number"). FONT_DIR is `fontDir()`'s own escape hatch for exactly
+    // this, and this file is the one place in the app that still runs as plain, unbundled
+    // Node — so it's where the real path can still be computed and handed down.
+    if (!process.env.FONT_DIR) process.env.FONT_DIR = join(dir, 'packages', 'core', 'fonts');
     break;
   }
   const parent = dirname(dir);

@@ -105,9 +105,9 @@ const REFERENCEABLE = new Set(['image', 'thumbnail_set', 'video']);
 // picker never drift apart (WP53).
 const KINDS = STUDIO_KINDS;
 const LABEL: Record<string, string> = Object.fromEntries(KINDS.map((k) => [k.key, k.label]));
-// The three kinds the gallery-feed Studio fronts with (WP64); the rest stay one tap away,
-// behind "More" and the kind picker dialog they always lived in.
-const PRIMARY_KINDS = ['script', 'image', 'video'] as const;
+// The four kinds the compose bar fronts with directly — Script, Image, Thumbnail, Video
+// (WP66) — chosen via the segmented control in control-panel.tsx; the rest stay one tap away,
+// behind "More kinds" and the kind picker dialog they always lived in.
 
 const PLATFORMS: Array<{ value: TargetPlatform; label: string }> = [
   { value: 'instagram', label: 'Instagram' },
