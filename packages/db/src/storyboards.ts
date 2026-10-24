@@ -146,7 +146,31 @@ export async function setSceneUploadedClip(
   );
 }
 
-/** Removes an uploaded clip, back to a blank scene a prompt can fill in (WP68). */
+/** A still the creator uploaded directly, held for `durationSeconds` in the final video rather
+ *  than animated — distinct from a reference image, which stays in `references` for Omni to
+ *  animate from (WP69). No outputId: nothing was generated. */
+export async function setSceneUploadedImage(
+  db: Database,
+  workspaceId: string,
+  sceneId: string,
+  image: { imageUrl: string; durationSeconds: number },
+): Promise<void> {
+  await scoped(db, workspaceId).update(
+    storyboardScenes,
+    {
+      imageUrl: image.imageUrl,
+      videoUrl: null,
+      videoDurationSeconds: image.durationSeconds,
+      outputId: null,
+      jobId: null,
+      status: 'complete',
+      error: null,
+    },
+    (t, op) => op.eq(t.id, sceneId),
+  );
+}
+
+/** Removes an uploaded clip or image, back to a blank scene a prompt can fill in (WP68/WP69). */
 export async function clearSceneClip(
   db: Database,
   workspaceId: string,
@@ -156,6 +180,7 @@ export async function clearSceneClip(
     storyboardScenes,
     {
       videoUrl: null,
+      imageUrl: null,
       videoDurationSeconds: null,
       outputId: null,
       jobId: null,

@@ -3,7 +3,7 @@ import type { ObjectStore } from '@cgp/contracts';
 import { findStoryboard, outputs, scoped, type Database } from '@cgp/db';
 import { findCompiledPrompt } from '@cgp/orchestration';
 import { ffmpegAvailable, type FfmpegOptions } from '../render/ffmpeg';
-import { buildReel, type ReelScene } from '../render/reel';
+import { buildReel, imageToClip, type ReelScene } from '../render/reel';
 import type { JobHandler } from '../process';
 
 /**
@@ -57,21 +57,27 @@ export function createStoryboardAssembleHandler(
       if (board.scenes.length === 0) throw new Error('Storyboard has no scenes');
 
       const ordered = [...board.scenes].sort((a, b) => a.index - b.index);
-      const missing = ordered.find((scene) => !scene.videoUrl);
+      const missing = ordered.find((scene) => !scene.videoUrl && !scene.imageUrl);
       if (missing) throw new Error(`Scene ${missing.index + 1} has no clip yet`);
-
-      const scenes: ReelScene[] = [];
-      for (const scene of ordered) {
-        const response = await fetch(scene.videoUrl!);
-        if (!response.ok) throw new Error(`Scene ${scene.index + 1}'s clip could not be fetched`);
-        scenes.push({
-          data: new Uint8Array(await response.arrayBuffer()),
-          durationSeconds: scene.videoDurationSeconds ?? DEFAULT_SCENE_SECONDS,
-        });
-      }
 
       if (!(await ffmpegAvailable(deps.ffmpeg))) {
         throw new Error('No renderer available to assemble the storyboard');
+      }
+
+      const scenes: ReelScene[] = [];
+      for (const scene of ordered) {
+        const durationSeconds = scene.videoDurationSeconds ?? DEFAULT_SCENE_SECONDS;
+        if (scene.videoUrl) {
+          const response = await fetch(scene.videoUrl);
+          if (!response.ok) throw new Error(`Scene ${scene.index + 1}'s clip could not be fetched`);
+          scenes.push({ data: new Uint8Array(await response.arrayBuffer()), durationSeconds });
+        } else {
+          // A still held for the scene's duration, not animated (WP69).
+          const response = await fetch(scene.imageUrl!);
+          if (!response.ok) throw new Error(`Scene ${scene.index + 1}'s image could not be fetched`);
+          const image = new Uint8Array(await response.arrayBuffer());
+          scenes.push(await imageToClip(deps.ffmpeg, image, durationSeconds, '720p-16:9'));
+        }
       }
 
       const prompt = await findCompiledPrompt(deps.db, job.workspaceId, input.compiledPromptId);

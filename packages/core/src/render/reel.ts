@@ -221,3 +221,54 @@ export async function buildReel(options: FfmpegOptions, request: ReelRequest): P
     await rm(dir, { recursive: true, force: true });
   }
 }
+
+/**
+ * A still held for `durationSeconds`, as a clip `buildReel` can join like any filmed scene
+ * (WP69) — a Storyboard scene can be a picture, not just a prompt or an uploaded clip. Scaled
+ * and cropped to the same frame every other scene normalises to, so a mismatched upload never
+ * stands out from the clips around it.
+ */
+export async function imageToClip(
+  options: FfmpegOptions,
+  image: Uint8Array,
+  durationSeconds: number,
+  resolution: ReelResolution,
+): Promise<ReelScene> {
+  const { width, height } = REEL_FRAMES[resolution];
+  const dir = await mkdtemp(join(tmpdir(), 'cgp-image-clip-'));
+  try {
+    const input = join(dir, 'still');
+    await writeFile(input, image);
+    const output = join(dir, 'clip.mp4');
+    await ffmpeg(
+      options,
+      'turn the image into a clip',
+      [
+        '-loop',
+        '1',
+        '-i',
+        input,
+        '-t',
+        durationSeconds.toFixed(3),
+        '-vf',
+        `scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},fps=${FPS},setsar=1,format=yuv420p`,
+        '-c:v',
+        'libx264',
+        '-profile:v',
+        'high',
+        '-preset',
+        options.preset ?? 'medium',
+        '-crf',
+        '21',
+        '-an',
+        '-movflags',
+        '+faststart',
+        output,
+      ],
+      dir,
+    );
+    return { data: new Uint8Array(await readFile(output)), durationSeconds };
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}

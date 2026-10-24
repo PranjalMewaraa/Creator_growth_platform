@@ -142,6 +142,7 @@ export {
 } from './render/captions';
 export {
   buildReel,
+  imageToClip,
   REEL_FRAMES,
   type Reel,
   type ReelRequest,

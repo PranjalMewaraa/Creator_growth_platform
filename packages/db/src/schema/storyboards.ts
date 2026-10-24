@@ -41,6 +41,10 @@ export const storyboardScenes = pgTable(
     /** Fixed 8s for an Omni-generated clip; the real probed length for an uploaded one (WP68) —
      *  so assembly never has to re-probe, just read this column. */
     videoDurationSeconds: real('video_duration_seconds'),
+    /** A still the creator uploaded directly for this scene (WP69) — mutually exclusive with
+     *  videoUrl: held for videoDurationSeconds in the final video rather than animated, unlike
+     *  a reference image (which stays in `references`, above, for Omni to animate from). */
+    imageUrl: text('image_url'),
     error: text('error'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),

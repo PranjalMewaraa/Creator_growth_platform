@@ -55,6 +55,7 @@ export {
   setSceneJob,
   setSceneResult,
   setSceneUploadedClip,
+  setSceneUploadedImage,
   updateScene,
   type StoryboardRow,
   type StoryboardSceneRow,

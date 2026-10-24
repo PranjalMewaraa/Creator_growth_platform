@@ -20,6 +20,7 @@ interface SceneView {
   jobId: string | null;
   outputId: string | null;
   videoUrl: string | null;
+  imageUrl: string | null;
   error: string | null;
 }
 
@@ -249,6 +250,32 @@ export function StoryboardWorkspace({
     });
   }
 
+  async function uploadImage(sceneId: string, file: File) {
+    if (!board) return;
+    const form = new FormData();
+    form.set('file', file);
+    const r = await fetch(`${base}/storyboards/${board.id}/scenes/${sceneId}/image`, {
+      method: 'POST',
+      body: form,
+    }).catch(() => null);
+    const body = (await r?.json().catch(() => ({}))) as {
+      scene?: { imageUrl: string };
+      error?: { code: string };
+    };
+    if (!r?.ok || !body.scene) {
+      show({ tone: 'bad', message: body.error?.code ?? 'That image could not be uploaded.' });
+      return;
+    }
+    patchSceneLocal(sceneId, {
+      imageUrl: body.scene.imageUrl,
+      videoUrl: null,
+      status: 'complete',
+      outputId: null,
+      jobId: null,
+      error: null,
+    });
+  }
+
   async function removeClip(sceneId: string) {
     if (!board) return;
     await fetch(`${base}/storyboards/${board.id}/scenes/${sceneId}`, {
@@ -258,6 +285,7 @@ export function StoryboardWorkspace({
     }).catch(() => null);
     patchSceneLocal(sceneId, {
       videoUrl: null,
+      imageUrl: null,
       status: 'draft',
       outputId: null,
       jobId: null,
@@ -578,6 +606,7 @@ export function StoryboardWorkspace({
                   onUploadReference={(file) => void uploadReference(scene.id, file)}
                   onRemoveReference={(key) => void removeReference(scene.id, key)}
                   onUploadClip={(file) => void uploadClip(scene.id, file)}
+                  onUploadImage={(file) => void uploadImage(scene.id, file)}
                   onRemoveClip={() => void removeClip(scene.id)}
                   onGenerate={() => void generateScene(scene.id)}
                   onRemove={() => void removeScene(scene.id)}
@@ -616,6 +645,7 @@ function SceneCard({
   onUploadReference,
   onRemoveReference,
   onUploadClip,
+  onUploadImage,
   onRemoveClip,
   onGenerate,
   onRemove,
@@ -630,6 +660,7 @@ function SceneCard({
   onUploadReference: (file: File) => void;
   onRemoveReference: (key: string) => void;
   onUploadClip: (file: File) => void;
+  onUploadImage: (file: File) => void;
   onRemoveClip: () => void;
   onGenerate: () => void;
   onRemove: () => void;
@@ -638,10 +669,11 @@ function SceneCard({
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const clipInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const jobId = scene.jobId;
-  // A clip with no outputId didn't come from a job — the creator uploaded it directly, so
-  // there's nothing left to generate or reference for this scene (WP68).
-  const uploaded = Boolean(scene.videoUrl) && !scene.outputId;
+  // Content with no outputId didn't come from a job — the creator uploaded it directly
+  // (a clip or a still), so there's nothing left to generate or reference here (WP68/WP69).
+  const uploaded = Boolean(scene.videoUrl || scene.imageUrl) && !scene.outputId;
 
   useEffect(() => {
     if (!jobId || scene.status !== 'generating') return;
@@ -691,6 +723,9 @@ function SceneCard({
       >
         {scene.videoUrl ? (
           <video src={scene.videoUrl} controls className="size-full object-cover" />
+        ) : scene.imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={scene.imageUrl} alt="" className="size-full object-cover" />
         ) : (
           <span className="text-caption text-faint">
             {scene.status === 'generating' ? 'Filming…' : 'No clip yet'}
@@ -700,7 +735,9 @@ function SceneCard({
 
       {!collapsed && uploaded ? (
         <div className="flex items-center justify-between rounded-lg border border-line bg-canvas px-2.5 py-1.5">
-          <span className="text-caption text-muted">Uploaded clip</span>
+          <span className="text-caption text-muted">
+            {scene.videoUrl ? 'Uploaded clip' : 'Uploaded image'}
+          </span>
           <button
             type="button"
             onClick={onRemoveClip}
@@ -764,14 +801,24 @@ function SceneCard({
       ) : null}
 
       {!collapsed && !uploaded ? (
-        <Button
-          variant="quiet"
-          onClick={() => clipInputRef.current?.click()}
-          disabled={scene.status === 'generating'}
-          className="h-7 w-full text-caption"
-        >
-          Upload clip instead
-        </Button>
+        <div className="flex gap-1.5">
+          <Button
+            variant="quiet"
+            onClick={() => clipInputRef.current?.click()}
+            disabled={scene.status === 'generating'}
+            className="h-7 flex-1 text-caption"
+          >
+            Upload clip
+          </Button>
+          <Button
+            variant="quiet"
+            onClick={() => imageInputRef.current?.click()}
+            disabled={scene.status === 'generating'}
+            className="h-7 flex-1 text-caption"
+          >
+            Upload image
+          </Button>
+        </div>
       ) : null}
       <input
         ref={clipInputRef}
@@ -781,6 +828,17 @@ function SceneCard({
         onChange={(e) => {
           const file = e.target.files?.[0];
           if (file) onUploadClip(file);
+          e.target.value = '';
+        }}
+      />
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/jpeg,image/png"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) onUploadImage(file);
           e.target.value = '';
         }}
       />
