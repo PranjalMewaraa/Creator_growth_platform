@@ -1,6 +1,6 @@
 import type { Logger } from '@cgp/config';
 import type { ObjectStore } from '@cgp/contracts';
-import { GoogleAuth } from 'google-auth-library';
+import { createGoogleAuth } from '../google-auth';
 import { normalizeError } from '../errors';
 
 class HttpError extends Error {
@@ -16,6 +16,8 @@ export interface GcsStoreOptions {
   bucket: string;
   project: string;
   log?: Logger;
+  /** Base64'd service-account JSON, for hosts with no filesystem (Vercel). */
+  credentialsB64?: string;
 }
 
 /**
@@ -24,7 +26,10 @@ export interface GcsStoreOptions {
  * the platform anyway. Moving to R2 or signed URLs later is a change inside this file.
  */
 export function createGcsStore(options: GcsStoreOptions): ObjectStore {
-  const auth = new GoogleAuth({ scopes: 'https://www.googleapis.com/auth/devstorage.read_write' });
+  const auth = createGoogleAuth(
+    'https://www.googleapis.com/auth/devstorage.read_write',
+    options.credentialsB64,
+  );
   const object = (key: string) => encodeURIComponent(key);
 
   async function request(method: string, url: string, body?: Uint8Array, mimeType?: string) {

@@ -7,7 +7,7 @@ import {
   type VideoRequest,
 } from '@cgp/contracts';
 import { createPacer } from '../pace';
-import { GoogleAuth } from 'google-auth-library';
+import { createGoogleAuth } from '../google-auth';
 import { categoryForStatus, normalizeError } from '../errors';
 import { mp4Info } from './mp4';
 
@@ -29,6 +29,8 @@ export interface VeoOptions {
   location: string;
   model: string;
   log?: Logger;
+  /** Base64'd service-account JSON, for hosts with no filesystem (Vercel). */
+  credentialsB64?: string;
   /** Tests pass a fetch that never leaves the machine, and auth that needs no login. */
   fetch?: typeof fetch;
   authHeaders?: (url: string) => Promise<ConstructorParameters<typeof Headers>[0]>;
@@ -65,7 +67,10 @@ export function createVeoVideo(options: VeoOptions): VideoAdapter {
   const authHeaders =
     options.authHeaders ??
     (() => {
-      const auth = new GoogleAuth({ scopes: 'https://www.googleapis.com/auth/cloud-platform' });
+      const auth = createGoogleAuth(
+        'https://www.googleapis.com/auth/cloud-platform',
+        options.credentialsB64,
+      );
       return async (url: string) => (await auth.getClient()).getRequestHeaders(url);
     })();
 

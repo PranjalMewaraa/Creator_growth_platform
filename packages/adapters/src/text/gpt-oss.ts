@@ -6,7 +6,7 @@ import type {
   TextResult,
   TextStreamEvent,
 } from '@cgp/contracts';
-import { GoogleAuth } from 'google-auth-library';
+import { createGoogleAuth } from '../google-auth';
 import { normalizeError } from '../errors';
 
 export interface GptOssTextOptions {
@@ -16,6 +16,8 @@ export interface GptOssTextOptions {
   /** Vertex serves open models as a service under ids like `openai/gpt-oss-20b-maas`. */
   model: string;
   log?: Logger;
+  /** Base64'd service-account JSON, for hosts with no filesystem (Vercel). */
+  credentialsB64?: string;
 }
 
 interface ChatChoice {
@@ -51,7 +53,10 @@ class HttpError extends Error {
  * token; nothing is deployed, so nothing bills while idle.
  */
 export function createGptOssText(options: GptOssTextOptions): TextAdapter {
-  const auth = new GoogleAuth({ scopes: 'https://www.googleapis.com/auth/cloud-platform' });
+  const auth = createGoogleAuth(
+    'https://www.googleapis.com/auth/cloud-platform',
+    options.credentialsB64,
+  );
   const host =
     options.location === 'global'
       ? 'aiplatform.googleapis.com'

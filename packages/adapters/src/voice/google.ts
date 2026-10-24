@@ -1,6 +1,6 @@
 import type { Logger } from '@cgp/config';
 import { AdapterError, type VoiceAdapter, type VoiceResult } from '@cgp/contracts';
-import { GoogleAuth } from 'google-auth-library';
+import { createGoogleAuth } from '../google-auth';
 import { categoryForStatus, normalizeError } from '../errors';
 
 // Google Cloud Text to Speech (WP23, plan section 6). The script is sent as SSML with a mark
@@ -19,6 +19,8 @@ export interface GoogleVoiceOptions {
   voice: string;
   language: string;
   log?: Logger;
+  /** Base64'd service-account JSON, for hosts with no filesystem (Vercel). */
+  credentialsB64?: string;
   /** Tests pass a fetch that never leaves the machine, and auth that needs no login. */
   fetch?: typeof fetch;
   authHeaders?: (url: string) => Promise<ConstructorParameters<typeof Headers>[0]>;
@@ -46,7 +48,10 @@ export function createGoogleVoice(options: GoogleVoiceOptions): VoiceAdapter {
   const authHeaders =
     options.authHeaders ??
     (() => {
-      const auth = new GoogleAuth({ scopes: 'https://www.googleapis.com/auth/cloud-platform' });
+      const auth = createGoogleAuth(
+        'https://www.googleapis.com/auth/cloud-platform',
+        options.credentialsB64,
+      );
       return async (url: string) => (await auth.getClient()).getRequestHeaders(url);
     })();
 

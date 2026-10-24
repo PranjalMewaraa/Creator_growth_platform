@@ -58,6 +58,8 @@ export interface RealProviderOptions {
   /** GCP project that Vertex bills; credentials come from application default credentials. */
   project: string;
   log?: Logger;
+  /** Base64'd service-account JSON, for hosts with no filesystem (Vercel). */
+  credentialsB64?: string;
 }
 
 export type TextAdapters = Record<TextModelKey, TextAdapter>;
@@ -77,7 +79,10 @@ export function createTextAdapters(mode: ProviderMode, real?: RealProviderOption
   return Object.fromEntries(entries) as TextAdapters;
 }
 
-function createRealText(key: TextModelKey, { project, log }: RealProviderOptions): TextAdapter {
+function createRealText(
+  key: TextModelKey,
+  { project, log, credentialsB64 }: RealProviderOptions,
+): TextAdapter {
   const config = TEXT_MODELS[key];
   switch (config.provider) {
     case 'gemini':
@@ -97,6 +102,7 @@ function createRealText(key: TextModelKey, { project, log }: RealProviderOptions
         location: config.location,
         model: config.model,
         log,
+        credentialsB64,
       });
   }
 }
@@ -137,19 +143,20 @@ export function createVideoAdapters(mode: ProviderMode, real?: RealProviderOptio
     if (mode === 'fake') return [key, createFakeVideo(key)] as const;
     if (!real?.project) throw new Error('PROVIDERS=real needs a GCP project');
     const config = VIDEO_MODELS[key];
-    const create = config.provider === 'omni' ? createOmniVideo : createVeoVideo;
-    return [
+    const base = {
       key,
-      create({
-        key,
-        project: real.project,
-        location: config.location,
-        model: config.model,
-        // One a minute, from the model's own capability (WP41).
-        requestsPerMinute: config.capability.requestsPerMinute,
-        log: real.log,
-      }),
-    ] as const;
+      project: real.project,
+      location: config.location,
+      model: config.model,
+      // One a minute, from the model's own capability (WP41).
+      requestsPerMinute: config.capability.requestsPerMinute,
+      log: real.log,
+    };
+    const adapter =
+      config.provider === 'omni'
+        ? createOmniVideo(base)
+        : createVeoVideo({ ...base, credentialsB64: real.credentialsB64 });
+    return [key, adapter] as const;
   });
   // The second provider is a stub in both modes: there is no account to switch on.
   return Object.fromEntries([...entries, ['second', createStubVideo()]]) as VideoAdapters;
@@ -173,6 +180,7 @@ export function createVoiceAdapters(mode: ProviderMode, real?: RealProviderOptio
         voice: config.name,
         language: config.language,
         log: real.log,
+        credentialsB64: real.credentialsB64,
       }),
     ] as const;
   });
@@ -214,6 +222,7 @@ export function createProviders(env: {
   PUBLISHING?: 'fake' | 'real';
   GCS_BUCKET?: string;
   GOOGLE_CLOUD_PROJECT?: string;
+  GOOGLE_CREDENTIALS_B64?: string;
   log?: Logger;
 }): Providers {
   if (env.PROVIDERS === 'real' && env.MODERATION !== 'google') {
@@ -221,24 +230,24 @@ export function createProviders(env: {
   }
   const moderation =
     env.MODERATION === 'google'
-      ? createGoogleModeration({ project: requireProject(env.GOOGLE_CLOUD_PROJECT), log: env.log })
+      ? createGoogleModeration({
+          project: requireProject(env.GOOGLE_CLOUD_PROJECT),
+          log: env.log,
+          credentialsB64: env.GOOGLE_CREDENTIALS_B64,
+        })
       : createFakeModeration();
-  const text =
-    env.PROVIDERS === 'real'
-      ? createTextAdapters('real', { project: env.GOOGLE_CLOUD_PROJECT ?? '', log: env.log })
-      : createTextAdapters('fake');
+  const real = {
+    project: env.GOOGLE_CLOUD_PROJECT ?? '',
+    log: env.log,
+    credentialsB64: env.GOOGLE_CREDENTIALS_B64,
+  };
+  const text = env.PROVIDERS === 'real' ? createTextAdapters('real', real) : createTextAdapters('fake');
   const voice =
-    env.PROVIDERS === 'real'
-      ? createVoiceAdapters('real', { project: env.GOOGLE_CLOUD_PROJECT ?? '', log: env.log })
-      : createVoiceAdapters('fake');
+    env.PROVIDERS === 'real' ? createVoiceAdapters('real', real) : createVoiceAdapters('fake');
   const video =
-    env.PROVIDERS === 'real'
-      ? createVideoAdapters('real', { project: env.GOOGLE_CLOUD_PROJECT ?? '', log: env.log })
-      : createVideoAdapters('fake');
+    env.PROVIDERS === 'real' ? createVideoAdapters('real', real) : createVideoAdapters('fake');
   const image =
-    env.PROVIDERS === 'real'
-      ? createImageAdapters('real', { project: env.GOOGLE_CLOUD_PROJECT ?? '', log: env.log })
-      : createImageAdapters('fake');
+    env.PROVIDERS === 'real' ? createImageAdapters('real', real) : createImageAdapters('fake');
   return {
     mode: env.PROVIDERS,
     text,
@@ -262,6 +271,7 @@ export function createProviders(env: {
           bucket: env.GCS_BUCKET,
           project: requireProject(env.GOOGLE_CLOUD_PROJECT),
           log: env.log,
+          credentialsB64: env.GOOGLE_CREDENTIALS_B64,
         })
       : createMemoryStore(),
     textCostInr: (key, usage) =>

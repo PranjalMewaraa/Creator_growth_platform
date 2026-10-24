@@ -199,7 +199,7 @@ const workers = JOB_CLASSES.map((jobClass) => {
         log.info({ jobClass, generator: job.name, jobId: job.data.jobId, result }, 'job ended');
         return result;
       }),
-    { connection, concurrency: CONCURRENCY[jobClass] },
+    { connection, concurrency: CONCURRENCY[jobClass], skipVersionCheck: true },
   );
   worker.on('failed', (job, err) =>
     withCorrelation(job?.data.correlationId, () =>

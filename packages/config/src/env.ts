@@ -36,6 +36,12 @@ export const baseEnvSchema = z.object({
   /** The GCP project Vertex bills. Required when PROVIDERS=real. */
   GOOGLE_CLOUD_PROJECT: z.string().min(1).optional(),
   /**
+   * Base64'd service-account JSON, for hosts with no filesystem for GOOGLE_APPLICATION_CREDENTIALS
+   * (Vercel). Handed to GoogleAuth as in-memory credentials instead of a file path. Unset on a
+   * host that already has a file (the worker's Dockerfile) or real ADC (Cloud Run).
+   */
+  GOOGLE_CREDENTIALS_B64: z.string().min(1).optional(),
+  /**
    * The ffmpeg the render worker runs (plan section 4.6). It needs libx264, AAC and libass.
    * A name is looked up on PATH; a path is used as given. Renders fail without one, and
    * nothing else does.

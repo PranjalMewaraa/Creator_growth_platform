@@ -5,7 +5,7 @@ import type {
   ModerationCategory,
   ModerationVerdict,
 } from '@cgp/contracts';
-import { GoogleAuth } from 'google-auth-library';
+import { createGoogleAuth } from '../google-auth';
 import { normalizeError } from '../errors';
 
 // D3: Cloud Natural Language moderateText for text, Vision SafeSearch for images. Both bill
@@ -63,6 +63,8 @@ interface AnnotateResponse {
 export interface GoogleModerationOptions {
   project: string;
   log?: Logger;
+  /** Base64'd service-account JSON, for hosts with no filesystem (Vercel). */
+  credentialsB64?: string;
   /** Tests pass a fetch that never leaves the machine, and auth headers that need no login. */
   fetch?: typeof fetch;
   authHeaders?: (url: string) => Promise<ConstructorParameters<typeof Headers>[0]>;
@@ -85,7 +87,10 @@ export function createGoogleModeration(options: GoogleModerationOptions): Modera
   const authHeaders =
     options.authHeaders ??
     (() => {
-      const auth = new GoogleAuth({ scopes: 'https://www.googleapis.com/auth/cloud-platform' });
+      const auth = createGoogleAuth(
+        'https://www.googleapis.com/auth/cloud-platform',
+        options.credentialsB64,
+      );
       return async (url: string) => (await auth.getClient()).getRequestHeaders(url);
     })();
 

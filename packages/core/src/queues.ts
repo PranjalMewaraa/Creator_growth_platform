@@ -15,7 +15,13 @@ export function createQueues(connection: Redis, { prefix }: QueueOptions = {}): 
   return Object.fromEntries(
     JOB_CLASSES.map((jobClass) => [
       jobClass,
-      new Queue<QueuedJobData>(jobClass, { connection, ...(prefix ? { prefix } : {}) }),
+      new Queue<QueuedJobData>(jobClass, {
+        connection,
+        ...(prefix ? { prefix } : {}),
+        // Upstash answers INFO with NOPERM; this is BullMQ's own version-detection call,
+        // separate from ioredis's ready check (which createRedis already turns off).
+        skipVersionCheck: true,
+      }),
     ]),
   ) as Queues;
 }
