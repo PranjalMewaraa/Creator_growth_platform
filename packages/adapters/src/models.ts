@@ -231,7 +231,9 @@ export const VIDEO_MODELS = {
       // caller that already checks it.
       acceptsStartImage: false,
       acceptsReferenceImages: true,
-      maxReferenceImages: 3,
+      // Google's docs say up to 10; raised from the Studio-wide default of 3 to actually test
+      // the model's real ceiling (WP67) rather than the UI's old one-size-fits-all cap.
+      maxReferenceImages: 10,
       generatesAudio: true,
       // Unverified for this project, the same caveat as Nano Banana 2.1 above: Vertex quotas
       // are granted per base model, and this is a newly added one.

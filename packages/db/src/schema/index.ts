@@ -4,5 +4,6 @@ export * from './content';
 export * from './identity';
 export * from './jobs';
 export * from './publishing';
+export * from './storyboards';
 export * from './tenancy';
 export * from './trends';

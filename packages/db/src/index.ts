@@ -41,6 +41,22 @@ export {
 } from './music';
 export { deleteTemplatePreview, saveTemplatePreview } from './template-previews';
 export {
+  addScene,
+  createStoryboard,
+  deleteStoryboard,
+  findStoryboard,
+  listStoryboards,
+  removeScene,
+  renameStoryboard,
+  setSceneFailed,
+  setSceneJob,
+  setSceneResult,
+  updateScene,
+  type StoryboardRow,
+  type StoryboardSceneRow,
+  type StoryboardWithScenes,
+} from './storyboards';
+export {
   bookmarkedTrendIds,
   findTrend,
   listTrendNiches,
@@ -78,6 +94,8 @@ export {
   renditions,
   slots,
   socialAccounts,
+  storyboards,
+  storyboardScenes,
   templatePreviews,
   templates,
   templateVersions,

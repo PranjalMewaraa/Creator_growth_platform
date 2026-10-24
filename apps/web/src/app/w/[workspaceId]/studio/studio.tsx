@@ -121,6 +121,9 @@ const VIDEO_DURATIONS = [8, 16, 24, 32, 40, 48];
 // The Lite model's own hard ceiling (packages/adapters/src/models.ts) — the 2.1 model allows
 // more, but a request moved between models should never lose an upload the other would keep.
 const MAX_REFERENCE_IMAGES = 3;
+// Video references only exist on Omni (Veo takes one start frame, not a reference set) — its
+// own ceiling, raised from the shared image cap above to actually test it (WP67).
+const VIDEO_REFERENCE_CAP = 10;
 const IMAGE_MODEL_OPTIONS = [
   { value: 'gemini-flash-lite-image', label: 'Nano Banana 2 Lite (current)' },
   { value: 'gemini-nano-banana-2-1', label: 'Nano Banana 2.1' },
@@ -1053,7 +1056,7 @@ export function Studio({
               <ControlLabel icon={ImageIcon}>
                 Reference images{' '}
                 <span className="normal-case text-faint">
-                  (optional, up to {MAX_REFERENCE_IMAGES})
+                  (optional, up to {kind === 'video' ? VIDEO_REFERENCE_CAP : MAX_REFERENCE_IMAGES})
                 </span>
               </ControlLabel>
               <div className="flex flex-wrap gap-2">
@@ -1075,7 +1078,8 @@ export function Studio({
                     </button>
                   </div>
                 ))}
-                {referenceImages.length < MAX_REFERENCE_IMAGES ? (
+                {referenceImages.length <
+                (kind === 'video' ? VIDEO_REFERENCE_CAP : MAX_REFERENCE_IMAGES) ? (
                   <button
                     type="button"
                     onClick={() => referenceInputRef.current?.click()}
