@@ -179,6 +179,7 @@ export function createVoiceAdapters(mode: ProviderMode, real?: RealProviderOptio
         project: real.project,
         voice: config.name,
         language: config.language,
+        supportsTimepoints: config.capability?.timepoints,
         log: real.log,
         credentialsB64: real.credentialsB64,
       }),

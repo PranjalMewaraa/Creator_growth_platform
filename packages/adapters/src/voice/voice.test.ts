@@ -29,6 +29,50 @@ function voiceWith(body: unknown, status = 200) {
 
 const audio = Buffer.from('fake-mp3').toString('base64');
 
+/** A minimal 16-bit mono PCM WAV, the shape Google's LINEAR16 encoding returns. */
+function wavOf(seconds: number, sampleRate = 24000): string {
+  const samples = Math.round(seconds * sampleRate);
+  const pcm = Buffer.alloc(samples * 2); // silence is fine; only the length is asserted
+  const header = Buffer.alloc(44);
+  header.write('RIFF', 0);
+  header.writeUInt32LE(36 + pcm.length, 4);
+  header.write('WAVE', 8);
+  header.write('fmt ', 12);
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);
+  header.writeUInt16LE(1, 22); // mono
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(sampleRate * 2, 28);
+  header.writeUInt16LE(2, 32);
+  header.writeUInt16LE(16, 34);
+  header.write('data', 36);
+  header.writeUInt32LE(pcm.length, 40);
+  return Buffer.concat([header, pcm]).toString('base64');
+}
+
+/** A Chirp-shaped voice: one call per segment, LINEAR16, no marks. */
+function chirpVoiceWith(secondsPerSegment: number[]) {
+  const calls: Array<Record<string, unknown>> = [];
+  let call = 0;
+  const adapter = createGoogleVoice({
+    key: 'chirp3-hd-en-in',
+    project: 'test-project',
+    voice: 'en-IN-Chirp3-HD-Achernar',
+    language: 'en-IN',
+    supportsTimepoints: false,
+    authHeaders: () => Promise.resolve({ authorization: 'Bearer test' }),
+    fetch: ((_url: string, init: { body: string }) => {
+      const body = JSON.parse(init.body) as Record<string, unknown>;
+      calls.push(body);
+      const seconds = secondsPerSegment[call++] ?? 1;
+      return Promise.resolve(
+        new Response(JSON.stringify({ audioContent: wavOf(seconds) }), { status: 200 }),
+      );
+    }) as unknown as typeof fetch,
+  });
+  return { adapter, calls };
+}
+
 describe('segmentsToSsml', () => {
   it('marks every segment and the end, so each has a start and a finish', () => {
     const ssml = segmentsToSsml(['One.', 'Two.']);
@@ -86,6 +130,32 @@ describe('the Google voice', () => {
       (e: unknown) => e,
     );
     expect(isAdapterError(err) && err.category).toBe('quota');
+  });
+});
+
+describe('a voice tier with no timepoints (Chirp 3 HD)', () => {
+  it('synthesises one call per segment and times each from its own audio length', async () => {
+    const { adapter, calls } = chirpVoiceWith([1, 2, 1.5]);
+    const result = await adapter.synthesize(request);
+
+    expect(calls).toHaveLength(3);
+    expect(calls[0]).not.toHaveProperty('enableTimePointing');
+    expect(calls[0]).toMatchObject({ input: { text: 'Plan it.' } });
+    expect(result.segmentStartsSeconds).toEqual([0, 1, 3]);
+    expect(result.durationSeconds).toBeCloseTo(4.5, 2);
+    expect(result.mimeType).toBe('audio/wav');
+  });
+
+  it('produces one playable WAV with every segment’s PCM, in order', async () => {
+    const { adapter } = chirpVoiceWith([1, 1]);
+    const result = await adapter.synthesize({ ...request, segments: ['One.', 'Two.'] });
+
+    const header = Buffer.from(result.data.buffer, result.data.byteOffset, 44);
+    expect(header.toString('ascii', 0, 4)).toBe('RIFF');
+    expect(header.toString('ascii', 8, 12)).toBe('WAVE');
+    expect(header.toString('ascii', 36, 40)).toBe('data');
+    // Two seconds of 24kHz mono 16-bit PCM, header excluded.
+    expect(result.data.length - 44).toBe(24000 * 2 * 2);
   });
 });
 

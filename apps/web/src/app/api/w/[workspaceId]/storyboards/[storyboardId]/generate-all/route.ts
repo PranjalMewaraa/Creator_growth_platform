@@ -44,7 +44,7 @@ export const POST = withRequestContext(async (_request: Request, { params }: Con
         targetPlatform: 'instagram',
         aspectRatio: '16:9',
         targetDurationSeconds: 8,
-        voiceover: false,
+        voiceover: true,
         videoModel: 'gemini-omni-1.1-flash',
         ...(scene.references.length > 0
           ? { referenceImageKeys: scene.references.map((r) => r.key) }

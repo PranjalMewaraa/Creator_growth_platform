@@ -9,7 +9,9 @@ import { getProviders } from '@/server/providers';
 type Context = { params: Promise<{ workspaceId: string; storyboardId: string; sceneId: string }> };
 
 /** One scene's clip, filmed with Omni — same single-clip `video` generation Studio's own Video
- *  kind already uses, just with the model forced and the scene's own prompt/references. */
+ *  kind already uses, just with the model forced and the scene's own prompt/references.
+ *  Voiceover is on (WP68): every scene gets the cinematic Chirp 3 HD narration the worker now
+ *  defaults to, same as any other video generation with voiceover on. */
 export const POST = withRequestContext(async (_request: Request, { params }: Context) => {
   const { workspaceId, storyboardId, sceneId } = await params;
   const access = await apiWorkspace(workspaceId);
@@ -42,7 +44,7 @@ export const POST = withRequestContext(async (_request: Request, { params }: Con
         targetPlatform: 'instagram',
         aspectRatio: '16:9',
         targetDurationSeconds: 8,
-        voiceover: false,
+        voiceover: true,
         videoModel: 'gemini-omni-1.1-flash',
         ...(scene.references.length > 0
           ? { referenceImageKeys: scene.references.map((r) => r.key) }

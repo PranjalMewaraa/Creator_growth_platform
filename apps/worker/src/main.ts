@@ -144,7 +144,9 @@ const handlers = {
     publishStage: (jobId, stage) => publishStage(connection, jobId, stage),
     providerLabel: providers.mode === 'real' ? 'vertex' : 'fake',
     ffmpeg: { bin: resolveToolPath(env.FFMPEG_PATH) },
-    voice: providers.voice['neural2-en-in'],
+    // Chirp 3 HD (WP68): the cinematic tier the WP5 spike deliberately left for later. Timed
+    // by packages/adapters/src/voice/google.ts's per-segment synthesis path, not SSML marks.
+    voice: providers.voice['chirp3-hd-en-in'],
     voiceCostInr: providers.voiceCostInr,
     logo: (workspaceId) => workspaceLogo(db, providers.store, workspaceId),
   }),

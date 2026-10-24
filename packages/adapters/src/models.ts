@@ -283,6 +283,19 @@ export const VOICE_MODELS = {
     // choice is made rather than only in a comment.
     capability: { timepoints: true, languages: ['en-IN'] },
   },
+  /**
+   * Chirp 3 HD (WP68): the cinematic, natural-sounding tier the WP5 spike deliberately left for
+   * later (docs/spikes/tts.md). `capability.timepoints: false` routes it through the adapter's
+   * per-segment synthesis path (packages/adapters/src/voice/google.ts) instead of the one-call
+   * SSML-marks path Neural2 uses — marks come back empty from this tier, so captions have to be
+   * timed from each segment's own synthesised length instead.
+   */
+  'chirp3-hd-en-in': {
+    name: 'en-IN-Chirp3-HD-Achernar',
+    language: 'en-IN',
+    usdPerMillionChars: 30,
+    capability: { timepoints: false, languages: ['en-IN'] },
+  },
 } as const satisfies Record<string, VoiceModel>;
 
 export type VoiceModelKey = keyof typeof VOICE_MODELS;

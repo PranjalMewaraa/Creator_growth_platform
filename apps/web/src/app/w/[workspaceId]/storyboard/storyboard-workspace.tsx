@@ -91,7 +91,7 @@ export function StoryboardWorkspace({
         targetPlatform: 'instagram',
         aspectRatio: '16:9',
         targetDurationSeconds: SCENE_DURATION_SECONDS,
-        voiceover: false,
+        voiceover: true,
         videoModel: 'gemini-omni-1.1-flash',
       }),
     })
@@ -356,6 +356,7 @@ export function StoryboardWorkspace({
                 <Badge tone="neutral">16:9</Badge>
                 <Badge tone="neutral">{SCENE_DURATION_SECONDS}s</Badge>
                 <Badge tone="accent">Gemini Omni</Badge>
+                <Badge tone="accent">Cinematic voiceover</Badge>
                 <Button
                   variant="secondary"
                   onClick={() => void generateAll()}
