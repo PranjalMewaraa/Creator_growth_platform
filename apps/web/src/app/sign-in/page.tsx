@@ -13,7 +13,9 @@ export default async function SignInPage() {
   return (
     <AuthFrame>
       <h1 className="text-display font-display font-semibold text-ink">Log in</h1>
-      <p className="mt-2 text-sm text-muted">We&apos;ll email you a link. No password, no card.</p>
+      <p className="mt-2 text-sm text-muted">
+        Log in with a password, or get a one-time link by email.
+      </p>
       <div className="mt-8">
         <SignInForm />
       </div>

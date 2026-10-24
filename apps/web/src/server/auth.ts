@@ -16,7 +16,9 @@ function buildAuth() {
     baseURL: env.APP_URL,
     // Identity ids are uuids, like every other id in the schema.
     advanced: { database: { generateId: 'uuid' } },
-    emailAndPassword: { enabled: false },
+    // Alongside the magic link (A12): a password for people who want one, no email round trip
+    // required to come back in. Same open signup as the magic link — no allowlist, no seeding.
+    emailAndPassword: { enabled: true, minPasswordLength: 8 },
     plugins: [
       magicLink({
         // Anyone with an inbox can sign up (A12, WP51): an unknown address becomes an

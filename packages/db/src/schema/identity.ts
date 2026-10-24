@@ -39,7 +39,7 @@ export const sessions = pgTable(
   (t) => [index('sessions_user').on(t.userId)],
 );
 
-/** Required by the auth library. Unused while sign in is a magic link only. */
+/** Required by the auth library. Also holds the password hash now that email+password is on. */
 export const accounts = pgTable('accounts', {
   id: authId(),
   userId: text('user_id')
