@@ -15,7 +15,7 @@ export type RewriteOutcome =
   | {
       fallbackUsed: true;
       brief: string;
-      reason: 'timeout' | 'provider_error' | 'invalid_output';
+      reason: 'timeout' | 'provider_error' | 'invalid_output' | 'disabled';
       elapsedMs: number;
     };
 

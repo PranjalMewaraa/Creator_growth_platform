@@ -225,6 +225,8 @@ export interface ControlPanelProps {
   onVideoDurationChange: (duration: number) => void;
   voiceover: boolean;
   onVoiceoverChange: (voiceover: boolean) => void;
+  refine: boolean;
+  onRefineChange: (refine: boolean) => void;
   onStoryboardFirst?: () => void;
 
   onOpenPromptDisclosure: () => void;
@@ -297,6 +299,8 @@ export function ControlPanel({
   onVideoDurationChange,
   voiceover,
   onVoiceoverChange,
+  refine,
+  onRefineChange,
   onStoryboardFirst,
   onOpenPromptDisclosure,
   onOpenKindsDialog,
@@ -896,6 +900,22 @@ export function ControlPanel({
               </button>
             </div>
           ) : null}
+
+          <button
+            type="button"
+            onClick={() => onRefineChange(!refine)}
+            title={
+              refine
+                ? 'Polishes the brief before generating. Off: what you typed is sent as is.'
+                : 'Sending exactly what you typed, unpolished.'
+            }
+            className={`tap-target h-7 sm:h-7.5 px-2.5 rounded-lg border flex items-center gap-1.5 text-xs font-medium transition-all select-none shrink-0 ${refine
+              ? 'border-accent bg-accent/15 text-white'
+              : 'border-[#282931] bg-[#1c1d22] text-[#787a86] hover:text-white'
+              }`}
+          >
+            <span>{refine ? 'Refine prompt' : 'Refine off'}</span>
+          </button>
 
           {kind === 'video' ? (
             <button

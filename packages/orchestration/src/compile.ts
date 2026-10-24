@@ -39,6 +39,9 @@ export interface CompileRequest {
   /** The output type's default template when absent. */
   templateId?: string;
   targetPlatform: TargetPlatform | null;
+  /** On by default (absent counts as on). Off, stage 2 is skipped and the stage 1 brief is
+   *  used as typed (WP68). */
+  refine?: boolean;
   /** Explicit user instructions, such as tone or durationSeconds. */
   params: Record<string, unknown>;
 }
@@ -152,15 +155,18 @@ export async function compile(deps: CompileDeps, request: CompileRequest): Promi
   );
   const stage1 = assembleBrief(config, request.intentText, settings);
 
-  // Stage 2: the rewrite pass, inside its budget.
-  const rewrite = await rewriteBrief({
-    brief: stage1,
-    system: config.rewrite.system,
-    maxOutputTokens: config.rewrite.maxOutputTokens,
-    providers: deps.rewriters,
-    budgetMs: deps.rewriteBudgetMs,
-    log: deps.log,
-  });
+  // Stage 2: the rewrite pass, inside its budget — skipped outright when the creator turned
+  // it off, which takes the same fallback shape a timeout or a provider error already does.
+  const rewrite = request.refine !== false
+    ? await rewriteBrief({
+        brief: stage1,
+        system: config.rewrite.system,
+        maxOutputTokens: config.rewrite.maxOutputTokens,
+        providers: deps.rewriters,
+        budgetMs: deps.rewriteBudgetMs,
+        log: deps.log,
+      })
+    : ({ fallbackUsed: true, brief: stage1, reason: 'disabled', elapsedMs: 0 } as const);
   if (!rewrite.fallbackUsed) {
     deps.log?.info(
       { provider: rewrite.provider, usage: rewrite.usage, elapsedMs: rewrite.elapsedMs },

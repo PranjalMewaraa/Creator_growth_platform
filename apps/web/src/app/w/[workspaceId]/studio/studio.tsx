@@ -331,6 +331,9 @@ export function Studio({
   // essay, and captions are timed by the voice, so they turn off together with it.
   const [voiceover, setVoiceover] = useState(true);
   const [tone, setTone] = useState('');
+  // Stage 2 of compile (WP68): on by default, since the rewrite pass only ever improves the
+  // brief. Off, what is typed is what is sent — for a brief already written exactly as wanted.
+  const [refine, setRefine] = useState(true);
   // The look (WP37): the parts a creator picked, each outranking the template's (FR-PO-06).
   const [look, setLook] = useState<Partial<Record<LookKey, string>>>({});
   const [templateId, setTemplateId] = useState<string | null>(null);
@@ -381,6 +384,7 @@ export function Studio({
   const input = {
     intentText: intent.trim(),
     targetPlatform: platform,
+    refine,
     ...(tone.trim() ? { tone: tone.trim() } : {}),
     ...(kind === 'script' && length ? { durationSeconds: length } : {}),
     ...(kind === 'image' ? { count } : {}),
@@ -966,6 +970,8 @@ export function Studio({
             onVideoDurationChange={setDurationSeconds}
             voiceover={voiceover}
             onVoiceoverChange={setVoiceover}
+            refine={refine}
+            onRefineChange={setRefine}
             onStoryboardFirst={
               kind === 'video'
                 ? () => {

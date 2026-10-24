@@ -15,6 +15,9 @@ const base = {
   targetPlatform: z.enum(TARGET_PLATFORMS).nullable().default(null),
   /** An explicit tone, which outranks the template's and the profile's (FR-PO-06). */
   tone: z.string().trim().min(1).max(80).optional(),
+  /** Stage 2 of compile (WP68): on by default. Off, the stage 1 brief is used as typed —
+   *  the same path an already-skipped rewrite takes, just by choice instead of a timeout. */
+  refine: z.boolean().default(true),
 };
 
 /**
@@ -53,12 +56,14 @@ function lookOption(key: LookKey) {
  * A picture the creator uploaded for the model to stay consistent with (WP60/63): the keys
  * `storeReferenceImage` returned. Every generator that takes one has a provider that reads it
  * — Veo does not, so `storyboard` and `redraw_frame` (pinned to Veo and Veo-shaped stills) are
- * the two that never get this field. Capped at 3, the smallest ceiling any model this build
- * offers actually has (packages/adapters/src/models.ts): a creator moving a request between
- * models should never lose an upload the other one would have kept.
+ * the two that never get this field. Capped at 14, the highest ceiling any model this build
+ * offers (Nano Banana 2.1/Pro, packages/adapters/src/models.ts) — this is only a sanity bound
+ * against an absurd payload; the real per-model limit (3 for Lite, 10 for Omni, 0 for Veo) is
+ * enforced downstream by `checkImage`/`checkVideo` (packages/contracts/src/capabilities.ts),
+ * which can give the specific model's own number back to the creator.
  */
 const reference = {
-  referenceImageKeys: z.array(z.string().min(1)).max(3).optional(),
+  referenceImageKeys: z.array(z.string().min(1)).max(14).optional(),
 };
 
 /**

@@ -36,12 +36,13 @@ interface CommonInput {
   intentText: string;
   templateId?: string;
   targetPlatform: TargetPlatform | null;
+  refine: boolean;
 }
 
 function splitInput(input: unknown) {
-  const { intentText, templateId, targetPlatform, ...params } = input as CommonInput &
+  const { intentText, templateId, targetPlatform, refine, ...params } = input as CommonInput &
     Record<string, unknown>;
-  return { intentText, templateId, targetPlatform, params };
+  return { intentText, templateId, targetPlatform, refine, params };
 }
 
 export type CompileGenerationResult =
@@ -74,13 +75,14 @@ async function compileFor(
   generator: RegisteredGenerator,
   input: unknown,
 ) {
-  const { intentText, templateId, targetPlatform, params } = splitInput(input);
+  const { intentText, templateId, targetPlatform, refine, params } = splitInput(input);
   return compile(deps, {
     workspaceId,
     outputType: generator.outputType,
     intentText,
     templateId,
     targetPlatform,
+    refine,
     params,
   });
 }
