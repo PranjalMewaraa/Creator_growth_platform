@@ -386,9 +386,12 @@ export function StoryboardWorkspace({
   // reached a terminal state — assemble them, watched below.
   function generateBoard() {
     if (!board) return;
-    const empty = board.scenes.find((s) => !s.prompt.trim() && !s.videoUrl);
+    const empty = board.scenes.find((s) => !s.prompt.trim() && !s.videoUrl && !s.imageUrl);
     if (empty) {
-      show({ tone: 'bad', message: `Scene ${empty.index + 1} needs a prompt or an uploaded clip.` });
+      show({
+        tone: 'bad',
+        message: `Scene ${empty.index + 1} needs a prompt or an uploaded clip/image.`,
+      });
       return;
     }
     setPendingAssembly(true);

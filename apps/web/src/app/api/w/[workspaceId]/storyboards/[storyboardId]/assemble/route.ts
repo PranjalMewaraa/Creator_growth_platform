@@ -21,7 +21,7 @@ export const POST = withRequestContext(async (_request: Request, { params }: Con
   if (board.scenes.length === 0) {
     return apiError(422, 'invalid_input', { issues: [{ path: 'scenes', message: 'Add a scene first' }] });
   }
-  const missing = board.scenes.find((scene) => !scene.videoUrl);
+  const missing = board.scenes.find((scene) => !scene.videoUrl && !scene.imageUrl);
   if (missing) {
     return apiError(422, 'invalid_input', {
       issues: [{ path: 'scenes', message: `Scene ${missing.index + 1} has no clip yet` }],
