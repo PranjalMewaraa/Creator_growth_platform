@@ -19,6 +19,7 @@ const ALSO: Record<string, Record<string, unknown>> = {
     frameIndex: 0,
   },
   regenerate_scene: { sceneId: '00000000-0000-4000-8000-000000000002' },
+  storyboard_assemble: { storyboardId: '00000000-0000-4000-8000-000000000003' },
 };
 
 describe('generator registry', () => {

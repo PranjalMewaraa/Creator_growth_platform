@@ -114,11 +114,54 @@ export async function setSceneResult(
   db: Database,
   workspaceId: string,
   sceneId: string,
-  result: { outputId: string; videoUrl: string },
+  result: { outputId: string; videoUrl: string; durationSeconds?: number },
+): Promise<void> {
+  const { durationSeconds, ...rest } = result;
+  await scoped(db, workspaceId).update(
+    storyboardScenes,
+    { ...rest, videoDurationSeconds: durationSeconds ?? null, status: 'complete', error: null },
+    (t, op) => op.eq(t.id, sceneId),
+  );
+}
+
+/** A clip the creator uploaded directly, skipping generation for this scene entirely —
+ *  no outputId, since nothing was generated (WP68). */
+export async function setSceneUploadedClip(
+  db: Database,
+  workspaceId: string,
+  sceneId: string,
+  clip: { videoUrl: string; durationSeconds: number },
 ): Promise<void> {
   await scoped(db, workspaceId).update(
     storyboardScenes,
-    { ...result, status: 'complete', error: null },
+    {
+      videoUrl: clip.videoUrl,
+      videoDurationSeconds: clip.durationSeconds,
+      outputId: null,
+      jobId: null,
+      status: 'complete',
+      error: null,
+    },
+    (t, op) => op.eq(t.id, sceneId),
+  );
+}
+
+/** Removes an uploaded clip, back to a blank scene a prompt can fill in (WP68). */
+export async function clearSceneClip(
+  db: Database,
+  workspaceId: string,
+  sceneId: string,
+): Promise<void> {
+  await scoped(db, workspaceId).update(
+    storyboardScenes,
+    {
+      videoUrl: null,
+      videoDurationSeconds: null,
+      outputId: null,
+      jobId: null,
+      status: 'draft',
+      error: null,
+    },
     (t, op) => op.eq(t.id, sceneId),
   );
 }
@@ -133,5 +176,31 @@ export async function setSceneFailed(
     storyboardScenes,
     { status: 'failed', error },
     (t, op) => op.eq(t.id, sceneId),
+  );
+}
+
+export async function setBoardAssembling(
+  db: Database,
+  workspaceId: string,
+  storyboardId: string,
+  jobId: string,
+): Promise<void> {
+  await scoped(db, workspaceId).update(
+    storyboards,
+    { finalJobId: jobId },
+    (t, op) => op.eq(t.id, storyboardId),
+  );
+}
+
+export async function setBoardAssembled(
+  db: Database,
+  workspaceId: string,
+  storyboardId: string,
+  result: { outputId: string; finalVideoUrl: string },
+): Promise<void> {
+  await scoped(db, workspaceId).update(
+    storyboards,
+    { finalOutputId: result.outputId, finalVideoUrl: result.finalVideoUrl },
+    (t, op) => op.eq(t.id, storyboardId),
   );
 }

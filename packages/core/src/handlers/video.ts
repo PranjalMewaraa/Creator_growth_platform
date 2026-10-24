@@ -41,6 +41,7 @@ import { sampleFrames } from '../render/frames';
 import type { GeneratorRegistry } from '../generators/registry';
 import { postCheckOutput } from '../moderation';
 import { storyboardFrames, storyboardScenes } from './storyboard';
+import { STORYBOARD_ASSEMBLE } from './storyboard-assemble';
 import { JobBlocked, type JobHandler } from '../process';
 
 // The video render (WP22): a compiled prompt becomes up to three scenes, each an eight second
@@ -234,6 +235,9 @@ export function createVideoHandlers(deps: VideoHandlerDeps): Record<string, JobH
     // Output type is not enough: the storyboard compiles as a video too, because that is the
     // profile that plans scenes. The render class is what separates filming from previewing.
     if (generator.outputType !== 'video' || generator.jobClass !== 'render') continue;
+    // Also video/render, but it stitches already-filmed clips rather than filming anything —
+    // its own handler lives in handlers/storyboard-assemble.ts (WP68).
+    if (generator.key === STORYBOARD_ASSEMBLE) continue;
 
     handlers[generator.key] = async (job, log) => {
       const ws = scoped(deps.db, job.workspaceId);

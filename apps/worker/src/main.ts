@@ -18,6 +18,7 @@ import {
   createImageHandlers,
   createTextHandlers,
   createRedrawFrameHandler,
+  createStoryboardAssembleHandler,
   createStoryboardHandler,
   createVideoHandlers,
   generators,
@@ -149,6 +150,13 @@ const handlers = {
     voice: providers.voice['chirp3-hd-en-in'],
     voiceCostInr: providers.voiceCostInr,
     logo: (workspaceId) => workspaceLogo(db, providers.store, workspaceId),
+  }),
+  ...createStoryboardAssembleHandler({
+    db,
+    store: providers.store,
+    ffmpeg: { bin: resolveToolPath(env.FFMPEG_PATH) },
+    logo: (workspaceId) => workspaceLogo(db, providers.store, workspaceId),
+    providerLabel: 'ffmpeg',
   }),
   ...publishHandlers(),
 };

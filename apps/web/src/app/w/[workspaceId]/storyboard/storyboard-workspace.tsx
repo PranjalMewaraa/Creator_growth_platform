@@ -18,6 +18,7 @@ interface SceneView {
   references: SceneReference[];
   status: SceneStatus;
   jobId: string | null;
+  outputId: string | null;
   videoUrl: string | null;
   error: string | null;
 }
@@ -33,6 +34,8 @@ interface BoardDetail {
   id: string;
   name: string;
   scenes: SceneView[];
+  finalVideoUrl: string | null;
+  finalJobId: string | null;
 }
 
 const VIDEO_REFERENCE_CAP = 10;
@@ -59,6 +62,11 @@ export function StoryboardWorkspace({
   const [loadingBoard, setLoadingBoard] = useState(false);
   const [collapseAll, setCollapseAll] = useState(false);
   const [costPerScene, setCostPerScene] = useState<number | null>(null);
+  // Set once "Generate" has fired every scene that needed one; watched below to know when it's
+  // safe to assemble.
+  const [pendingAssembly, setPendingAssembly] = useState(false);
+  const [assembling, setAssembling] = useState(false);
+  const [assembleJobId, setAssembleJobId] = useState<string | null>(null);
   const [newBoardName, setNewBoardName] = useState('');
   const [creating, setCreating] = useState(false);
 
@@ -77,6 +85,9 @@ export function StoryboardWorkspace({
 
   function selectBoard(id: string | null) {
     setSelectedId(id);
+    setPendingAssembly(false);
+    setAssembling(false);
+    setAssembleJobId(null);
     if (id) void loadBoard(id);
     else setBoard(null);
   }
@@ -213,6 +224,47 @@ export function StoryboardWorkspace({
     }).catch(() => null);
   }
 
+  async function uploadClip(sceneId: string, file: File) {
+    if (!board) return;
+    const form = new FormData();
+    form.set('file', file);
+    const r = await fetch(`${base}/storyboards/${board.id}/scenes/${sceneId}/clip`, {
+      method: 'POST',
+      body: form,
+    }).catch(() => null);
+    const body = (await r?.json().catch(() => ({}))) as {
+      scene?: { videoUrl: string };
+      error?: { code: string };
+    };
+    if (!r?.ok || !body.scene) {
+      show({ tone: 'bad', message: body.error?.code ?? 'That clip could not be uploaded.' });
+      return;
+    }
+    patchSceneLocal(sceneId, {
+      videoUrl: body.scene.videoUrl,
+      status: 'complete',
+      outputId: null,
+      jobId: null,
+      error: null,
+    });
+  }
+
+  async function removeClip(sceneId: string) {
+    if (!board) return;
+    await fetch(`${base}/storyboards/${board.id}/scenes/${sceneId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ clearClip: true }),
+    }).catch(() => null);
+    patchSceneLocal(sceneId, {
+      videoUrl: null,
+      status: 'draft',
+      outputId: null,
+      jobId: null,
+      error: null,
+    });
+  }
+
   async function generateScene(sceneId: string) {
     if (!board) return;
     patchSceneLocal(sceneId, { status: 'generating', error: null });
@@ -257,12 +309,22 @@ export function StoryboardWorkspace({
       patchSceneLocal(sceneId, { status: 'failed', error: 'No clip came back' });
       return;
     }
-    patchSceneLocal(sceneId, { status: 'complete', videoUrl: output.media.url, error: null });
+    patchSceneLocal(sceneId, {
+      status: 'complete',
+      videoUrl: output.media.url,
+      outputId: output.id,
+      error: null,
+    });
     if (board) {
       await fetch(`${base}/storyboards/${board.id}/scenes/${sceneId}`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ outputId: output.id, videoUrl: output.media.url, status: 'complete' }),
+        body: JSON.stringify({
+          outputId: output.id,
+          videoUrl: output.media.url,
+          durationSeconds: SCENE_DURATION_SECONDS,
+          status: 'complete',
+        }),
       }).catch(() => null);
     }
   }
@@ -270,6 +332,98 @@ export function StoryboardWorkspace({
   function onSceneFailed(sceneId: string) {
     patchSceneLocal(sceneId, { status: 'failed', error: 'Generation failed' });
   }
+
+  async function assembleBoard() {
+    if (!board) return;
+    setAssembling(true);
+    const r = await fetch(`${base}/storyboards/${board.id}/assemble`, { method: 'POST' }).catch(
+      () => null,
+    );
+    const body = (await r?.json().catch(() => ({}))) as {
+      job?: { id: string };
+      error?: { code: string; issues?: Array<{ message: string }> };
+    };
+    if (!r?.ok || !body.job) {
+      setAssembling(false);
+      show({
+        tone: 'bad',
+        message: body.error?.issues?.[0]?.message ?? body.error?.code ?? 'Could not assemble the video.',
+      });
+      return;
+    }
+    setAssembleJobId(body.job.id);
+  }
+
+  // One click does both steps: fill every scene missing a clip, then — once every scene has
+  // reached a terminal state — assemble them, watched below.
+  function generateBoard() {
+    if (!board) return;
+    const empty = board.scenes.find((s) => !s.prompt.trim() && !s.videoUrl);
+    if (empty) {
+      show({ tone: 'bad', message: `Scene ${empty.index + 1} needs a prompt or an uploaded clip.` });
+      return;
+    }
+    setPendingAssembly(true);
+    void generateAll();
+  }
+
+  // Fires once every scene that was generating has settled, reusing the state each SceneCard's
+  // own SSE watcher already feeds up — no second polling mechanism.
+  useEffect(() => {
+    if (!pendingAssembly || !board) return;
+    if (board.scenes.some((s) => s.status === 'generating')) return;
+    setPendingAssembly(false);
+    const failed = board.scenes.filter((s) => s.status === 'failed');
+    if (failed.length > 0) {
+      show({
+        tone: 'bad',
+        message: `${failed.length} scene${failed.length === 1 ? '' : 's'} could not be filmed. Fix and try again before assembling.`,
+      });
+      return;
+    }
+    void assembleBoard();
+    // assembleBoard is stable enough for this one-shot trigger; re-running it on every
+    // definition change would refire the assemble call unnecessarily.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [board, pendingAssembly]);
+
+  useEffect(() => {
+    if (!assembleJobId) return;
+    const events = new EventSource(`${base}/jobs/${assembleJobId}/events`);
+    events.addEventListener('status', (e) => {
+      const { job } = JSON.parse((e as MessageEvent<string>).data) as { job: { status: string } };
+      if (job.status === 'COMPLETE') {
+        events.close();
+        void (async () => {
+          const r = await fetch(`${base}/jobs/${assembleJobId}/outputs`).catch(() => null);
+          const body = (await r?.json().catch(() => ({}))) as {
+            outputs?: Array<{ id: string; media: { url: string } | null }>;
+          };
+          const output = body.outputs?.[0];
+          setAssembling(false);
+          if (!r?.ok || !output?.media || !board) {
+            show({ tone: 'bad', message: 'The final video did not come back.' });
+            return;
+          }
+          setBoard((current) =>
+            current ? { ...current, finalVideoUrl: output.media!.url } : current,
+          );
+          await fetch(`${base}/storyboards/${board.id}`, {
+            method: 'PATCH',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ finalOutputId: output.id, finalVideoUrl: output.media.url }),
+          }).catch(() => null);
+          show({ tone: 'good', message: 'Final video ready.' });
+        })();
+      } else if (['BLOCKED', 'FAILED', 'CANCELLED'].includes(job.status)) {
+        events.close();
+        setAssembling(false);
+        show({ tone: 'bad', message: 'Assembling the final video failed.' });
+      }
+    });
+    return () => events.close();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [base, assembleJobId]);
 
   const readyCount = board?.scenes.filter((s) => s.status === 'complete').length ?? 0;
   const totalScenes = board?.scenes.length ?? 0;
@@ -358,12 +512,16 @@ export function StoryboardWorkspace({
                 <Badge tone="accent">Gemini Omni</Badge>
                 <Badge tone="accent">Cinematic voiceover</Badge>
                 <Button
-                  variant="secondary"
-                  onClick={() => void generateAll()}
-                  disabled={pendingCount === 0}
+                  variant="primary"
+                  onClick={generateBoard}
+                  disabled={pendingAssembly || assembling || totalScenes === 0}
                 >
-                  Generate all {pendingCount > 0 ? pendingCount : ''}
-                  {generateAllCost !== null ? (
+                  {assembling
+                    ? 'Assembling…'
+                    : pendingAssembly
+                      ? 'Filming…'
+                      : `Generate${pendingCount > 0 ? ` ${pendingCount}` : ''}`}
+                  {!assembling && !pendingAssembly && generateAllCost !== null ? (
                     <span className="font-mono text-caption text-muted">
                       &nbsp;· {generateAllCost}s
                     </span>
@@ -375,13 +533,11 @@ export function StoryboardWorkspace({
                 </div>
                 <Button
                   variant="quiet"
+                  disabled={!board.finalVideoUrl}
                   onClick={() =>
                     show({
                       tone: 'neutral',
-                      message:
-                        readyCount > 0
-                          ? `${readyCount} finished clip${readyCount === 1 ? '' : 's'} already saved to Assets.`
-                          : 'Generate at least one scene before sending it on.',
+                      message: 'The final video is ready in Assets. Scheduling it from here is next.',
                     })
                   }
                 >
@@ -389,6 +545,26 @@ export function StoryboardWorkspace({
                 </Button>
               </div>
             </div>
+
+            {board.finalVideoUrl ? (
+              <div className="mt-5 flex flex-col gap-2 rounded-2xl border border-accent/40 bg-raised p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-label font-medium text-ink">Final video</span>
+                  <a
+                    href={board.finalVideoUrl}
+                    download
+                    className="text-caption text-accent hover:underline"
+                  >
+                    Download
+                  </a>
+                </div>
+                <video
+                  src={board.finalVideoUrl}
+                  controls
+                  className="aspect-video w-full max-w-md rounded-xl bg-canvas"
+                />
+              </div>
+            ) : null}
 
             <div className="mt-5 flex gap-4 overflow-x-auto pb-2">
               {board.scenes.map((scene) => (
@@ -401,6 +577,8 @@ export function StoryboardWorkspace({
                   onPromptSave={(prompt) => void saveScenePrompt(scene.id, prompt)}
                   onUploadReference={(file) => void uploadReference(scene.id, file)}
                   onRemoveReference={(key) => void removeReference(scene.id, key)}
+                  onUploadClip={(file) => void uploadClip(scene.id, file)}
+                  onRemoveClip={() => void removeClip(scene.id)}
                   onGenerate={() => void generateScene(scene.id)}
                   onRemove={() => void removeScene(scene.id)}
                   onComplete={(jobId) => void onSceneComplete(scene.id, jobId)}
@@ -437,6 +615,8 @@ function SceneCard({
   onPromptSave,
   onUploadReference,
   onRemoveReference,
+  onUploadClip,
+  onRemoveClip,
   onGenerate,
   onRemove,
   onComplete,
@@ -449,13 +629,19 @@ function SceneCard({
   onPromptSave: (prompt: string) => void;
   onUploadReference: (file: File) => void;
   onRemoveReference: (key: string) => void;
+  onUploadClip: (file: File) => void;
+  onRemoveClip: () => void;
   onGenerate: () => void;
   onRemove: () => void;
   onComplete: (jobId: string) => void;
   onFailed: () => void;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const clipInputRef = useRef<HTMLInputElement>(null);
   const jobId = scene.jobId;
+  // A clip with no outputId didn't come from a job — the creator uploaded it directly, so
+  // there's nothing left to generate or reference for this scene (WP68).
+  const uploaded = Boolean(scene.videoUrl) && !scene.outputId;
 
   useEffect(() => {
     if (!jobId || scene.status !== 'generating') return;
@@ -512,7 +698,20 @@ function SceneCard({
         )}
       </div>
 
-      {!collapsed ? (
+      {!collapsed && uploaded ? (
+        <div className="flex items-center justify-between rounded-lg border border-line bg-canvas px-2.5 py-1.5">
+          <span className="text-caption text-muted">Uploaded clip</span>
+          <button
+            type="button"
+            onClick={onRemoveClip}
+            className="text-caption text-accent hover:underline"
+          >
+            Remove
+          </button>
+        </div>
+      ) : null}
+
+      {!collapsed && !uploaded ? (
         <>
           <textarea
             value={scene.prompt}
@@ -543,6 +742,7 @@ function SceneCard({
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 aria-label="Add a reference image"
+                title="Add a reference image — animated into this scene's clip with Omni"
                 className="flex size-9 cursor-pointer items-center justify-center rounded-md border border-dashed border-line text-faint hover:border-faint hover:text-ink"
               >
                 <PlusIcon width={14} height={14} />
@@ -563,18 +763,42 @@ function SceneCard({
         </>
       ) : null}
 
-      <Button
-        variant={scene.status === 'complete' ? 'secondary' : 'primary'}
-        onClick={onGenerate}
-        disabled={scene.status === 'generating' || !scene.prompt.trim()}
-        className="h-8 w-full text-caption"
-      >
-        {scene.status === 'generating'
-          ? 'Filming…'
-          : scene.status === 'complete'
-            ? 'Regenerate'
-            : 'Generate'}
-      </Button>
+      {!collapsed && !uploaded ? (
+        <Button
+          variant="quiet"
+          onClick={() => clipInputRef.current?.click()}
+          disabled={scene.status === 'generating'}
+          className="h-7 w-full text-caption"
+        >
+          Upload clip instead
+        </Button>
+      ) : null}
+      <input
+        ref={clipInputRef}
+        type="file"
+        accept="video/mp4"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) onUploadClip(file);
+          e.target.value = '';
+        }}
+      />
+
+      {!uploaded ? (
+        <Button
+          variant={scene.status === 'complete' ? 'secondary' : 'primary'}
+          onClick={onGenerate}
+          disabled={scene.status === 'generating' || !scene.prompt.trim()}
+          className="h-8 w-full text-caption"
+        >
+          {scene.status === 'generating'
+            ? 'Filming…'
+            : scene.status === 'complete'
+              ? 'Regenerate'
+              : 'Generate'}
+        </Button>
+      ) : null}
       {scene.error ? <p className="text-caption text-bad">{scene.error}</p> : null}
     </div>
   );

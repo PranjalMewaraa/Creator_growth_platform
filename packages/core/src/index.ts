@@ -95,6 +95,11 @@ export {
   videoSecondsFor,
   type VideoHandlerDeps,
 } from './handlers/video';
+export {
+  createStoryboardAssembleHandler,
+  STORYBOARD_ASSEMBLE,
+  type StoryboardAssembleHandlerDeps,
+} from './handlers/storyboard-assemble';
 export { createTextHandlers, type TextHandlerDeps } from './handlers/text';
 export {
   ModerationUnavailable,
@@ -122,6 +127,7 @@ export {
 } from './publishing';
 export { fitToFrame, INSTAGRAM_FRAME, INSTAGRAM_FRAMES, type InstagramFrame } from './media';
 export { storeReferenceImage, type ReferenceImageResult } from './references';
+export { MAX_CLIP_BYTES, storeSceneClip, type SceneClipResult } from './scene-clips';
 export { ffmpeg, ffmpegAvailable, RenderFailed, type FfmpegOptions } from './render/ffmpeg';
 export { sampleFrames } from './render/frames';
 export { fontDir } from './render/fonts';

@@ -1,4 +1,4 @@
-import { deleteStoryboard, findStoryboard, renameStoryboard } from '@cgp/db';
+import { deleteStoryboard, findStoryboard, renameStoryboard, setBoardAssembled } from '@cgp/db';
 import { apiError, apiWorkspace, jsonBody } from '@/server/api';
 import { withRequestContext } from '@/server/request-context';
 import { getDb } from '@/server/runtime';
@@ -19,8 +19,19 @@ export const PATCH = withRequestContext(async (request: Request, { params }: Con
   const access = await apiWorkspace(workspaceId);
   if (!access.ok) return access.response;
 
-  const body = await jsonBody(request);
-  const name = body && typeof body === 'object' && 'name' in body ? String(body.name).trim() : '';
+  const body = (await jsonBody(request)) as
+    | { name?: string; finalOutputId?: string; finalVideoUrl?: string }
+    | undefined;
+
+  if (body?.finalOutputId && body.finalVideoUrl) {
+    await setBoardAssembled(getDb(), workspaceId, storyboardId, {
+      outputId: body.finalOutputId,
+      finalVideoUrl: body.finalVideoUrl,
+    });
+    return Response.json({ ok: true });
+  }
+
+  const name = body?.name?.trim() ?? '';
   if (!name) {
     return apiError(422, 'invalid_input', { issues: [{ path: 'name', message: 'Name a board' }] });
   }

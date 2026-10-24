@@ -350,6 +350,22 @@ const video = register({
   }),
 });
 
+/**
+ * A Storyboard board's scenes, joined into one video (WP68). Pure stitching of clips already
+ * individually paid for (generated or uploaded) — nothing new to charge, hence the zero
+ * estimate. `intentText` is unused content — the schema requires one, the same trick
+ * `redraw_frame` already documents: a fixed placeholder is sent, and nothing is drawn from it.
+ */
+const storyboardAssemble = register({
+  key: 'storyboard_assemble',
+  outputType: 'video',
+  jobClass: 'render',
+  inputSchema: z.object({ ...base, storyboardId: z.uuid() }),
+  compilerProfile: 'video',
+  providerAdapter: 'ffmpeg',
+  estimate: () => ({ credits: 0, videoSeconds: 0, breakdown: [] }),
+});
+
 export const generators = createGeneratorRegistry([
   script,
   hookTitleSet,
@@ -360,4 +376,5 @@ export const generators = createGeneratorRegistry([
   redrawFrame,
   regenerateScene,
   video,
+  storyboardAssemble,
 ]);
